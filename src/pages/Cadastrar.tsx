@@ -8,17 +8,32 @@ export default function Cadastrar() {
   const navigate = useNavigate();
   const [nome, setNome] = useState('');
   const [nomeEmpresa, setNomeEmpresa] = useState('');
+  const [cnpj, setCnpj] = useState('');
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
+  const [confirmarSenha, setConfirmarSenha] = useState('');
   const [erro, setErro] = useState('');
   const [carregando, setCarregando] = useState(false);
+
+  function formatarCnpj(valor: string) {
+    const digitos = valor.replace(/\D/g, '').slice(0, 14);
+    return digitos
+      .replace(/^(\d{2})(\d)/, '$1.$2')
+      .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+      .replace(/\.(\d{3})(\d)/, '.$1/$2')
+      .replace(/(\d{4})(\d)/, '$1-$2');
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErro('');
+    if (senha !== confirmarSenha) {
+      setErro('As senhas não coincidem. Confira e tente de novo.');
+      return;
+    }
     setCarregando(true);
     try {
-      await cadastrar(nome, email, senha, nomeEmpresa);
+      await cadastrar(nome, email, senha, nomeEmpresa, cnpj || undefined);
       navigate('/dashboard');
     } catch (err) {
       const codigo = (err as { code?: string })?.code;
@@ -58,6 +73,18 @@ export default function Cadastrar() {
           />
         </div>
         <div>
+          <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1.5">
+            CNPJ <span className="normal-case font-semibold text-ink-soft/70">(opcional)</span>
+          </label>
+          <input
+            value={cnpj}
+            onChange={(e) => setCnpj(formatarCnpj(e.target.value))}
+            placeholder="00.000.000/0000-00"
+            inputMode="numeric"
+            className="w-full rounded-xl border border-line px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500"
+          />
+        </div>
+        <div>
           <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1.5">Seu nome</label>
           <input
             required
@@ -86,6 +113,19 @@ export default function Cadastrar() {
             minLength={6}
             value={senha}
             onChange={(e) => setSenha(e.target.value)}
+            className="w-full rounded-xl border border-line px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1.5">
+            Confirmar senha
+          </label>
+          <input
+            type="password"
+            required
+            minLength={6}
+            value={confirmarSenha}
+            onChange={(e) => setConfirmarSenha(e.target.value)}
             className="w-full rounded-xl border border-line px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500"
           />
         </div>
