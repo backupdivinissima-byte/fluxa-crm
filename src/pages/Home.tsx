@@ -134,7 +134,7 @@ export default function Home() {
               to="/cadastrar"
               className="rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-4 py-2.5 hover:opacity-90 transition-opacity"
             >
-              Teste grátis e entrar
+              Teste grátis
             </Link>
           </div>
         </div>
@@ -212,7 +212,7 @@ export default function Home() {
             to="/cadastrar"
             className="inline-block rounded-xl bg-white text-ink text-sm font-bold px-6 py-3.5 hover:opacity-90 transition-opacity"
           >
-            Criar minha empresa
+            Criar minha conta
           </Link>
         </div>
       </section>
