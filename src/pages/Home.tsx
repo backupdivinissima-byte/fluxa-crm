@@ -1,29 +1,89 @@
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import fluxaIcon from '../assets/fluxa-icon.svg';
+
+/** Ícones dos cards de recursos — mesmo quadrado arredondado com gradiente
+ * teal→azul da logo (fluxa-icon.svg), com um traço branco simples por
+ * dentro, pra manter a identidade visual da marca em vez de emojis genéricos. */
+function IconBase({ children }: { children: ReactNode }) {
+  return (
+    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 flex items-center justify-center">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="white"
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="w-6 h-6"
+      >
+        {children}
+      </svg>
+    </div>
+  );
+}
+
+function IconFunil() {
+  return (
+    <IconBase>
+      <path d="M4 5h16l-6.2 7.2v6.3l-3.6 1.8v-8.1L4 5z" />
+    </IconBase>
+  );
+}
+
+function IconClientes() {
+  return (
+    <IconBase>
+      <circle cx="9" cy="8.2" r="3" />
+      <path d="M3.3 20c.3-3.6 2.8-6 5.7-6s5.4 2.4 5.7 6" />
+      <circle cx="17" cy="9.2" r="2.2" />
+      <path d="M14.6 14.4c2.3.5 4 2.6 4.2 5.6" />
+    </IconBase>
+  );
+}
+
+function IconVendedores() {
+  return (
+    <IconBase>
+      <path d="M12 3.2 14.3 5l2.9.4.5 2.9 2 2.1-1.7 2.5.3 2.9-2.8.9-1.6 2.5-2.7-.8-2.7.8-1.6-2.5-2.8-.9.3-2.9L2.5 10.4l2-2.1.5-2.9L7.9 5 12 3.2Z" />
+      <circle cx="12" cy="10.8" r="2.3" />
+    </IconBase>
+  );
+}
+
+function IconMetas() {
+  return (
+    <IconBase>
+      <circle cx="12" cy="12" r="7.8" />
+      <circle cx="12" cy="12" r="4.3" />
+      <circle cx="12" cy="12" r="0.9" fill="white" stroke="none" />
+    </IconBase>
+  );
+}
 
 const recursos = [
   {
     titulo: 'Funil de vendas',
     desc: 'Acompanhe cada cliente da primeira conversa até a venda fechada, num quadro visual fácil de arrastar e organizar.',
-    icon: '📋',
+    icon: <IconFunil />,
     bg: 'bg-teal-50',
   },
   {
     titulo: 'Clientes',
     desc: 'Todo o histórico de cada cliente num só lugar — contato, última compra, vendedor responsável e etapa atual.',
-    icon: '👥',
+    icon: <IconClientes />,
     bg: 'bg-blue-50',
   },
   {
     titulo: 'Vendedores',
     desc: 'Cada vendedor com seu próprio acesso e sua própria carteira de clientes, sem misturar dados entre a equipe.',
-    icon: '🏷️',
+    icon: <IconVendedores />,
     bg: 'bg-violet-50',
   },
   {
     titulo: 'Metas & Comissões',
     desc: 'Defina metas por vendedor e acompanhe o progresso em tempo real, com o cálculo de comissão sempre atualizado.',
-    icon: '🎯',
+    icon: <IconMetas />,
     bg: 'bg-amber-50',
   },
 ];
@@ -74,7 +134,7 @@ export default function Home() {
               to="/cadastrar"
               className="rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-4 py-2.5 hover:opacity-90 transition-opacity"
             >
-              Criar empresa grátis
+              Teste grátis e entrar
             </Link>
           </div>
         </div>
@@ -83,7 +143,7 @@ export default function Home() {
       {/* Hero */}
       <section className="max-w-4xl mx-auto text-center px-5 pt-20 pb-16">
         <span className="inline-block bg-teal-500/10 text-teal-600 text-xs font-bold uppercase tracking-wide px-3 py-1.5 rounded-full mb-6">
-          Comece hoje, é grátis
+          Teste grátis
         </span>
         <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-ink leading-tight mb-5">
           Cada cliente, no momento certo do funil.
@@ -93,18 +153,12 @@ export default function Home() {
           vendedores, metas e comissões, tudo num só lugar.
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-          <Link
-            to="/cadastrar"
-            className="w-full sm:w-auto rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-6 py-3.5 hover:opacity-90 transition-opacity"
+          <a
+            href="mailto:josycampos.comercial@gmail.com?subject=Quero%20conhecer%20o%20Fluxa%20CRM"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-6 py-3.5 hover:opacity-90 transition-opacity"
           >
-            Criar minha empresa
-          </Link>
-          <Link
-            to="/login"
-            className="w-full sm:w-auto rounded-xl border border-line text-ink text-sm font-bold px-6 py-3.5 hover:bg-surface transition-colors"
-          >
-            Já tenho uma empresa → Entrar
-          </Link>
+            Fale com vendas <span aria-hidden="true">→</span>
+          </a>
         </div>
       </section>
 
@@ -119,7 +173,7 @@ export default function Home() {
         <div className="grid sm:grid-cols-2 gap-5">
           {recursos.map((r) => (
             <div key={r.titulo} className={`${r.bg} rounded-2xl p-7 border border-line/60`}>
-              <div className="text-3xl mb-4">{r.icon}</div>
+              <div className="mb-4">{r.icon}</div>
               <h3 className="text-base font-extrabold text-ink mb-2">{r.titulo}</h3>
               <p className="text-sm text-ink-soft leading-relaxed">{r.desc}</p>
             </div>
