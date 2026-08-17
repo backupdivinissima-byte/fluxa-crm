@@ -36,6 +36,8 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Raiz />} />
+      <Route path="/planos" element={<Home />} />
+      <Route path="/produtos" element={<Home />} />
       <Route path="/login" element={<Login />} />
       <Route path="/cadastrar" element={<Cadastrar />} />
       <Route
