@@ -18,7 +18,7 @@ export default function AuthShell({ titulo, subtitulo, children, rodape }: Props
         <DecoracaoFacetas />
 
         <div className="relative flex items-center gap-3">
-          <img src={fluxaIcon} alt="Fluxa CRM" className="w-10 h-10 brightness-0 invert" />
+          <img src={fluxaIcon} alt="Fluxa CRM" className="w-10 h-10 rounded-xl ring-2 ring-white/40 shadow-lg" />
           <span className="text-2xl font-extrabold tracking-tight">Fluxa CRM</span>
         </div>
 
