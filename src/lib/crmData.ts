@@ -23,6 +23,18 @@ function vendedoresCol(empresaId: string) {
   return collection(db, 'empresas', empresaId, 'vendedores');
 }
 
+// Firestore recusa gravar campos com valor `undefined` (tanto em addDoc
+// quanto em setDoc/updateDoc) — remove essas chaves antes de qualquer
+// escrita, pra campos opcionais (ex.: meta, id ainda não criado) não
+// derrubarem o salvamento inteiro em silêncio.
+function semUndefined<T extends Record<string, unknown>>(obj: T): T {
+  const limpo = { ...obj };
+  for (const k of Object.keys(limpo)) {
+    if (limpo[k] === undefined) delete limpo[k];
+  }
+  return limpo;
+}
+
 export function ouvirClientes(empresaId: string, cb: (clientes: Cliente[]) => void): Unsubscribe {
   const q = query(clientesCol(empresaId), orderBy('dtUltCompra', 'desc'));
   return onSnapshot(q, (snap) => {
@@ -38,7 +50,7 @@ export function ouvirVendedores(empresaId: string, cb: (vendedores: Vendedor[]) 
 
 export async function salvarCliente(empresaId: string, cliente: Cliente) {
   const { id, ...dados } = cliente;
-  await setDoc(doc(db, 'empresas', empresaId, 'clientes', id), dados, { merge: true });
+  await setDoc(doc(db, 'empresas', empresaId, 'clientes', id), semUndefined(dados), { merge: true });
 }
 
 export async function atualizarCampoCliente(empresaId: string, clienteId: string, patch: Partial<Cliente>) {
@@ -51,7 +63,7 @@ export async function atualizarCampoCliente(empresaId: string, clienteId: string
 }
 
 export async function criarCliente(empresaId: string, cliente: Omit<Cliente, 'id'>) {
-  await addDoc(clientesCol(empresaId), cliente);
+  await addDoc(clientesCol(empresaId), semUndefined(cliente));
 }
 
 export async function removerCliente(empresaId: string, clienteId: string) {
@@ -61,9 +73,10 @@ export async function removerCliente(empresaId: string, clienteId: string) {
 export async function salvarVendedor(empresaId: string, vendedor: Omit<Vendedor, 'id'> & { id?: string }) {
   if (vendedor.id) {
     const { id, ...dados } = vendedor;
-    await setDoc(doc(db, 'empresas', empresaId, 'vendedores', id), dados, { merge: true });
+    await setDoc(doc(db, 'empresas', empresaId, 'vendedores', id), semUndefined(dados), { merge: true });
   } else {
-    await addDoc(vendedoresCol(empresaId), vendedor);
+    const { id: _id, ...dados } = vendedor;
+    await addDoc(vendedoresCol(empresaId), semUndefined(dados));
   }
 }
 
