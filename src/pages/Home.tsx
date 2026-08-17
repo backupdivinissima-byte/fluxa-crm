@@ -61,6 +61,75 @@ function IconMetas() {
   );
 }
 
+/** Versão "apagada" do ícone de produto — cinza em vez do gradiente da marca,
+ * usada nos produtos que ainda não existem (em breve / em construção), pra
+ * diferenciar visualmente do produto que já está disponível. */
+function IconBaseMuted({ children }: { children: ReactNode }) {
+  return (
+    <div className="w-12 h-12 rounded-xl bg-slate-200 flex items-center justify-center">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="w-6 h-6 text-ink-soft"
+      >
+        {children}
+      </svg>
+    </div>
+  );
+}
+
+function IconErp() {
+  return (
+    <IconBaseMuted>
+      <rect x="3.5" y="7.5" width="17" height="12" rx="1.5" />
+      <path d="M8 7.5V6a4 4 0 0 1 8 0v1.5" />
+      <path d="M3.5 12.5h17" />
+    </IconBaseMuted>
+  );
+}
+
+function IconSpark() {
+  return (
+    <IconBaseMuted>
+      <path d="M12 3v4.5M12 16.5V21M3 12h4.5M16.5 12H21M5.6 5.6l3.2 3.2M15.2 15.2l3.2 3.2M18.4 5.6l-3.2 3.2M8.8 15.2l-3.2 3.2" />
+    </IconBaseMuted>
+  );
+}
+
+const produtos = [
+  {
+    nome: 'Fluxa CRM',
+    status: 'Disponível agora',
+    statusCls: 'bg-teal-500/10 text-teal-600',
+    desc: 'Organize o funil de vendas da sua empresa: clientes, vendedores, metas e comissões, tudo num só lugar.',
+    icon: <IconFunil />,
+    ctaLabel: 'Teste grátis',
+    ctaTo: '/cadastrar',
+  },
+  {
+    nome: 'Fluxa ERP',
+    status: 'Em breve',
+    statusCls: 'bg-slate-100 text-ink-soft',
+    desc: 'Gestão financeira, estoque e nota fiscal integrados ao seu CRM, pra cuidar da empresa inteira num só lugar.',
+    icon: <IconErp />,
+    ctaLabel: 'Quero ser avisado',
+    ctaTo: null,
+  },
+  {
+    nome: 'Novos produtos',
+    status: 'Em construção',
+    statusCls: 'bg-slate-100 text-ink-soft',
+    desc: 'Estamos construindo mais soluções pra ajudar sua empresa a crescer. Em breve, novidades por aqui.',
+    icon: <IconSpark />,
+    ctaLabel: 'Quero ser avisado',
+    ctaTo: null,
+  },
+];
+
 const recursos = [
   {
     titulo: 'Funil de vendas',
@@ -163,6 +232,9 @@ export default function Home() {
           </Link>
 
           <nav className="hidden md:flex items-center gap-6 text-sm font-semibold text-ink-soft">
+            <a href="#produtos" className="hover:text-ink transition-colors">
+              Produtos
+            </a>
             <a href="#recursos" className="hover:text-ink transition-colors">
               Funcionalidades
             </a>
@@ -207,6 +279,50 @@ export default function Home() {
           >
             Fale com vendas <span aria-hidden="true">→</span>
           </a>
+        </div>
+      </section>
+
+      {/* Produtos — a Fluxa CRM é o primeiro produto do ecossistema Fluxa,
+          com mais soluções (ERP e outras) a caminho. */}
+      <section id="produtos" className="bg-surface py-16">
+        <div className="max-w-6xl mx-auto px-5">
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight text-center mb-2">
+            Os produtos Fluxa
+          </h2>
+          <p className="text-ink-soft text-center max-w-xl mx-auto mb-12">
+            Estamos construindo uma plataforma completa de gestão pra sua empresa. Comece agora com o Fluxa CRM.
+          </p>
+          <div className="grid sm:grid-cols-3 gap-5">
+            {produtos.map((p) => (
+              <div key={p.nome} className="bg-white rounded-2xl p-7 border border-line flex flex-col h-full">
+                <div className="mb-4">{p.icon}</div>
+                <span
+                  className={`inline-block self-start text-xs font-bold uppercase tracking-wide px-2.5 py-1 rounded-full mb-3 ${p.statusCls}`}
+                >
+                  {p.status}
+                </span>
+                <h3 className="text-base font-extrabold text-ink mb-2">{p.nome}</h3>
+                <p className="text-sm text-ink-soft leading-relaxed mb-6 flex-1">{p.desc}</p>
+                {p.ctaTo ? (
+                  <Link
+                    to={p.ctaTo}
+                    className="inline-flex items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-4 py-2.5 hover:opacity-90 transition-opacity"
+                  >
+                    {p.ctaLabel} <span aria-hidden="true" className="ml-1">→</span>
+                  </Link>
+                ) : (
+                  <a
+                    href={`mailto:josycampos.comercial@gmail.com?subject=Quero%20saber%20mais%20sobre%20o%20${encodeURIComponent(
+                      p.nome
+                    )}`}
+                    className="inline-flex items-center justify-center rounded-xl bg-surface text-ink text-sm font-bold px-4 py-2.5 border border-line hover:opacity-80 transition-opacity"
+                  >
+                    {p.ctaLabel}
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
