@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, type ReactNode } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import fluxaIcon from '../assets/fluxa-icon.svg';
 
 /** Ícones dos cards de recursos — mesmo quadrado arredondado com gradiente
@@ -221,6 +221,17 @@ const passos = [
 ];
 
 export default function Home() {
+  const location = useLocation();
+
+  // Links diretos como /produtos e /planos (compartilháveis, ex. em anúncios
+  // ou mensagens) abrem a Home já rolada até a seção correspondente.
+  useEffect(() => {
+    const alvo = location.pathname === '/planos' ? 'planos' : location.pathname === '/produtos' ? 'produtos' : null;
+    if (!alvo) return;
+    const el = document.getElementById(alvo);
+    if (el) el.scrollIntoView({ block: 'start' });
+  }, [location.pathname]);
+
   return (
     <div className="min-h-screen bg-white">
       {/* Nav pública */}
