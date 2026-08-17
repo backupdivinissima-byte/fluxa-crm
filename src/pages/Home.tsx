@@ -88,6 +88,51 @@ const recursos = [
   },
 ];
 
+const planos = [
+  {
+    nome: 'Starter',
+    preco: 79,
+    desc: 'Pra quem está começando a organizar o time de vendas.',
+    destaque: false,
+    limite: 'Até 3 vendedores',
+    recursos: [
+      'Funil de vendas (Kanban)',
+      'Cadastro de clientes ilimitado',
+      'Metas e comissões por vendedor',
+      'Sincronização em nuvem',
+      'Suporte por e-mail',
+    ],
+  },
+  {
+    nome: 'Pro',
+    preco: 179,
+    desc: 'Pra equipes de vendas em crescimento.',
+    destaque: true,
+    limite: 'Até 10 vendedores',
+    recursos: [
+      'Tudo do plano Starter',
+      'Painel individual por vendedor',
+      'Links de acesso ilimitados p/ equipe',
+      'Relatórios e ranking de vendas',
+      'Suporte prioritário via WhatsApp',
+    ],
+  },
+  {
+    nome: 'Empresas',
+    preco: 390,
+    desc: 'Pra operações maiores, com times grandes.',
+    destaque: false,
+    limite: 'Vendedores ilimitados',
+    recursos: [
+      'Tudo do plano Pro',
+      'Múltiplas equipes/filiais',
+      'Gerente de conta dedicado',
+      'Onboarding e treinamento da equipe',
+      'Suporte prioritário 24/7',
+    ],
+  },
+];
+
 const passos = [
   {
     numero: '1',
@@ -123,6 +168,9 @@ export default function Home() {
             </a>
             <a href="#como-funciona" className="hover:text-ink transition-colors">
               Como funciona
+            </a>
+            <a href="#planos" className="hover:text-ink transition-colors">
+              Planos
             </a>
           </nav>
 
@@ -199,6 +247,79 @@ export default function Home() {
             ))}
           </div>
         </div>
+      </section>
+
+      {/* Planos */}
+      <section id="planos" className="max-w-6xl mx-auto px-5 py-16">
+        <h2 className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight text-center mb-2">
+          Planos pra cada tamanho de equipe
+        </h2>
+        <p className="text-ink-soft text-center max-w-xl mx-auto mb-4">
+          Comece com 14 dias grátis em qualquer plano, sem cartão de crédito. Cancele quando quiser.
+        </p>
+        <div className="grid sm:grid-cols-3 gap-6 items-start">
+          {planos.map((p) => (
+            <div
+              key={p.nome}
+              className={`relative rounded-2xl p-7 border ${
+                p.destaque ? 'border-teal-500 shadow-lg shadow-teal-500/10 sm:-translate-y-2' : 'border-line'
+              } bg-white flex flex-col h-full`}
+            >
+              {p.destaque && (
+                <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-br from-teal-500 to-blue-600 text-white text-xs font-bold uppercase tracking-wide px-3 py-1">
+                  Mais popular
+                </span>
+              )}
+              <h3 className="text-lg font-extrabold text-ink mb-1">{p.nome}</h3>
+              <p className="text-sm text-ink-soft mb-5">{p.desc}</p>
+              <div className="mb-1 flex items-baseline gap-1">
+                <span className="text-3xl font-extrabold text-ink">
+                  R$ {p.preco.toLocaleString('pt-BR')}
+                </span>
+                <span className="text-sm text-ink-soft">/mês</span>
+              </div>
+              <p className="text-xs font-bold text-teal-600 uppercase tracking-wide mb-6">{p.limite}</p>
+              <ul className="space-y-3 mb-8 flex-1">
+                {p.recursos.map((r) => (
+                  <li key={r} className="flex items-start gap-2 text-sm text-ink-soft">
+                    <svg
+                      viewBox="0 0 20 20"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="w-4 h-4 mt-0.5 shrink-0 text-teal-500"
+                    >
+                      <path d="M4 10.5 8 14.5 16 6" />
+                    </svg>
+                    {r}
+                  </li>
+                ))}
+              </ul>
+              <Link
+                to="/cadastrar"
+                className={`w-full text-center rounded-xl text-sm font-bold px-4 py-3 transition-opacity hover:opacity-90 ${
+                  p.destaque
+                    ? 'bg-gradient-to-br from-teal-500 to-blue-600 text-white'
+                    : 'bg-surface text-ink border border-line'
+                }`}
+              >
+                Teste grátis
+              </Link>
+            </div>
+          ))}
+        </div>
+        <p className="text-center text-xs text-ink-soft mt-8">
+          Precisa de um plano sob medida para uma operação maior?{' '}
+          <a
+            href="mailto:josycampos.comercial@gmail.com?subject=Quero%20conhecer%20o%20Fluxa%20CRM"
+            className="font-bold text-blue-600"
+          >
+            Fale com vendas
+          </a>
+          .
+        </p>
       </section>
 
       {/* CTA final */}
