@@ -26,7 +26,7 @@ interface AuthState {
   papel: 'admin' | 'vendedor' | null;
   login: (email: string, senha: string) => Promise<void>;
   loginVendedor: (login: string, senha: string, empresaIdHint?: string) => Promise<void>;
-  cadastrar: (nome: string, email: string, senha: string, nomeEmpresa: string) => Promise<void>;
+  cadastrar: (nome: string, email: string, senha: string, nomeEmpresa: string, cnpj?: string) => Promise<void>;
   sair: () => Promise<void>;
 }
 
@@ -134,12 +134,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function cadastrar(nome: string, email: string, senha: string, nomeEmpresa: string) {
+  async function cadastrar(nome: string, email: string, senha: string, nomeEmpresa: string, cnpj?: string) {
     const cred = await createUserWithEmailAndPassword(auth, email, senha);
     const empresaRef = doc(db, 'empresas', cred.user.uid); // 1ª empresa = doc com id do próprio admin fundador
     const novaEmpresa: Empresa = {
       id: empresaRef.id,
       nome: nomeEmpresa,
+      ...(cnpj ? { cnpj } : {}),
       criadoEm: new Date().toISOString(),
       plano: 'trial',
     };
