@@ -243,9 +243,50 @@ export default function Home() {
           </Link>
 
           <nav className="hidden md:flex items-center gap-6 text-sm font-semibold text-ink-soft">
-            <a href="#produtos" className="hover:text-ink transition-colors">
-              Produtos
-            </a>
+            <div className="relative group">
+              <button type="button" className="flex items-center gap-1.5 py-2 hover:text-ink transition-colors">
+                Produtos
+                <svg
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="w-3.5 h-3.5 transition-transform duration-150 group-hover:rotate-180"
+                >
+                  <path d="M5 7.5 10 12.5 15 7.5" />
+                </svg>
+              </button>
+              {/* Painel abre ao passar o mouse (mesmo padrão da aba Produtos do
+                  site do RD Station): lista os produtos do ecossistema Fluxa
+                  com ícone, status e descrição curta, cada um levando direto
+                  pra sua seção/CTA. */}
+              <div className="invisible opacity-0 translate-y-1 group-hover:visible group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-150 absolute left-0 top-full pt-3 w-[520px] z-50">
+                <div className="bg-white rounded-2xl border border-line shadow-xl shadow-ink/10 p-2">
+                  {produtos.map((p) => (
+                    <Link
+                      key={p.nome}
+                      to={p.ctaTo ?? '/produtos'}
+                      className="flex items-start gap-3 rounded-xl p-3 hover:bg-surface transition-colors"
+                    >
+                      <div className="shrink-0 scale-[0.7] origin-top-left -mr-2 -mt-1">{p.icon}</div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-extrabold text-ink">{p.nome}</span>
+                          <span
+                            className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${p.statusCls}`}
+                          >
+                            {p.status}
+                          </span>
+                        </div>
+                        <p className="text-xs text-ink-soft mt-0.5 leading-snug">{p.desc}</p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </div>
             <a href="#recursos" className="hover:text-ink transition-colors">
               Funcionalidades
             </a>
