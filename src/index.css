@@ -1,0 +1,21 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+
+@theme {
+  --font-sans: 'Manrope', ui-sans-serif, system-ui, sans-serif;
+
+  --color-ink: #0F172A;
+  --color-ink-soft: #475569;
+  --color-teal-500: #0EA5A0;
+  --color-blue-600: #2563EB;
+  --color-teal-300: #5EEAD4;
+  --color-blue-400: #60A5FA;
+  --color-surface: #F8FAFC;
+  --color-line: #E2E8F0;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+  background: var(--color-surface);
+}
