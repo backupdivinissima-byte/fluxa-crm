@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import AuthShell from '../components/AuthShell';
+import CampoSenha from '../components/CampoSenha';
 
 export default function Login() {
   const { login, loginVendedor } = useAuth();
@@ -82,16 +83,7 @@ export default function Login() {
             className="w-full rounded-xl border border-line px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500"
           />
         </div>
-        <div>
-          <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1.5">Senha</label>
-          <input
-            type="password"
-            required
-            value={senha}
-            onChange={(e) => setSenha(e.target.value)}
-            className="w-full rounded-xl border border-line px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500"
-          />
-        </div>
+        <CampoSenha label="Senha" value={senha} onChange={setSenha} required autoComplete="current-password" />
         {erro && <p className="text-xs text-red-500">{erro}</p>}
         <button
           type="submit"

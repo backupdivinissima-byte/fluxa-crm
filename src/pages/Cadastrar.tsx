@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import AuthShell from '../components/AuthShell';
+import CampoSenha from '../components/CampoSenha';
 
 export default function Cadastrar() {
   const { cadastrar } = useAuth();
@@ -36,11 +37,24 @@ export default function Cadastrar() {
       await cadastrar(nome, email, senha, nomeEmpresa, cnpj || undefined);
       navigate('/dashboard');
     } catch (err) {
+      console.error('Erro ao cadastrar empresa:', err);
       const codigo = (err as { code?: string })?.code;
       if (codigo === 'auth/email-already-in-use') {
         setErro('Esse e-mail já tem uma empresa cadastrada. Tente entrar em vez de cadastrar.');
+      } else if (codigo === 'auth/invalid-email') {
+        setErro('E-mail inválido. Confira e tente de novo.');
+      } else if (codigo === 'auth/weak-password') {
+        setErro('Senha muito fraca — use pelo menos 6 caracteres.');
+      } else if (codigo === 'auth/network-request-failed') {
+        setErro('Falha de conexão. Verifique sua internet e tente de novo.');
+      } else if (codigo === 'auth/operation-not-allowed') {
+        setErro('Cadastro por e-mail/senha está desativado nas configurações do Firebase. Fale com o suporte.');
       } else {
-        setErro('Não foi possível criar a empresa. Verifique os dados e tente novamente.');
+        setErro(
+          `Não foi possível criar a empresa. Verifique os dados e tente novamente.${
+            codigo ? ` (código: ${codigo})` : ''
+          }`
+        );
       }
     } finally {
       setCarregando(false);
@@ -105,30 +119,22 @@ export default function Cadastrar() {
             className="w-full rounded-xl border border-line px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500"
           />
         </div>
-        <div>
-          <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1.5">Senha</label>
-          <input
-            type="password"
-            required
-            minLength={6}
-            value={senha}
-            onChange={(e) => setSenha(e.target.value)}
-            className="w-full rounded-xl border border-line px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1.5">
-            Confirmar senha
-          </label>
-          <input
-            type="password"
-            required
-            minLength={6}
-            value={confirmarSenha}
-            onChange={(e) => setConfirmarSenha(e.target.value)}
-            className="w-full rounded-xl border border-line px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500"
-          />
-        </div>
+        <CampoSenha
+          label="Senha"
+          value={senha}
+          onChange={setSenha}
+          required
+          minLength={6}
+          autoComplete="new-password"
+        />
+        <CampoSenha
+          label="Confirmar senha"
+          value={confirmarSenha}
+          onChange={setConfirmarSenha}
+          required
+          minLength={6}
+          autoComplete="new-password"
+        />
         {erro && <p className="text-xs text-red-500">{erro}</p>}
         <button
           type="submit"
