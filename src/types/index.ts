@@ -21,12 +21,10 @@ export interface MetaTier {
   bonus: number;
 }
 
-export const METAS_PADRAO: MetaTier[] = [
-  { label: 'Meta 1', valor: 5000, comissao: 3, bonus: 200 },
-  { label: 'Meta 2', valor: 9000, comissao: 5, bonus: 500 },
-  { label: 'Meta 3', valor: 13000, comissao: 7, bonus: 900 },
-  { label: 'Meta 4', valor: 18000, comissao: 10, bonus: 1500 },
-];
+// Padrão pra empresas novas: só a 1ª faixa (fixa). A empresa adiciona as
+// próximas (até 5 no total) pelo botão "+ Meta" em Metas & Comissões,
+// conforme o que fizer sentido pro negócio dela.
+export const METAS_PADRAO: MetaTier[] = [{ label: 'Meta 1', valor: 5000, comissao: 3, bonus: 200 }];
 
 export interface UsuarioPerfil {
   uid: string;
