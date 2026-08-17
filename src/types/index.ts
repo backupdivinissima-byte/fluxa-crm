@@ -5,6 +5,7 @@ export type PapelUsuario = 'admin';
 export interface Empresa {
   id: string;
   nome: string;
+  cnpj?: string;
   criadoEm: string; // ISO date
   plano: 'trial' | 'starter' | 'pro';
   metas?: MetaTier[]; // faixas globais de meta/comissão da empresa
