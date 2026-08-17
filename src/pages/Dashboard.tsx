@@ -12,12 +12,11 @@ export default function Dashboard() {
       </p>
 
       <div className="bg-gradient-to-br from-teal-500 to-blue-600 rounded-2xl p-6 text-white max-w-2xl">
-        <div className="text-sm font-bold uppercase tracking-wide opacity-80 mb-1">Em construção</div>
-        <h2 className="text-lg font-extrabold mb-2">Funil de vendas chegando</h2>
+        <div className="text-sm font-bold uppercase tracking-wide opacity-80 mb-1">Bem-vinda ao Fluxa CRM</div>
+        <h2 className="text-lg font-extrabold mb-2">Funil de vendas, clientes e equipe num só lugar</h2>
         <p className="text-sm opacity-90">
-          O cadastro da empresa e o login já estão funcionando. As próximas etapas: funil de vendas (CRM), clientes,
-          vendedores, metas e comissões — trazendo tudo que já existe no sistema atual, agora pronto pra várias
-          empresas.
+          Use o menu acima pra organizar seu funil de vendas no CRM, cadastrar clientes e vendedores, e acompanhar
+          metas e comissões. Um resumo com números da empresa chega aqui em breve.
         </p>
       </div>
     </div>

@@ -69,22 +69,33 @@ export default function Vendedores() {
       setErro('Já existe um vendedor com esse login.');
       return;
     }
-    await salvarVendedor(empresaId, {
-      id: editando?.id,
-      nome: nome.trim(),
-      login: editando ? editando.login : login.trim(), // login não muda depois de criado
-      senha: senha.trim(),
-      ativo: true,
-      meta: meta ? Number(meta) : undefined,
-      criadoEm: editando?.criadoEm ?? new Date().toISOString(),
-    });
-    setModalAberto(false);
+    setErro('');
+    try {
+      await salvarVendedor(empresaId, {
+        id: editando?.id,
+        nome: nome.trim(),
+        login: editando ? editando.login : login.trim(), // login não muda depois de criado
+        senha: senha.trim(),
+        ativo: true,
+        meta: meta ? Number(meta) : undefined,
+        criadoEm: editando?.criadoEm ?? new Date().toISOString(),
+      });
+      setModalAberto(false);
+    } catch (err) {
+      console.error('Erro ao salvar vendedor:', err);
+      setErro('Não foi possível salvar o vendedor. Tente novamente em instantes.');
+    }
   }
 
   async function remover(v: Vendedor) {
     if (!empresaId) return;
     if (!confirm(`Remover o vendedor "${v.nome}"? Os clientes vinculados a ele ficarão sem vendedor.`)) return;
-    await removerVendedor(empresaId, v.id);
+    try {
+      await removerVendedor(empresaId, v.id);
+    } catch (err) {
+      console.error('Erro ao remover vendedor:', err);
+      alert('Não foi possível remover o vendedor. Tente novamente em instantes.');
+    }
   }
 
   if (!empresaId) return null;

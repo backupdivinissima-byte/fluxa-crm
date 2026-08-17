@@ -47,6 +47,9 @@ export default function Metas() {
     setSalvando(true);
     try {
       await salvarMetasEmpresa(empresaId, metas);
+    } catch (err) {
+      console.error('Erro ao salvar metas:', err);
+      alert('Não foi possível salvar as metas. Tente novamente em instantes.');
     } finally {
       setSalvando(false);
     }
@@ -56,6 +59,20 @@ export default function Metas() {
     setMetas((atual) =>
       atual.map((m, idx) => (idx === i ? { ...m, [campo]: campo === 'label' ? valor : Number(valor) } : m))
     );
+  }
+
+  const LIMITE_FAIXAS = 5;
+
+  function adicionarFaixa() {
+    setMetas((atual) => {
+      if (atual.length >= LIMITE_FAIXAS) return atual;
+      return [...atual, { label: `Meta ${atual.length + 1}`, valor: 0, comissao: 0, bonus: 0 }];
+    });
+  }
+
+  function removerFaixa(i: number) {
+    if (i === 0) return; // a primeira faixa é fixa, não pode ser removida
+    setMetas((atual) => atual.filter((_, idx) => idx !== i));
   }
 
   const vendedoresComVendas = useMemo(
@@ -122,6 +139,7 @@ export default function Metas() {
               <th className="text-right pb-2">Meta (R$)</th>
               <th className="text-right pb-2">Comissão (%)</th>
               <th className="text-right pb-2">Bônus (R$)</th>
+              <th className="pb-2 w-8"></th>
             </tr>
           </thead>
           <tbody>
@@ -150,7 +168,7 @@ export default function Metas() {
                     className="w-full rounded-lg border border-line px-2 py-1.5 text-sm text-right"
                   />
                 </td>
-                <td className="py-2">
+                <td className="py-2 pr-2">
                   <input
                     type="number"
                     value={m.bonus}
@@ -158,17 +176,42 @@ export default function Metas() {
                     className="w-full rounded-lg border border-line px-2 py-1.5 text-sm text-right"
                   />
                 </td>
+                <td className="py-2 text-right">
+                  {i > 0 && (
+                    <button
+                      onClick={() => removerFaixa(i)}
+                      title="Remover faixa"
+                      aria-label="Remover faixa"
+                      className="text-ink-soft hover:text-red-500 font-bold text-sm w-6 h-6"
+                    >
+                      ×
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
-        <button
-          onClick={salvarMetas}
-          disabled={salvando}
-          className="mt-4 rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-4 py-2.5 hover:opacity-90 disabled:opacity-60"
-        >
-          {salvando ? 'Salvando...' : 'Salvar faixas'}
-        </button>
+        <div className="flex items-center gap-3 mt-4">
+          <button
+            onClick={salvarMetas}
+            disabled={salvando}
+            className="rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-4 py-2.5 hover:opacity-90 disabled:opacity-60"
+          >
+            {salvando ? 'Salvando...' : 'Salvar faixas'}
+          </button>
+          <button
+            onClick={adicionarFaixa}
+            disabled={metas.length >= LIMITE_FAIXAS}
+            title={metas.length >= LIMITE_FAIXAS ? `Máximo de ${LIMITE_FAIXAS} faixas` : undefined}
+            className="rounded-xl border border-line text-ink text-sm font-bold px-4 py-2.5 hover:bg-surface disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            + Meta
+          </button>
+          {metas.length >= LIMITE_FAIXAS && (
+            <span className="text-xs text-ink-soft">Máximo de {LIMITE_FAIXAS} faixas.</span>
+          )}
+        </div>
       </div>
 
       <div className="bg-white border border-line rounded-2xl overflow-hidden">

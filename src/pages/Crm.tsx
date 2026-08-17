@@ -73,7 +73,10 @@ export default function Crm() {
       return;
     }
     if (resultado.patch && empresaId) {
-      atualizarCampoCliente(empresaId, cliente.id, resultado.patch);
+      atualizarCampoCliente(empresaId, cliente.id, resultado.patch).catch((err) => {
+        console.error('Erro ao mover cliente:', err);
+        alert('Não foi possível mover o cliente. Tente novamente em instantes.');
+      });
     }
   }
 
@@ -92,14 +95,19 @@ export default function Crm() {
     }
     const origem = destino.includes('catalogo') ? 'catalogo' : 'live';
     const stage = destino === 'atendimento' ? 'atendimento' : destino.startsWith('orcamento') ? 'orcamento' : 'concluido';
-    await atualizarCampoCliente(empresaId, cliente.id, {
-      crmStage: stage,
-      crmOrigem: stage === 'atendimento' ? undefined : origem,
-      crmVendedorLogin: loginParaUsar,
-      crmOrcamentoValor: precisaValor ? Number(valorOrcamento) : cliente.crmOrcamentoValor,
-      crmStageChangedAt: new Date().toISOString(),
-    });
-    setPendMove(null);
+    try {
+      await atualizarCampoCliente(empresaId, cliente.id, {
+        crmStage: stage,
+        crmOrigem: stage === 'atendimento' ? undefined : origem,
+        crmVendedorLogin: loginParaUsar,
+        crmOrcamentoValor: precisaValor ? Number(valorOrcamento) : cliente.crmOrcamentoValor,
+        crmStageChangedAt: new Date().toISOString(),
+      });
+      setPendMove(null);
+    } catch (err) {
+      console.error('Erro ao mover cliente:', err);
+      alert('Não foi possível mover o cliente. Tente novamente em instantes.');
+    }
   }
 
   if (!empresaId) return null;
