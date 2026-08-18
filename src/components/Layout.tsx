@@ -19,7 +19,9 @@ const itens = [
   { to: '/vendedores', label: 'Vendedores', icon: <IconVendedores /> },
   { to: '/metas', label: 'Metas & Comissões', icon: <IconMetas /> },
   { to: '/links', label: 'Links dos vendedores', icon: <IconLinks /> },
-  { to: '/importar', label: 'Importar / Sincronização', icon: <IconImportar /> },
+  // Ferramenta de migração única (dados legados da Divinissima) — só faz
+  // sentido pro login do administrador, nunca pro login de vendedor.
+  { to: '/importar', label: 'Importar / Sincronização', icon: <IconImportar />, apenasAdmin: true },
 ];
 
 /** Nav superior única (marca + abas), mesmo padrão já validado no Fluxa ERP
@@ -45,20 +47,22 @@ export default function Layout() {
           </div>
 
           <nav className="flex items-center gap-1 flex-wrap">
-            {itens.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.fim}
-                className={({ isActive }) =>
-                  `flex items-center gap-2 px-3 h-9 rounded-lg text-sm font-semibold whitespace-nowrap transition-colors ${
-                    isActive ? 'bg-teal-500/10 text-teal-500' : 'text-ink-soft hover:bg-surface'
-                  }`
-                }
-              >
-                {item.icon} {item.label}
-              </NavLink>
-            ))}
+            {itens
+              .filter((item) => !item.apenasAdmin || papel === 'admin')
+              .map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.fim}
+                  className={({ isActive }) =>
+                    `flex items-center gap-2 px-3 h-9 rounded-lg text-sm font-semibold whitespace-nowrap transition-colors ${
+                      isActive ? 'bg-teal-500/10 text-teal-500' : 'text-ink-soft hover:bg-surface'
+                    }`
+                  }
+                >
+                  {item.icon} {item.label}
+                </NavLink>
+              ))}
           </nav>
 
           <div className="ml-auto flex items-center gap-4 pl-4 shrink-0">
