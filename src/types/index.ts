@@ -10,6 +10,7 @@ export interface Empresa {
   plano: 'trial' | 'starter' | 'pro';
   metas?: MetaTier[]; // faixas globais de meta/comissão da empresa
   crmFiltros?: FiltroCrm[]; // filtros personalizados do quadro CRM (até 10)
+  crmColunas?: ColunaCrm[]; // colunas personalizadas do quadro CRM (até 8)
 }
 
 // Filtro personalizado do quadro CRM — cada empresa pode criar até 10,
@@ -66,12 +67,6 @@ export interface Vendedor {
 
 // ===== CRM =====
 
-// As 8 colunas fixas do funil (mesmo modelo da Divinissima). As 3 primeiras
-// são calculadas automaticamente por dias sem compra; as 5 seguintes são
-// manuais, controladas por crmStage/crmOrigem.
-export type CrmStage = 'atendimento' | 'orcamento' | 'concluido' | null;
-export type CrmOrigem = 'live' | 'catalogo';
-
 export interface Cliente {
   id: string;
   cod: string;
@@ -90,42 +85,27 @@ export interface Cliente {
   cod_vendedor?: string; // vendedor "dono" do cliente (origem cadastral)
   vend_nome?: string;
 
-  // Campos do pipeline manual do CRM — preenchidos pelo time de vendas.
-  // Protegidos contra sobrescrita automática (mesma lógica do
-  // mergeClientesCRM da Divinissima): só mudam por ação manual do usuário.
-  crmStage?: CrmStage;
-  crmVendedorLogin?: string;
-  crmOrcamentoValor?: number;
-  crmOrigem?: CrmOrigem;
-  crmStageChangedAt?: string; // ISO date, usado pra resolver conflitos no merge
+  // Posição do cliente no quadro CRM (coluna personalizada da empresa) —
+  // só muda por ação manual (arrastar no quadro ou pela aba "+ Lançar
+  // orçamento"), nunca automaticamente.
+  crmColunaId?: string; // referencia ColunaCrm.id; sem valor = cai na 1ª coluna
+  crmColunaChangedAt?: string; // ISO date, usado pra filtrar comissão por mês
+  crmVendedorLogin?: string; // vendedor responsável pelo card no funil
+  crmOrcamentoValor?: number; // valor combinado quando o card entrou numa coluna de fechamento
 }
 
-// As 3 colunas automáticas (por dias sem compra) + as 5 manuais do pipeline.
-export type KbColunaId =
-  | 'inativos'
-  | 'd31_40'
-  | 'ativos'
-  | 'atendimento'
-  | 'orcamento_live'
-  | 'orcamento_catalogo'
-  | 'concluido_live'
-  | 'concluido_catalogo';
-
-export interface KbColuna {
-  id: KbColunaId;
-  titulo: string;
-  sub?: string;
-  cor: string;
-  auto: boolean;
+// Coluna do quadro CRM — 100% personalizável pela empresa (até
+// MAX_COLUNAS_CRM). Uma coluna marcada como "fechamento" conta como venda
+// concluída pra fins de comissão (aba Metas & Comissões): ao soltar um
+// card lá, pede vendedor responsável + valor combinado.
+export interface ColunaCrm {
+  id: string;
+  nome: string;
+  fechamento?: boolean;
 }
 
-export const KB_COLUNAS: KbColuna[] = [
-  { id: 'inativos', titulo: 'Clientes Inativos', sub: '+ 40 dias sem compra', cor: '#C0392B', auto: true },
-  { id: 'd31_40', titulo: '31 a 40 dias', sub: 'risco de inatividade', cor: '#E67E22', auto: true },
-  { id: 'ativos', titulo: 'Clientes Ativos', sub: 'até 30 dias', cor: '#27AE60', auto: true },
-  { id: 'atendimento', titulo: 'Em Atendimento', cor: '#2980B9', auto: false },
-  { id: 'orcamento_live', titulo: 'Orçamento 1', cor: '#8E6FBE', auto: false },
-  { id: 'orcamento_catalogo', titulo: 'Orçamento 2', cor: '#1791A8', auto: false },
-  { id: 'concluido_live', titulo: 'Concluído Live', cor: '#1E7A46', auto: false },
-  { id: 'concluido_catalogo', titulo: 'Concluído Catálogo', cor: '#4C51BF', auto: false },
-];
+export const MAX_COLUNAS_CRM = 8;
+
+// Empresa nova começa com 1 coluna só, chamada "Novo" — o resto quem monta
+// é a própria empresa (renomeando e adicionando colunas, até o limite).
+export const CRM_COLUNAS_PADRAO: ColunaCrm[] = [{ id: 'coluna-inicial', nome: 'Novo' }];
