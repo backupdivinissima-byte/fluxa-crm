@@ -19,8 +19,8 @@ const itens = [
   { to: '/vendedores', label: 'Vendedores', icon: <IconVendedores /> },
   { to: '/metas', label: 'Metas & Comissões', icon: <IconMetas /> },
   { to: '/links', label: 'Links dos vendedores', icon: <IconLinks /> },
-  // Ferramenta de migração única (dados legados da Divinissima) — só faz
-  // sentido pro login do administrador, nunca pro login de vendedor.
+  // Disponível pra qualquer empresa, só não faz sentido pro login de
+  // vendedor (só o administrador importa/sincroniza dados).
   { to: '/importar', label: 'Importar / Sincronização', icon: <IconImportar />, apenasAdmin: true },
 ];
 
