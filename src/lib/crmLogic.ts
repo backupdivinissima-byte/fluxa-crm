@@ -3,6 +3,23 @@
 // pra facilitar comparação/manutenção futura.
 import type { Cliente, CrmOrigem, KbColunaId, Vendedor } from '../types';
 
+/** Transforma um código/login em um ID de documento Firestore seguro e
+ * determinístico (mesmo valor de entrada sempre vira o mesmo ID) — usado
+ * pelas importações (planilha, migração legada) pra atualizar em vez de
+ * duplicar quando o mesmo código/login aparece de novo. */
+export function idSeguro(valor: string): string {
+  return (
+    valor
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 120) || `id-${Math.random().toString(36).slice(2, 10)}`
+  );
+}
+
 /** Dias corridos desde a última compra/atendimento do cliente. */
 export function diasSemAtend(c: Cliente): number {
   if (!c.dtUltCompra) return 9999;
