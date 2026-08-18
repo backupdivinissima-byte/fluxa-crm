@@ -6,7 +6,7 @@ export default function Dashboard() {
 
   return (
     <div className="p-8 w-full">
-      <h1 className="text-2xl font-extrabold text-ink tracking-tight">Olá, {nome?.split(' ')[0]} 👋</h1>
+      <h1 className="text-2xl font-extrabold text-ink tracking-tight">Olá, {nome?.split(' ')[0]}</h1>
       <p className="text-sm text-ink-soft mt-1 mb-8">
         Aqui está o resumo da <b>{empresa?.nome}</b>.
       </p>

@@ -4,6 +4,7 @@ import { ouvirClientes, ouvirVendedores, atualizarCampoCliente } from '../lib/cr
 import { KB_COLUNAS, type Cliente, type KbColunaId, type Vendedor } from '../types';
 import { calcularMovimentoCliente, formatarMoeda, kbValorCliente, colunaDoCliente } from '../lib/crmLogic';
 import ClienteDetalheModal from '../components/ClienteDetalheModal';
+import { IconCrm } from '../components/NavIcons';
 
 /** Quadro Kanban do funil de vendas — 8 colunas em CSS Grid (mesma correção
  * de largura já aplicada na Divinissima: repeat(8,minmax(150px,1fr))), com
@@ -115,7 +116,9 @@ export default function Crm() {
   return (
     <div className="p-6 w-full">
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-        <h1 className="text-base font-extrabold text-ink flex items-center gap-2">📋 CRM — Funil de vendas</h1>
+        <h1 className="text-base font-extrabold text-ink flex items-center gap-2">
+          <IconCrm /> CRM — Funil de vendas
+        </h1>
         <input
           value={busca}
           onChange={(e) => setBusca(e.target.value)}

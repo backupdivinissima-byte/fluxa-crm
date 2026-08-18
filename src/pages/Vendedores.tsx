@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { ouvirClientes, ouvirVendedores, removerVendedor, salvarVendedor } from '../lib/crmData';
 import type { Cliente, Vendedor } from '../types';
 import { formatarMoeda, vendasMesVendedor } from '../lib/crmLogic';
+import { IconVendedores } from '../components/NavIcons';
 
 /** CRUD de vendedores — cada um recebe um login/senha simples (sem e-mail
  * próprio), definido pelo admin, igual ao padrão já usado na Divinissima. */
@@ -104,7 +105,9 @@ export default function Vendedores() {
     const meu = sessaoVendedor?.vendedor;
     return (
       <div className="p-6 w-full max-w-md">
-        <h1 className="text-base font-extrabold text-ink flex items-center gap-2 mb-4">🏷️ Meu perfil</h1>
+        <h1 className="text-base font-extrabold text-ink flex items-center gap-2 mb-4">
+          <IconVendedores /> Meu perfil
+        </h1>
         {meu && (
           <div className="bg-white border border-line rounded-2xl p-6">
             <div className="text-lg font-extrabold text-ink">{meu.nome}</div>
@@ -120,7 +123,9 @@ export default function Vendedores() {
   return (
     <div className="p-6 w-full">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-base font-extrabold text-ink flex items-center gap-2">🏷️ Vendedores</h1>
+        <h1 className="text-base font-extrabold text-ink flex items-center gap-2">
+          <IconVendedores /> Vendedores
+        </h1>
         <button
           onClick={abrirNovo}
           className="rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-4 py-2.5 hover:opacity-90"

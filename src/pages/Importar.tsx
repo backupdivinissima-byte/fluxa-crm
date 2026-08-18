@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { importarDadosDivinissima, type ResultadoImportacao } from '../lib/importarDivinissima';
+import { IconImportar } from '../components/NavIcons';
 
 /** Ferramenta de importação — traz os clientes e vendedores reais da
  * Divinissima (mesmo projeto Firebase, coleções legadas) pra dentro da
@@ -46,7 +47,9 @@ export default function Importar() {
 
   return (
     <div className="p-6 w-full max-w-xl">
-      <h1 className="text-base font-extrabold text-ink flex items-center gap-2 mb-1">☁️ Importar / Sincronização</h1>
+      <h1 className="text-base font-extrabold text-ink flex items-center gap-2 mb-1">
+        <IconImportar /> Importar / Sincronização
+      </h1>
       <p className="text-sm text-ink-soft mb-6">
         Traz os clientes e vendedores já cadastrados na Divinissima para dentro desta empresa no Fluxa CRM. Os dados
         de origem continuam intactos — nada é alterado ou removido do sistema atual da Divinissima.

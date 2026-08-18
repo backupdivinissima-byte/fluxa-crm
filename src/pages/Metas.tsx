@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { ouvirClientes, ouvirVendedores, salvarMetasEmpresa } from '../lib/crmData';
 import { METAS_PADRAO, type Cliente, type MetaTier, type Vendedor } from '../types';
 import { formatarMoeda, vendasMesVendedor } from '../lib/crmLogic';
+import { IconMetas } from '../components/NavIcons';
 
 /** Faixas de meta/comissão da empresa + acompanhamento por vendedor.
  * A comissão do mês usa a MAIOR faixa atingida (não cumulativa entre
@@ -89,7 +90,9 @@ export default function Metas() {
     const nivel = calcularNivel(vendasMes);
     return (
       <div className="p-6 w-full max-w-lg">
-        <h1 className="text-base font-extrabold text-ink flex items-center gap-2 mb-4">🎯 Minhas metas</h1>
+        <h1 className="text-base font-extrabold text-ink flex items-center gap-2 mb-4">
+          <IconMetas /> Minhas metas
+        </h1>
         <div className="bg-white border border-line rounded-2xl p-6 mb-4">
           <p className="text-xs text-ink-soft uppercase font-bold tracking-wide mb-1">Vendas no mês</p>
           <p className="text-2xl font-extrabold text-ink mb-4">{formatarMoeda(vendasMes)}</p>
@@ -128,7 +131,9 @@ export default function Metas() {
   // Visão do admin: editor de faixas + tabela por vendedor.
   return (
     <div className="p-6 w-full">
-      <h1 className="text-base font-extrabold text-ink flex items-center gap-2 mb-4">🎯 Metas &amp; Comissões</h1>
+      <h1 className="text-base font-extrabold text-ink flex items-center gap-2 mb-4">
+        <IconMetas /> Metas &amp; Comissões
+      </h1>
 
       <div className="bg-white border border-line rounded-2xl p-5 mb-6 overflow-x-auto">
         <h2 className="text-sm font-extrabold text-ink mb-3">Faixas de meta da empresa</h2>

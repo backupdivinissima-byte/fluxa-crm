@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { ouvirClientes, ouvirVendedores } from '../lib/crmData';
 import type { Cliente, Vendedor } from '../types';
 import { formatarMoeda, vendasMesVendedor } from '../lib/crmLogic';
+import { IconLinks } from '../components/NavIcons';
 
 /** Link direto de cada vendedor: abre já na tela de login, com o login
  * pré-preenchido e a empresa certa identificada por ?empresa=ID — assim o
@@ -52,7 +53,9 @@ export default function Links() {
 
   return (
     <div className="p-6 w-full">
-      <h1 className="text-base font-extrabold text-ink flex items-center gap-2 mb-1">🔗 Links dos vendedores</h1>
+      <h1 className="text-base font-extrabold text-ink flex items-center gap-2 mb-1">
+        <IconLinks /> Links dos vendedores
+      </h1>
       <p className="text-sm text-ink-soft mb-4">
         Cada vendedor tem um link próprio de acesso — ele só precisa digitar a senha ao abrir.
       </p>

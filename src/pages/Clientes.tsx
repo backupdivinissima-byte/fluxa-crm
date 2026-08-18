@@ -4,6 +4,7 @@ import { ouvirClientes, ouvirVendedores } from '../lib/crmData';
 import type { Cliente, Vendedor } from '../types';
 import { diasSemAtend, formatarMoeda, matchVendedor, statusInfo } from '../lib/crmLogic';
 import ClienteDetalheModal from '../components/ClienteDetalheModal';
+import { IconClientes } from '../components/NavIcons';
 
 type FiltroStatus = 'todos' | 'com' | 'sem' | 'inat' | '31_40' | 'at';
 
@@ -62,7 +63,9 @@ export default function Clientes() {
   return (
     <div className="p-6 w-full">
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-        <h1 className="text-base font-extrabold text-ink flex items-center gap-2">👥 Clientes</h1>
+        <h1 className="text-base font-extrabold text-ink flex items-center gap-2">
+          <IconClientes /> Clientes
+        </h1>
         <div className="flex items-center gap-2 flex-wrap">
           <select
             value={filtro}
