@@ -124,8 +124,8 @@ export const KB_COLUNAS: KbColuna[] = [
   { id: 'd31_40', titulo: '31 a 40 dias', sub: 'risco de inatividade', cor: '#E67E22', auto: true },
   { id: 'ativos', titulo: 'Clientes Ativos', sub: 'até 30 dias', cor: '#27AE60', auto: true },
   { id: 'atendimento', titulo: 'Em Atendimento', cor: '#2980B9', auto: false },
-  { id: 'orcamento_live', titulo: 'Orçamento Live', cor: '#8E6FBE', auto: false },
-  { id: 'orcamento_catalogo', titulo: 'Orçamento Catálogo', cor: '#1791A8', auto: false },
+  { id: 'orcamento_live', titulo: 'Orçamento 1', cor: '#8E6FBE', auto: false },
+  { id: 'orcamento_catalogo', titulo: 'Orçamento 2', cor: '#1791A8', auto: false },
   { id: 'concluido_live', titulo: 'Concluído Live', cor: '#1E7A46', auto: false },
   { id: 'concluido_catalogo', titulo: 'Concluído Catálogo', cor: '#4C51BF', auto: false },
 ];
