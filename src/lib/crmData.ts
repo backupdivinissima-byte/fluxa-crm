@@ -13,7 +13,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Cliente, Empresa, FiltroCrm, MetaTier, Vendedor } from '../types';
+import type { Cliente, ColunaCrm, Empresa, FiltroCrm, MetaTier, Vendedor } from '../types';
 
 function clientesCol(empresaId: string) {
   return collection(db, 'empresas', empresaId, 'clientes');
@@ -93,6 +93,11 @@ export async function salvarMetasEmpresa(empresaId: string, metas: MetaTier[]) {
 // editar os mesmos filtros em tempo real.
 export async function salvarFiltrosCrm(empresaId: string, filtros: FiltroCrm[]) {
   await updateDoc(doc(db, 'empresas', empresaId), { crmFiltros: filtros });
+}
+
+// Colunas personalizadas do quadro CRM — mesmo padrão de `crmFiltros`.
+export async function salvarColunasCrm(empresaId: string, colunas: ColunaCrm[]) {
+  await updateDoc(doc(db, 'empresas', empresaId), { crmColunas: colunas });
 }
 
 export function ouvirEmpresa(empresaId: string, cb: (empresa: Empresa | null) => void): Unsubscribe {

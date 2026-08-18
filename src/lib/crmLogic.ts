@@ -1,7 +1,5 @@
-// Funções puras de regra de negócio do CRM — portadas da Divinissima
-// (index.html, seção "CRM Kanban"), mantendo os mesmos nomes e comportamento
-// pra facilitar comparação/manutenção futura.
-import type { Cliente, CrmOrigem, FiltroCrm, KbColunaId, Vendedor } from '../types';
+// Funções puras de regra de negócio do CRM.
+import type { Cliente, FiltroCrm } from '../types';
 
 /** Transforma um código/login em um ID de documento Firestore seguro e
  * determinístico (mesmo valor de entrada sempre vira o mesmo ID) — usado
@@ -46,12 +44,10 @@ export function matchVendedor(c: Cliente, login: string, nome?: string): boolean
   return false;
 }
 
-/** Valor a exibir no card do Kanban: valor do orçamento se houver, senão o total geral. */
-export function kbValorCliente(c: Cliente): number {
-  if ((c.crmStage === 'orcamento' || c.crmStage === 'concluido') && c.crmOrcamentoValor) {
-    return c.crmOrcamentoValor;
-  }
-  return c.totalGeral ?? c.c1 ?? 0;
+/** Valor a exibir no card do quadro CRM: valor combinado (quando o card já
+ * passou por uma coluna de fechamento) se houver, senão o total geral. */
+export function valorCliente(c: Cliente): number {
+  return c.crmOrcamentoValor ?? c.totalGeral ?? c.c1 ?? 0;
 }
 
 /** Testa se um cliente atende a todos os critérios preenchidos de um filtro
@@ -75,132 +71,38 @@ export function clientePassaFiltro(c: Cliente, f: FiltroCrm): boolean {
   if (f.vendedorLogin) {
     if (c.crmVendedorLogin !== f.vendedorLogin && c.cod_vendedor !== f.vendedorLogin) return false;
   }
-  if (f.valorMin != null && kbValorCliente(c) < f.valorMin) return false;
-  if (f.valorMax != null && kbValorCliente(c) > f.valorMax) return false;
+  if (f.valorMin != null && valorCliente(c) < f.valorMin) return false;
+  if (f.valorMax != null && valorCliente(c) > f.valorMax) return false;
   return true;
 }
 
-/** Em qual das 8 colunas do Kanban um cliente cai, dado o vendedor logado (ou null se admin). */
-export function colunaDoCliente(
+/** Um card só aparece pro login de vendedor se já for "dele" (vendedor
+ * vinculado bate) ou, se ainda sem vendedor vinculado, se o cliente já era
+ * originalmente dele (cod_vendedor/nome). Admin vê tudo. */
+export function cartaoVisivelPara(
   c: Cliente,
   papel: 'admin' | 'vendedor',
   loginAtual?: string,
   nomeAtual?: string
-): KbColunaId | null {
-  // Pipeline manual tem prioridade.
-  if (c.crmStage === 'atendimento') {
-    if (papel === 'vendedor' && c.crmVendedorLogin !== loginAtual) return null;
-    return 'atendimento';
-  }
-  if (c.crmStage === 'orcamento') {
-    if (papel === 'vendedor' && c.crmVendedorLogin !== loginAtual) return null;
-    return c.crmOrigem === 'catalogo' ? 'orcamento_catalogo' : 'orcamento_live';
-  }
-  if (c.crmStage === 'concluido') {
-    if (papel === 'vendedor' && c.crmVendedorLogin !== loginAtual) return null;
-    return c.crmOrigem === 'catalogo' ? 'concluido_catalogo' : 'concluido_live';
-  }
-
-  // Sem estágio manual: cai automaticamente pelos dias sem compra.
-  const dias = diasSemAtend(c);
-  if (dias > 40) return 'inativos'; // inativos é global, todo mundo vê
-  if (papel === 'vendedor' && !matchVendedor(c, loginAtual ?? '', nomeAtual)) return null;
-  if (dias > 30) return 'd31_40';
-  return 'ativos';
+): boolean {
+  if (papel === 'admin') return true;
+  if (c.crmVendedorLogin) return c.crmVendedorLogin === loginAtual;
+  return matchVendedor(c, loginAtual ?? '', nomeAtual);
 }
 
 export function formatarMoeda(v: number): string {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
-/** Regras de transição ao soltar um card numa coluna — replica kbMoverCliente. */
-export interface ResultadoMover {
-  ok: boolean;
-  erro?: string;
-  precisaVendedor?: boolean;
-  precisaValorOrcamento?: boolean;
-  patch?: Partial<Cliente>;
-}
-
-export function calcularMovimentoCliente(
-  cliente: Cliente,
-  destino: KbColunaId,
-  vendedorAtual: Vendedor | 'admin'
-): ResultadoMover {
-  const loginAtual = vendedorAtual === 'admin' ? null : vendedorAtual.login;
-
-  // Guarda: se já tem vendedor vinculado e é outro vendedor tentando mexer, bloqueia.
-  if (
-    loginAtual &&
-    cliente.crmVendedorLogin &&
-    cliente.crmVendedorLogin !== loginAtual &&
-    destino !== 'inativos' &&
-    destino !== 'd31_40' &&
-    destino !== 'ativos'
-  ) {
-    return { ok: false, erro: 'Esse cliente já está sendo atendido por outro vendedor.' };
-  }
-
-  if (destino === 'inativos' || destino === 'd31_40' || destino === 'ativos') {
-    return {
-      ok: true,
-      patch: {
-        crmStage: null,
-        crmVendedorLogin: undefined,
-        crmOrcamentoValor: undefined,
-        crmOrigem: undefined,
-        crmStageChangedAt: new Date().toISOString(),
-      },
-    };
-  }
-
-  if (destino === 'atendimento') {
-    if (!cliente.crmVendedorLogin && !loginAtual) {
-      return { ok: true, precisaVendedor: true };
-    }
-    return {
-      ok: true,
-      patch: {
-        crmStage: 'atendimento',
-        crmOrigem: undefined,
-        crmVendedorLogin: cliente.crmVendedorLogin ?? loginAtual ?? undefined,
-        crmStageChangedAt: new Date().toISOString(),
-      },
-    };
-  }
-
-  if (destino === 'orcamento_live' || destino === 'orcamento_catalogo') {
-    if (!cliente.crmVendedorLogin && !loginAtual) {
-      return { ok: true, precisaVendedor: true, precisaValorOrcamento: true };
-    }
-    return { ok: true, precisaValorOrcamento: true };
-  }
-
-  if (destino === 'concluido_live' || destino === 'concluido_catalogo') {
-    if (!cliente.crmVendedorLogin && !loginAtual) {
-      return { ok: true, precisaVendedor: true };
-    }
-    const origem: CrmOrigem = destino === 'concluido_catalogo' ? 'catalogo' : 'live';
-    return {
-      ok: true,
-      patch: {
-        crmStage: 'concluido',
-        crmOrigem: origem,
-        crmVendedorLogin: cliente.crmVendedorLogin ?? loginAtual ?? undefined,
-        crmStageChangedAt: new Date().toISOString(),
-      },
-    };
-  }
-
-  return { ok: false, erro: 'Destino inválido.' };
-}
-
-/** Vendas do mês corrente de um vendedor: soma dos orçamentos concluídos no mês. */
-export function vendasMesVendedor(clientes: Cliente[], login: string): number {
+/** Vendas do mês corrente de um vendedor: soma dos cards que estão HOJE
+ * numa coluna de fechamento, atribuídos a esse vendedor, e que entraram
+ * nela dentro do mês corrente. */
+export function vendasMesVendedor(clientes: Cliente[], login: string, colunasFechamentoIds: string[]): number {
+  if (colunasFechamentoIds.length === 0) return 0;
   const agora = new Date();
   const mesRef = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}`;
   return clientes
-    .filter((c) => c.crmStage === 'concluido' && c.crmVendedorLogin === login)
-    .filter((c) => (c.crmStageChangedAt ?? '').slice(0, 7) === mesRef)
+    .filter((c) => c.crmColunaId && colunasFechamentoIds.includes(c.crmColunaId) && c.crmVendedorLogin === login)
+    .filter((c) => (c.crmColunaChangedAt ?? '').slice(0, 7) === mesRef)
     .reduce((soma, c) => soma + (c.crmOrcamentoValor ?? c.totalGeral ?? 0), 0);
 }
