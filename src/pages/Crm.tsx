@@ -1,10 +1,28 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { ouvirClientes, ouvirVendedores, atualizarCampoCliente } from '../lib/crmData';
-import { KB_COLUNAS, type Cliente, type KbColunaId, type Vendedor } from '../types';
-import { calcularMovimentoCliente, formatarMoeda, kbValorCliente, colunaDoCliente } from '../lib/crmLogic';
+import { ouvirClientes, ouvirVendedores, ouvirEmpresa, atualizarCampoCliente, salvarFiltrosCrm } from '../lib/crmData';
+import { KB_COLUNAS, type Cliente, type FiltroCrm, type KbColunaId, type Vendedor } from '../types';
+import {
+  calcularMovimentoCliente,
+  clientePassaFiltro,
+  formatarMoeda,
+  kbValorCliente,
+  colunaDoCliente,
+} from '../lib/crmLogic';
 import ClienteDetalheModal from '../components/ClienteDetalheModal';
 import { IconCrm } from '../components/NavIcons';
+
+const MAX_FILTROS = 10;
+
+const FILTRO_VAZIO = {
+  nome: '',
+  texto: '',
+  cidade: '',
+  uf: '',
+  vendedorLogin: '',
+  valorMin: '',
+  valorMax: '',
+};
 
 /** Quadro Kanban do funil de vendas — 8 colunas em CSS Grid (mesma correção
  * de largura já aplicada na Divinissima: repeat(8,minmax(150px,1fr))), com
@@ -22,13 +40,23 @@ export default function Crm() {
   const [vendedorEscolhido, setVendedorEscolhido] = useState('');
   const [valorOrcamento, setValorOrcamento] = useState('');
 
+  // Filtros personalizados do quadro — vêm do doc da empresa (live), pra
+  // qualquer login (admin ou vendedor) ver e usar os mesmos filtros.
+  const [filtros, setFiltros] = useState<FiltroCrm[]>([]);
+  const [filtroAtivoId, setFiltroAtivoId] = useState<string | null>(null);
+  const [modalFiltro, setModalFiltro] = useState<{ editandoId: string | null } | null>(null);
+  const [formFiltro, setFormFiltro] = useState(FILTRO_VAZIO);
+  const [salvandoFiltro, setSalvandoFiltro] = useState(false);
+
   useEffect(() => {
     if (!empresaId) return;
     const unsubC = ouvirClientes(empresaId, setClientes);
     const unsubV = ouvirVendedores(empresaId, setVendedores);
+    const unsubE = ouvirEmpresa(empresaId, (emp) => setFiltros(emp?.crmFiltros ?? []));
     return () => {
       unsubC();
       unsubV();
+      unsubE();
     };
   }, [empresaId]);
 
@@ -48,15 +76,93 @@ export default function Crm() {
 
   const totalEmpresa = useMemo(() => clientes.reduce((s, c) => s + (c.totalGeral ?? 0), 0) || 1, [clientes]);
 
+  const filtroAtivo = filtros.find((f) => f.id === filtroAtivoId) ?? null;
+
   function filtrar(lista: Cliente[]) {
-    if (!busca.trim()) return lista;
-    const termo = busca.trim().toLowerCase();
-    return lista.filter(
-      (c) =>
-        (c.razao ?? c.nome ?? '').toLowerCase().includes(termo) ||
-        c.cod.toLowerCase().includes(termo) ||
-        (c.telefone ?? '').includes(termo)
-    );
+    let out = lista;
+    if (busca.trim()) {
+      const termo = busca.trim().toLowerCase();
+      out = out.filter(
+        (c) =>
+          (c.razao ?? c.nome ?? '').toLowerCase().includes(termo) ||
+          c.cod.toLowerCase().includes(termo) ||
+          (c.telefone ?? '').includes(termo)
+      );
+    }
+    if (filtroAtivo) out = out.filter((c) => clientePassaFiltro(c, filtroAtivo));
+    return out;
+  }
+
+  function abrirNovoFiltro() {
+    if (filtros.length >= MAX_FILTROS) return;
+    setFormFiltro(FILTRO_VAZIO);
+    setModalFiltro({ editandoId: null });
+  }
+
+  function abrirEditarFiltro(f: FiltroCrm) {
+    setFormFiltro({
+      nome: f.nome,
+      texto: f.texto ?? '',
+      cidade: f.cidade ?? '',
+      uf: f.uf ?? '',
+      vendedorLogin: f.vendedorLogin ?? '',
+      valorMin: f.valorMin != null ? String(f.valorMin) : '',
+      valorMax: f.valorMax != null ? String(f.valorMax) : '',
+    });
+    setModalFiltro({ editandoId: f.id });
+  }
+
+  async function salvarFiltro() {
+    if (!empresaId || !modalFiltro) return;
+    const nome = formFiltro.nome.trim();
+    if (!nome) {
+      alert('Dê um nome para o filtro.');
+      return;
+    }
+    const dados: FiltroCrm = {
+      id: modalFiltro.editandoId ?? `filtro-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      nome,
+      ...(formFiltro.texto.trim() && { texto: formFiltro.texto.trim() }),
+      ...(formFiltro.cidade.trim() && { cidade: formFiltro.cidade.trim() }),
+      ...(formFiltro.uf.trim() && { uf: formFiltro.uf.trim().toUpperCase() }),
+      ...(formFiltro.vendedorLogin && { vendedorLogin: formFiltro.vendedorLogin }),
+      ...(formFiltro.valorMin.trim() && { valorMin: Number(formFiltro.valorMin) }),
+      ...(formFiltro.valorMax.trim() && { valorMax: Number(formFiltro.valorMax) }),
+    };
+    const novaLista = modalFiltro.editandoId
+      ? filtros.map((f) => (f.id === modalFiltro.editandoId ? dados : f))
+      : [...filtros, dados];
+    if (novaLista.length > MAX_FILTROS) {
+      alert(`Você já tem o máximo de ${MAX_FILTROS} filtros.`);
+      return;
+    }
+    setSalvandoFiltro(true);
+    try {
+      await salvarFiltrosCrm(empresaId, novaLista);
+      setModalFiltro(null);
+    } catch (err) {
+      console.error('Erro ao salvar filtro:', err);
+      alert('Não foi possível salvar o filtro. Tente novamente em instantes.');
+    } finally {
+      setSalvandoFiltro(false);
+    }
+  }
+
+  async function excluirFiltroAtual() {
+    if (!empresaId || !modalFiltro?.editandoId) return;
+    if (!confirm('Excluir este filtro?')) return;
+    setSalvandoFiltro(true);
+    try {
+      const novaLista = filtros.filter((f) => f.id !== modalFiltro.editandoId);
+      await salvarFiltrosCrm(empresaId, novaLista);
+      if (filtroAtivoId === modalFiltro.editandoId) setFiltroAtivoId(null);
+      setModalFiltro(null);
+    } catch (err) {
+      console.error('Erro ao excluir filtro:', err);
+      alert('Não foi possível excluir o filtro. Tente novamente em instantes.');
+    } finally {
+      setSalvandoFiltro(false);
+    }
   }
 
   function onDrop(destino: KbColunaId, cliente: Cliente) {
@@ -125,6 +231,51 @@ export default function Crm() {
           placeholder="Buscar cliente por nome, código ou telefone..."
           className="w-full sm:w-80 rounded-xl border border-line px-3.5 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/30"
         />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1.5 mb-4">
+        <span className="text-[11px] font-bold text-ink-soft uppercase tracking-wide mr-1">Filtros</span>
+        {filtros.map((f) => (
+          <div
+            key={f.id}
+            className={`group flex items-center gap-0.5 rounded-full border pl-3 pr-1 py-1 text-xs font-semibold transition-colors ${
+              filtroAtivoId === f.id
+                ? 'bg-teal-500/10 border-teal-500 text-teal-600'
+                : 'border-line text-ink-soft hover:bg-surface'
+            }`}
+          >
+            <button
+              type="button"
+              onClick={() => setFiltroAtivoId(filtroAtivoId === f.id ? null : f.id)}
+              className="whitespace-nowrap"
+              title="Clique para ativar/desativar este filtro"
+            >
+              {f.nome}
+            </button>
+            <button
+              type="button"
+              onClick={() => abrirEditarFiltro(f)}
+              title="Editar filtro"
+              className="w-5 h-5 rounded-full hover:bg-line/60 flex items-center justify-center text-[10px] shrink-0"
+            >
+              ✎
+            </button>
+          </div>
+        ))}
+        {filtros.length < MAX_FILTROS ? (
+          <button
+            type="button"
+            onClick={abrirNovoFiltro}
+            className="rounded-full border border-dashed border-line text-ink-soft text-xs font-bold px-3 py-1 hover:bg-surface hover:text-ink"
+          >
+            + Novo filtro
+          </button>
+        ) : (
+          <span className="text-[10px] text-ink-soft">Limite de {MAX_FILTROS} filtros atingido</span>
+        )}
+        <span className="text-[10px] text-ink-soft ml-auto">
+          {filtros.length}/{MAX_FILTROS} filtros
+        </span>
       </div>
 
       <div
@@ -250,6 +401,124 @@ export default function Crm() {
                 Cancelar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {modalFiltro && (
+        <div className="fixed inset-0 z-50 bg-ink/40 flex items-center justify-center p-4" onClick={() => setModalFiltro(null)}>
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-base font-extrabold text-ink mb-1">
+              {modalFiltro.editandoId ? 'Editar filtro' : 'Novo filtro'}
+            </h2>
+            <p className="text-xs text-ink-soft mb-4">
+              Preencha só os critérios que quiser combinar. Deixe em branco o que não importa pra esse filtro.
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1">Nome do filtro *</label>
+                <input
+                  value={formFiltro.nome}
+                  onChange={(e) => setFormFiltro((f) => ({ ...f, nome: e.target.value }))}
+                  placeholder="Ex.: SP alto valor"
+                  className="w-full rounded-lg border border-line px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/30"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1">
+                  Texto (nome, código ou telefone)
+                </label>
+                <input
+                  value={formFiltro.texto}
+                  onChange={(e) => setFormFiltro((f) => ({ ...f, texto: e.target.value }))}
+                  className="w-full rounded-lg border border-line px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/30"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1">Cidade</label>
+                  <input
+                    value={formFiltro.cidade}
+                    onChange={(e) => setFormFiltro((f) => ({ ...f, cidade: e.target.value }))}
+                    className="w-full rounded-lg border border-line px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/30"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1">UF</label>
+                  <input
+                    value={formFiltro.uf}
+                    maxLength={2}
+                    onChange={(e) => setFormFiltro((f) => ({ ...f, uf: e.target.value.toUpperCase() }))}
+                    className="w-full rounded-lg border border-line px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/30 uppercase"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1">Vendedor</label>
+                <select
+                  value={formFiltro.vendedorLogin}
+                  onChange={(e) => setFormFiltro((f) => ({ ...f, vendedorLogin: e.target.value }))}
+                  className="w-full rounded-lg border border-line px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/30"
+                >
+                  <option value="">Todos</option>
+                  {vendedores.map((v) => (
+                    <option key={v.id} value={v.login}>
+                      {v.nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1">Valor mínimo (R$)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formFiltro.valorMin}
+                    onChange={(e) => setFormFiltro((f) => ({ ...f, valorMin: e.target.value }))}
+                    className="w-full rounded-lg border border-line px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/30"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1">Valor máximo (R$)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formFiltro.valorMax}
+                    onChange={(e) => setFormFiltro((f) => ({ ...f, valorMax: e.target.value }))}
+                    className="w-full rounded-lg border border-line px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/30"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-5">
+              <button
+                onClick={salvarFiltro}
+                disabled={salvandoFiltro}
+                className="flex-1 rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold py-2.5 hover:opacity-90 disabled:opacity-60"
+              >
+                {salvandoFiltro ? 'Salvando...' : 'Salvar filtro'}
+              </button>
+              <button
+                onClick={() => setModalFiltro(null)}
+                className="rounded-xl border border-line text-ink text-sm font-bold px-4 py-2.5 hover:bg-surface"
+              >
+                Cancelar
+              </button>
+            </div>
+            {modalFiltro.editandoId && (
+              <button
+                onClick={excluirFiltroAtual}
+                disabled={salvandoFiltro}
+                className="w-full text-center mt-3 text-xs font-bold text-red-500 hover:text-red-600 disabled:opacity-60"
+              >
+                Excluir filtro
+              </button>
+            )}
           </div>
         </div>
       )}
