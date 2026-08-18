@@ -1,7 +1,7 @@
 // Funções puras de regra de negócio do CRM — portadas da Divinissima
 // (index.html, seção "CRM Kanban"), mantendo os mesmos nomes e comportamento
 // pra facilitar comparação/manutenção futura.
-import type { Cliente, CrmOrigem, KbColunaId, Vendedor } from '../types';
+import type { Cliente, CrmOrigem, FiltroCrm, KbColunaId, Vendedor } from '../types';
 
 /** Transforma um código/login em um ID de documento Firestore seguro e
  * determinístico (mesmo valor de entrada sempre vira o mesmo ID) — usado
@@ -52,6 +52,32 @@ export function kbValorCliente(c: Cliente): number {
     return c.crmOrcamentoValor;
   }
   return c.totalGeral ?? c.c1 ?? 0;
+}
+
+/** Testa se um cliente atende a todos os critérios preenchidos de um filtro
+ * personalizado do CRM (critérios vazios são ignorados; os preenchidos se
+ * combinam com "E" entre si). */
+export function clientePassaFiltro(c: Cliente, f: FiltroCrm): boolean {
+  if (f.texto && f.texto.trim()) {
+    const termo = f.texto.trim().toLowerCase();
+    const bate =
+      (c.razao ?? c.nome ?? '').toLowerCase().includes(termo) ||
+      c.cod.toLowerCase().includes(termo) ||
+      (c.telefone ?? '').includes(termo);
+    if (!bate) return false;
+  }
+  if (f.cidade && f.cidade.trim()) {
+    if (!(c.cidade ?? '').toLowerCase().includes(f.cidade.trim().toLowerCase())) return false;
+  }
+  if (f.uf && f.uf.trim()) {
+    if ((c.uf ?? '').trim().toUpperCase() !== f.uf.trim().toUpperCase()) return false;
+  }
+  if (f.vendedorLogin) {
+    if (c.crmVendedorLogin !== f.vendedorLogin && c.cod_vendedor !== f.vendedorLogin) return false;
+  }
+  if (f.valorMin != null && kbValorCliente(c) < f.valorMin) return false;
+  if (f.valorMax != null && kbValorCliente(c) > f.valorMax) return false;
+  return true;
 }
 
 /** Em qual das 8 colunas do Kanban um cliente cai, dado o vendedor logado (ou null se admin). */

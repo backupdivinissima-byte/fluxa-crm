@@ -13,7 +13,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Cliente, Empresa, MetaTier, Vendedor } from '../types';
+import type { Cliente, Empresa, FiltroCrm, MetaTier, Vendedor } from '../types';
 
 function clientesCol(empresaId: string) {
   return collection(db, 'empresas', empresaId, 'clientes');
@@ -86,6 +86,13 @@ export async function removerVendedor(empresaId: string, vendedorId: string) {
 
 export async function salvarMetasEmpresa(empresaId: string, metas: MetaTier[]) {
   await updateDoc(doc(db, 'empresas', empresaId), { metas });
+}
+
+// Filtros personalizados do quadro CRM — gravados direto no doc da empresa
+// (mesmo padrão de `metas`), pra qualquer login (admin ou vendedor) ver e
+// editar os mesmos filtros em tempo real.
+export async function salvarFiltrosCrm(empresaId: string, filtros: FiltroCrm[]) {
+  await updateDoc(doc(db, 'empresas', empresaId), { crmFiltros: filtros });
 }
 
 export function ouvirEmpresa(empresaId: string, cb: (empresa: Empresa | null) => void): Unsubscribe {
