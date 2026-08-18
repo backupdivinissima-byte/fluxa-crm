@@ -9,6 +9,22 @@ export interface Empresa {
   criadoEm: string; // ISO date
   plano: 'trial' | 'starter' | 'pro';
   metas?: MetaTier[]; // faixas globais de meta/comissão da empresa
+  crmFiltros?: FiltroCrm[]; // filtros personalizados do quadro CRM (até 10)
+}
+
+// Filtro personalizado do quadro CRM — cada empresa pode criar até 10,
+// combinando os critérios preenchidos (todos opcionais, exceto o nome) com
+// "E" entre si. Salvo na própria empresa pra ficar visível/editável tanto
+// pelo administrador quanto pelos vendedores.
+export interface FiltroCrm {
+  id: string;
+  nome: string;
+  texto?: string; // nome/código/telefone contém
+  cidade?: string; // contém
+  uf?: string; // igual (2 letras)
+  vendedorLogin?: string; // igual
+  valorMin?: number;
+  valorMax?: number;
 }
 
 // Faixa de meta/comissão (ex.: "Meta 1" = R$5.000 → 3% + bônus R$200).
