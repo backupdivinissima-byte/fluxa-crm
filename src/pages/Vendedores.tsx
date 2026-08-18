@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { ouvirClientes, ouvirVendedores, removerVendedor, salvarVendedor } from '../lib/crmData';
-import type { Cliente, Vendedor } from '../types';
+import { ouvirClientes, ouvirEmpresa, ouvirVendedores, removerVendedor, salvarVendedor } from '../lib/crmData';
+import { CRM_COLUNAS_PADRAO, type Cliente, type ColunaCrm, type Vendedor } from '../types';
 import { formatarMoeda, vendasMesVendedor } from '../lib/crmLogic';
 import { IconVendedores } from '../components/NavIcons';
 
@@ -12,6 +12,7 @@ export default function Vendedores() {
   const empresaId = empresa?.id;
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [colunas, setColunas] = useState<ColunaCrm[]>(empresa?.crmColunas ?? CRM_COLUNAS_PADRAO);
   const [modalAberto, setModalAberto] = useState(false);
   const [editando, setEditando] = useState<Vendedor | null>(null);
   const [nome, setNome] = useState('');
@@ -26,11 +27,17 @@ export default function Vendedores() {
     if (!empresaId) return;
     const unsubV = ouvirVendedores(empresaId, setVendedores);
     const unsubC = ouvirClientes(empresaId, setClientes);
+    const unsubE = ouvirEmpresa(empresaId, (emp) => {
+      setColunas(emp?.crmColunas && emp.crmColunas.length > 0 ? emp.crmColunas : CRM_COLUNAS_PADRAO);
+    });
     return () => {
       unsubV();
       unsubC();
+      unsubE();
     };
   }, [empresaId]);
+
+  const colunasFechamentoIds = useMemo(() => colunas.filter((c) => c.fechamento).map((c) => c.id), [colunas]);
 
   const contagemClientes = useMemo(() => {
     const mapa = new Map<string, number>();
@@ -113,7 +120,9 @@ export default function Vendedores() {
             <div className="text-lg font-extrabold text-ink">{meu.nome}</div>
             <div className="text-sm text-ink-soft mb-3">Login: {meu.login}</div>
             <div className="text-xs text-ink-soft">Clientes na minha carteira: {contagemClientes.get(meu.login) ?? 0}</div>
-            <div className="text-xs text-ink-soft">Vendas no mês: {formatarMoeda(vendasMesVendedor(clientes, meu.login))}</div>
+            <div className="text-xs text-ink-soft">
+              Vendas no mês: {formatarMoeda(vendasMesVendedor(clientes, meu.login, colunasFechamentoIds))}
+            </div>
           </div>
         )}
       </div>
@@ -152,7 +161,7 @@ export default function Vendedores() {
                 <td className="px-4 py-2.5 text-ink-soft">{v.login}</td>
                 <td className="px-4 py-2.5 text-right text-ink-soft">{contagemClientes.get(v.login) ?? 0}</td>
                 <td className="px-4 py-2.5 text-right font-bold text-ink">
-                  {formatarMoeda(vendasMesVendedor(clientes, v.login))}
+                  {formatarMoeda(vendasMesVendedor(clientes, v.login, colunasFechamentoIds))}
                 </td>
                 <td className="px-4 py-2.5 text-right">
                   <button onClick={() => abrirEdicao(v)} className="text-teal-600 font-bold text-xs mr-3 hover:underline">

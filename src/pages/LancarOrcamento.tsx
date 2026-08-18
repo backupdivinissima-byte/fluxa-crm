@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { ouvirClientes, ouvirVendedores, atualizarCampoCliente } from '../lib/crmData';
+import { ouvirClientes, ouvirEmpresa, ouvirVendedores, atualizarCampoCliente } from '../lib/crmData';
 import { matchVendedor } from '../lib/crmLogic';
-import type { Cliente, Vendedor } from '../types';
+import { CRM_COLUNAS_PADRAO, type Cliente, type ColunaCrm, type Vendedor } from '../types';
 import { IconOrcamento } from '../components/NavIcons';
 
 /** Lançamento rápido de orçamento — disponível pra qualquer login (vendedor
@@ -18,9 +18,10 @@ export default function LancarOrcamento() {
 
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
+  const [colunas, setColunas] = useState<ColunaCrm[]>(empresa?.crmColunas ?? CRM_COLUNAS_PADRAO);
   const [clienteId, setClienteId] = useState('');
   const [vendedorEscolhido, setVendedorEscolhido] = useState('');
-  const [tipo, setTipo] = useState<'live' | 'catalogo'>('live');
+  const [colunaId, setColunaId] = useState('');
   const [valor, setValor] = useState('');
   const [data, setData] = useState(() => new Date().toISOString().slice(0, 10));
   const [enviando, setEnviando] = useState(false);
@@ -31,11 +32,25 @@ export default function LancarOrcamento() {
     if (!empresaId) return;
     const unsubC = ouvirClientes(empresaId, setClientes);
     const unsubV = ouvirVendedores(empresaId, setVendedores);
+    const unsubE = ouvirEmpresa(empresaId, (emp) => {
+      const novas = emp?.crmColunas && emp.crmColunas.length > 0 ? emp.crmColunas : CRM_COLUNAS_PADRAO;
+      setColunas(novas);
+    });
     return () => {
       unsubC();
       unsubV();
+      unsubE();
     };
   }, [empresaId]);
+
+  // Mantém a coluna de destino selecionada válida conforme o quadro CRM
+  // muda (ex.: coluna escolhida foi excluída) — cai sempre na 1ª coluna.
+  useEffect(() => {
+    if (colunas.length === 0) return;
+    if (!colunaId || !colunas.some((c) => c.id === colunaId)) {
+      setColunaId(colunas[0].id);
+    }
+  }, [colunas, colunaId]);
 
   const loginAtual = ehAdmin ? undefined : sessaoVendedor?.vendedor.login;
   const nomeAtual = ehAdmin ? perfil?.nome : sessaoVendedor?.vendedor.nome;
@@ -69,11 +84,10 @@ export default function LancarOrcamento() {
     setEnviando(true);
     try {
       await atualizarCampoCliente(empresaId!, clienteId, {
-        crmStage: 'orcamento',
-        crmOrigem: tipo,
+        crmColunaId: colunaId || colunas[0]?.id,
         crmVendedorLogin: loginParaUsar,
         crmOrcamentoValor: valorNum,
-        crmStageChangedAt: data ? new Date(`${data}T12:00:00`).toISOString() : new Date().toISOString(),
+        crmColunaChangedAt: data ? new Date(`${data}T12:00:00`).toISOString() : new Date().toISOString(),
       });
       setSucesso(true);
       setClienteId('');
@@ -93,8 +107,8 @@ export default function LancarOrcamento() {
         <IconOrcamento /> Lançar orçamento
       </h1>
       <p className="text-sm text-ink-soft mb-6">
-        Registre um orçamento pra um cliente. Ele já cai automaticamente na coluna de Orçamento do quadro CRM e fica
-        lá até ser movido manualmente pra outra etapa.
+        Registre um orçamento pra um cliente. Ele já cai direto na coluna escolhida do quadro CRM e fica lá até ser
+        movido manualmente pra outra etapa.
       </p>
 
       <form onSubmit={registrar} className="bg-white border border-line rounded-2xl p-6 space-y-4">
@@ -138,15 +152,18 @@ export default function LancarOrcamento() {
 
         <div>
           <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1.5">
-            Tipo de orçamento
+            Coluna de destino
           </label>
           <select
-            value={tipo}
-            onChange={(e) => setTipo(e.target.value as 'live' | 'catalogo')}
+            value={colunaId}
+            onChange={(e) => setColunaId(e.target.value)}
             className="w-full rounded-xl border border-line px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500"
           >
-            <option value="live">Orçamento 1</option>
-            <option value="catalogo">Orçamento 2</option>
+            {colunas.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nome}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -177,9 +194,7 @@ export default function LancarOrcamento() {
 
         {erro && <p className="text-xs text-red-500">{erro}</p>}
         {sucesso && (
-          <p className="text-xs text-teal-600 font-bold">
-            Orçamento lançado! O cliente já está na coluna de Orçamento do CRM.
-          </p>
+          <p className="text-xs text-teal-600 font-bold">Orçamento lançado! O cliente já está no quadro CRM.</p>
         )}
 
         <button

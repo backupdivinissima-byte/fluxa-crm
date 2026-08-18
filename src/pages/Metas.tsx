@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { ouvirClientes, ouvirVendedores, salvarMetasEmpresa } from '../lib/crmData';
-import { METAS_PADRAO, type Cliente, type MetaTier, type Vendedor } from '../types';
+import { ouvirClientes, ouvirEmpresa, ouvirVendedores, salvarMetasEmpresa } from '../lib/crmData';
+import { CRM_COLUNAS_PADRAO, METAS_PADRAO, type Cliente, type ColunaCrm, type MetaTier, type Vendedor } from '../types';
 import { formatarMoeda, vendasMesVendedor } from '../lib/crmLogic';
 import { IconMetas } from '../components/NavIcons';
 
@@ -16,6 +16,7 @@ export default function Metas() {
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [metas, setMetas] = useState<MetaTier[]>(empresa?.metas ?? METAS_PADRAO);
+  const [colunas, setColunas] = useState<ColunaCrm[]>(empresa?.crmColunas ?? CRM_COLUNAS_PADRAO);
   const [salvando, setSalvando] = useState(false);
 
   const ehAdmin = papel === 'admin';
@@ -24,15 +25,24 @@ export default function Metas() {
     if (!empresaId) return;
     const unsubV = ouvirVendedores(empresaId, setVendedores);
     const unsubC = ouvirClientes(empresaId, setClientes);
+    const unsubE = ouvirEmpresa(empresaId, (emp) => {
+      setColunas(emp?.crmColunas && emp.crmColunas.length > 0 ? emp.crmColunas : CRM_COLUNAS_PADRAO);
+    });
     return () => {
       unsubV();
       unsubC();
+      unsubE();
     };
   }, [empresaId]);
 
   useEffect(() => {
     if (empresa?.metas && empresa.metas.length > 0) setMetas(empresa.metas);
   }, [empresa?.metas]);
+
+  // IDs das colunas marcadas como "fechamento" — só essas contam como venda
+  // concluída pra fins de comissão (independente de como a empresa nomeou
+  // ou organizou o resto do quadro).
+  const colunasFechamentoIds = useMemo(() => colunas.filter((c) => c.fechamento).map((c) => c.id), [colunas]);
 
   function calcularNivel(vendasMes: number) {
     for (let i = metas.length - 1; i >= 0; i--) {
@@ -77,8 +87,9 @@ export default function Metas() {
   }
 
   const vendedoresComVendas = useMemo(
-    () => vendedores.map((v) => ({ vendedor: v, vendasMes: vendasMesVendedor(clientes, v.login) })),
-    [vendedores, clientes]
+    () =>
+      vendedores.map((v) => ({ vendedor: v, vendasMes: vendasMesVendedor(clientes, v.login, colunasFechamentoIds) })),
+    [vendedores, clientes, colunasFechamentoIds]
   );
 
   if (!empresaId) return null;
@@ -86,7 +97,7 @@ export default function Metas() {
   // Visão do próprio vendedor: progresso pessoal.
   if (!ehAdmin) {
     const meu = sessaoVendedor?.vendedor;
-    const vendasMes = meu ? vendasMesVendedor(clientes, meu.login) : 0;
+    const vendasMes = meu ? vendasMesVendedor(clientes, meu.login, colunasFechamentoIds) : 0;
     const nivel = calcularNivel(vendasMes);
     return (
       <div className="p-6 w-full max-w-lg">

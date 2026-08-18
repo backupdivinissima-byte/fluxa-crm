@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { ouvirClientes, ouvirVendedores } from '../lib/crmData';
-import type { Cliente, Vendedor } from '../types';
+import { ouvirClientes, ouvirEmpresa, ouvirVendedores } from '../lib/crmData';
+import { CRM_COLUNAS_PADRAO, type Cliente, type ColunaCrm, type Vendedor } from '../types';
 import { formatarMoeda, vendasMesVendedor } from '../lib/crmLogic';
 import { IconLinks } from '../components/NavIcons';
 
@@ -14,17 +14,24 @@ export default function Links() {
   const empresaId = empresa?.id;
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [colunas, setColunas] = useState<ColunaCrm[]>(empresa?.crmColunas ?? CRM_COLUNAS_PADRAO);
   const [copiado, setCopiado] = useState<string | null>(null);
 
   useEffect(() => {
     if (!empresaId) return;
     const unsubV = ouvirVendedores(empresaId, setVendedores);
     const unsubC = ouvirClientes(empresaId, setClientes);
+    const unsubE = ouvirEmpresa(empresaId, (emp) => {
+      setColunas(emp?.crmColunas && emp.crmColunas.length > 0 ? emp.crmColunas : CRM_COLUNAS_PADRAO);
+    });
     return () => {
       unsubV();
       unsubC();
+      unsubE();
     };
   }, [empresaId]);
+
+  const colunasFechamentoIds = useMemo(() => colunas.filter((c) => c.fechamento).map((c) => c.id), [colunas]);
 
   if (!empresaId || papel !== 'admin') {
     return (
@@ -71,7 +78,7 @@ export default function Links() {
               <div className="text-xs text-ink-soft">login: {v.login}</div>
             </div>
             <div className="text-xs text-ink-soft text-right">
-              <div>Vendas no mês: {formatarMoeda(vendasMesVendedor(clientes, v.login))}</div>
+              <div>Vendas no mês: {formatarMoeda(vendasMesVendedor(clientes, v.login, colunasFechamentoIds))}</div>
             </div>
             <div className="flex items-center gap-2">
               <button
