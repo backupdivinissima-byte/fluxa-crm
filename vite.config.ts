@@ -4,6 +4,8 @@ import tailwindcss from '@tailwindcss/vite'
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/fluxa-crm/',
+  // Domínio próprio (fluxagestaoevendas.com.br) serve o site na raiz —
+  // por isso a base mudou de '/fluxa-crm/' pra '/'.
+  base: '/',
   plugins: [react(), tailwindcss()],
 })
