@@ -89,3 +89,26 @@ export function IconImportar(props: { className?: string }) {
     </NavIcon>
   );
 }
+
+export function IconOrcamento(props: { className?: string }) {
+  return (
+    <NavIcon {...props}>
+      <path d="M6 3.5h9l3 3v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-16a1 1 0 0 1 1-1Z" />
+      <path d="M14.5 3.5V7h3.5" />
+      <path d="M12 12v5M9.5 14.5h5" />
+    </NavIcon>
+  );
+}
+
+// Ícone de chave no mesmo traço fino dos demais (substitui o emoji 🔑), pra
+// usar tanto solto (cor herdada) quanto dentro do quadrado com gradiente
+// teal→azul, igual ao selo da logo.
+export function IconChave(props: { className?: string }) {
+  return (
+    <NavIcon {...props}>
+      <circle cx="8" cy="15" r="3.6" />
+      <path d="M10.4 12.6 18.5 4.5" />
+      <path d="M15.5 7.5l2 2M18 5l2 2" />
+    </NavIcon>
+  );
+}
