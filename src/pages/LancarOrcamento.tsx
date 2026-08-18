@@ -145,8 +145,8 @@ export default function LancarOrcamento() {
             onChange={(e) => setTipo(e.target.value as 'live' | 'catalogo')}
             className="w-full rounded-xl border border-line px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500"
           >
-            <option value="live">Orçamento Live</option>
-            <option value="catalogo">Orçamento Catálogo</option>
+            <option value="live">Orçamento 1</option>
+            <option value="catalogo">Orçamento 2</option>
           </select>
         </div>
 
