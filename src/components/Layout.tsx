@@ -38,7 +38,7 @@ export default function Layout() {
   return (
     <div className="min-h-screen flex flex-col bg-surface">
       <header className="sticky top-0 z-40 bg-white border-b border-line shrink-0">
-        <div className="flex items-center gap-1 px-5 h-14 flex-wrap">
+        <div className="flex items-center gap-1 px-5 py-2 min-h-14 flex-wrap">
           <div className="flex items-center gap-2 mr-4 shrink-0">
             <img src={fluxaIcon} alt="Fluxa CRM" className="w-8 h-8" />
             <span className="text-lg font-extrabold tracking-tight text-ink">Fluxa CRM</span>
