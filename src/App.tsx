@@ -11,6 +11,7 @@ import Vendedores from './pages/Vendedores';
 import Metas from './pages/Metas';
 import Links from './pages/Links';
 import Importar from './pages/Importar';
+import LancarOrcamento from './pages/LancarOrcamento';
 
 function Carregando() {
   return <div className="min-h-screen flex items-center justify-center text-ink-soft text-sm">Carregando...</div>;
@@ -53,6 +54,7 @@ function AppRoutes() {
         <Route path="/vendedores" element={<Vendedores />} />
         <Route path="/metas" element={<Metas />} />
         <Route path="/links" element={<Links />} />
+        <Route path="/lancar-orcamento" element={<LancarOrcamento />} />
         <Route path="/importar" element={<Importar />} />
       </Route>
     </Routes>
