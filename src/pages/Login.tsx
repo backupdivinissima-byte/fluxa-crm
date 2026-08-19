@@ -29,8 +29,15 @@ export default function Login() {
         await loginVendedor(identificador, senha, empresaHint);
       }
       navigate('/dashboard');
-    } catch {
-      setErro(modo === 'admin' ? 'E-mail ou senha inválidos.' : 'Login ou senha inválidos.');
+    } catch (err) {
+      // No modo vendedor, loginVendedor já lança mensagens próprias em
+      // português (credenciais inválidas, autenticação indisponível, sem
+      // conexão) — mostramos elas direto em vez de sempre genérico.
+      if (modo === 'vendedor' && err instanceof Error && err.message) {
+        setErro(err.message);
+      } else {
+        setErro(modo === 'admin' ? 'E-mail ou senha inválidos.' : 'Login ou senha inválidos.');
+      }
     } finally {
       setCarregando(false);
     }
