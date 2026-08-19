@@ -3,6 +3,7 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  signInAnonymously,
   signOut as firebaseSignOut,
   type User,
 } from 'firebase/auth';
@@ -95,6 +96,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function loginVendedor(loginVend: string, senha: string, empresaIdHint?: string) {
+    // Vendedor não usa e-mail/senha do Firebase Auth (login/senha simples,
+    // guardado no Firestore) — mas as regras de segurança do Firestore
+    // exigem "request.auth != null" pra qualquer leitura, mesmo a de
+    // vendedor. Por isso autenticamos anonimamente antes de consultar:
+    // isso satisfaz a regra sem exigir e-mail/senha reais do vendedor. Só
+    // autentica se ainda não houver ninguém logado (não derruba uma sessão
+    // de admin já aberta no mesmo navegador).
+    if (!auth.currentUser) {
+      try {
+        await signInAnonymously(auth);
+      } catch (err) {
+        const codigo = (err as { code?: string })?.code;
+        if (codigo === 'auth/operation-not-allowed' || codigo === 'auth/admin-restricted-operation') {
+          throw new Error(
+            'Login de vendedor está temporariamente indisponível (autenticação anônima não habilitada). Avise o administrador do sistema.'
+          );
+        }
+        throw new Error('Não foi possível conectar agora. Verifique sua internet e tente de novo.');
+      }
+    }
+
     // Caminho rápido: quando o vendedor entra pelo próprio link (aba "Links
     // dos vendedores", que já embute ?empresa=ID), consultamos direto a
     // empresa certa em O(1) — sem varrer o Firestore inteiro.
