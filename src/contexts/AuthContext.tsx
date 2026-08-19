@@ -12,7 +12,7 @@ import { auth, db } from '../lib/firebase';
 import type { Empresa, UsuarioPerfil, Vendedor } from '../types';
 
 // Sessão de vendedor (login/senha simples, sem Firebase Auth) — guardada só
-// em memória + localStorage, igual ao padrão atual da Divinissima.
+// em memória + localStorage.
 interface SessaoVendedor {
   vendedor: Vendedor;
   empresaId: string;
