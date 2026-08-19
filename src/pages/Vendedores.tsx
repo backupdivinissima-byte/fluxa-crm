@@ -6,7 +6,7 @@ import { formatarMoeda, vendasMesVendedor } from '../lib/crmLogic';
 import { IconVendedores } from '../components/NavIcons';
 
 /** CRUD de vendedores — cada um recebe um login/senha simples (sem e-mail
- * próprio), definido pelo admin, igual ao padrão já usado na Divinissima. */
+ * próprio), definido pelo admin. */
 export default function Vendedores() {
   const { empresa, papel, sessaoVendedor } = useAuth();
   const empresaId = empresa?.id;

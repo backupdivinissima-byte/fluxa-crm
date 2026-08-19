@@ -8,7 +8,7 @@ import { IconClientes } from '../components/NavIcons';
 
 type FiltroStatus = 'todos' | 'com' | 'sem' | 'inat' | '31_40' | 'at';
 
-/** Lista de clientes com busca e filtros — equivalente à aba "Clientes" da Divinissima. */
+/** Lista de clientes com busca e filtros. */
 export default function Clientes() {
   const { empresa, perfil, sessaoVendedor, papel } = useAuth();
   const empresaId = empresa?.id;

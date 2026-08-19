@@ -7,9 +7,8 @@ import { IconMetas } from '../components/NavIcons';
 
 /** Faixas de meta/comissão da empresa + acompanhamento por vendedor.
  * A comissão do mês usa a MAIOR faixa atingida (não cumulativa entre
- * faixas) — mesma regra da Divinissima. Como o Fluxa CRM ainda não importa
- * o total de vendas do sistema de origem, "vendas do mês" aqui é a soma dos
- * orçamentos marcados como Concluído no funil dentro do mês corrente. */
+ * faixas). "Vendas do mês" aqui é a soma dos orçamentos marcados como
+ * Concluído no funil dentro do mês corrente. */
 export default function Metas() {
   const { empresa, papel, sessaoVendedor } = useAuth();
   const empresaId = empresa?.id;
