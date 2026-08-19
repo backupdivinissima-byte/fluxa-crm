@@ -17,6 +17,20 @@ interface SessaoVendedor {
   empresaId: string;
 }
 
+// Dados coletados na tela "Cadastre sua empresa" (mesmas informações do
+// formulário de cadastro do Bling, adaptadas ao Fluxa CRM).
+export interface DadosCadastro {
+  nome: string; // nome de quem está cadastrando (login de administrador)
+  email: string;
+  senha: string;
+  nomeEmpresa: string; // razão social
+  whatsapp: string;
+  segmento: string;
+  atividadePrincipal: string;
+  documento?: string; // CNPJ ou CPF, opcional
+  documentoTipo?: 'cnpj' | 'cpf';
+}
+
 interface AuthState {
   carregando: boolean;
   usuario: User | null;
@@ -26,7 +40,7 @@ interface AuthState {
   papel: 'admin' | 'vendedor' | null;
   login: (email: string, senha: string) => Promise<void>;
   loginVendedor: (login: string, senha: string, empresaIdHint?: string) => Promise<void>;
-  cadastrar: (nome: string, email: string, senha: string, nomeEmpresa: string, cnpj?: string) => Promise<void>;
+  cadastrar: (dados: DadosCadastro) => Promise<void>;
   sair: () => Promise<void>;
 }
 
@@ -134,13 +148,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function cadastrar(nome: string, email: string, senha: string, nomeEmpresa: string, cnpj?: string) {
-    const cred = await createUserWithEmailAndPassword(auth, email, senha);
+  async function cadastrar(dados: DadosCadastro) {
+    const cred = await createUserWithEmailAndPassword(auth, dados.email, dados.senha);
     const empresaRef = doc(db, 'empresas', cred.user.uid); // 1ª empresa = doc com id do próprio admin fundador
     const novaEmpresa: Empresa = {
       id: empresaRef.id,
-      nome: nomeEmpresa,
-      ...(cnpj ? { cnpj } : {}),
+      nome: dados.nomeEmpresa,
+      whatsapp: dados.whatsapp,
+      segmento: dados.segmento,
+      atividadePrincipal: dados.atividadePrincipal,
+      ...(dados.documento ? { cnpj: dados.documento, documentoTipo: dados.documentoTipo } : {}),
       criadoEm: new Date().toISOString(),
       plano: 'trial',
     };
@@ -148,8 +165,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const novoPerfil: UsuarioPerfil = {
       uid: cred.user.uid,
-      nome,
-      email,
+      nome: dados.nome,
+      email: dados.email,
       empresaId: empresaRef.id,
       papel: 'admin',
       criadoEm: new Date().toISOString(),
