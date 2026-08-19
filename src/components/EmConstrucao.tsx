@@ -3,9 +3,9 @@ interface Props {
   icone: string;
 }
 
-/** Placeholder pras telas que ainda vão ser reconstruídas (CRM, Clientes,
+/** Placeholder pras telas que ainda vão ser construídas (CRM, Clientes,
  * Vendedores, Metas, Links, Importar) — só pra deixar a navegação completa
- * e utilizável enquanto cada uma é migrada da Divinissima. */
+ * e utilizável enquanto cada uma é implementada. */
 export default function EmConstrucao({ titulo, icone }: Props) {
   return (
     <div className="p-8 w-full">

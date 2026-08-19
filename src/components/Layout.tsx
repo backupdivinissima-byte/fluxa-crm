@@ -16,9 +16,8 @@ import {
 const itens = [
   { to: '/dashboard', label: 'Dashboard', icon: <IconDashboard />, fim: true },
   { to: '/crm', label: 'CRM', icon: <IconCrm /> },
-  // Atalho pra lançar orçamento (some direto na coluna de Orçamento do
-  // CRM) — visível pra admin e vendedor, com destaque visual (mesma ideia
-  // do botão "+ Lançar venda" que já existia na Divinissima).
+  // Atalho pra lançar orçamento (cai direto na coluna de Orçamento do
+  // CRM) — visível pra admin e vendedor, com destaque visual.
   { to: '/lancar-orcamento', label: '+ Lançar orçamento', icon: <IconOrcamento />, destaque: true },
   { to: '/clientes', label: 'Clientes', icon: <IconClientes /> },
   { to: '/vendedores', label: 'Vendedores', icon: <IconVendedores /> },
@@ -29,8 +28,7 @@ const itens = [
   { to: '/importar', label: 'Importar / Sincronização', icon: <IconImportar />, apenasAdmin: true },
 ];
 
-/** Nav superior única (marca + abas), mesmo padrão já validado no Fluxa ERP
- * e na própria Divinissima hoje: nada de menu lateral, todas as abas
+/** Nav superior única (marca + abas): nada de menu lateral, todas as abas
  * acessíveis no topo, tela toda livre para os dados. */
 export default function Layout() {
   const { empresa, perfil, sessaoVendedor, papel, sair } = useAuth();
