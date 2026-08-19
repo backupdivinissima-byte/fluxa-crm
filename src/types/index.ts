@@ -34,7 +34,7 @@ export interface FiltroCrm {
 
 // Faixa de meta/comissão (ex.: "Meta 1" = R$5.000 → 3% + bônus R$200).
 // A comissão do mês é calculada pela MAIOR faixa que o vendedor atingiu
-// (não é cumulativo entre faixas) — mesma regra da Divinissima.
+// (não é cumulativo entre faixas).
 export interface MetaTier {
   label: string;
   valor: number;
@@ -57,8 +57,7 @@ export interface UsuarioPerfil {
 }
 
 // Vendedores não usam Firebase Auth — o admin cria um login/senha simples
-// pra cada um, igual ao sistema atual da Divinissima (evita exigir e-mail
-// próprio de cada vendedor).
+// pra cada um (evita exigir e-mail próprio de cada vendedor).
 export interface Vendedor {
   id: string;
   nome: string;
