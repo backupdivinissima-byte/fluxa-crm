@@ -81,16 +81,49 @@ function paraDataISO(v: unknown): string | undefined {
   return undefined;
 }
 
-/** Aceita número direto ou texto em formato BR ("1.234,56") ou US ("1234.56"). */
+/** Aceita número direto ou texto em formato BR ("1.234,56") ou internacional
+ * ("1234.56"). Só interpreta ponto como separador de milhar quando também
+ * há vírgula (aí sim é inequivocamente formato BR) — sem vírgula, o ponto é
+ * tratado como separador decimal direto, que é o formato mais comum em
+ * exportação de banco de dados/CSV (ex.: "999.9"). Sem essa distinção, um
+ * valor como "999.9" virava 9999 (o ponto era removido por engano). */
 function paraNumero(v: unknown): number | undefined {
   if (v === '' || v == null) return undefined;
   if (typeof v === 'number') return v;
   const s = String(v).trim();
   if (!s) return undefined;
-  const comBr = Number(s.replace(/\./g, '').replace(',', '.'));
-  if (Number.isFinite(comBr)) return comBr;
+  if (s.includes(',')) {
+    const comBr = Number(s.replace(/\./g, '').replace(',', '.'));
+    if (Number.isFinite(comBr)) return comBr;
+  }
   const direto = Number(s);
   return Number.isFinite(direto) ? direto : undefined;
+}
+
+/** Marca uma coluna inteira (pelas próximas `linhasComFormato` linhas) com
+ * formato "Texto" (@) no Excel — evita que o Excel reinterprete códigos,
+ * telefones, CNPJ/CPF e logins como número e corte zero à esquerda (ex.:
+ * "011..." virando "11..."), o que corrompe a importação. Sem isso, toda
+ * coluna da planilha gerada aparece como "Geral" no Excel. */
+async function aplicarFormatoTexto(
+  XLSX: Awaited<ReturnType<typeof carregarXLSX>>,
+  ws: ReturnType<typeof XLSX.utils.aoa_to_sheet>,
+  colunas: readonly string[],
+  nomesColunaTexto: string[],
+  linhasComFormato = 500
+) {
+  const nomesSet = new Set(nomesColunaTexto);
+  colunas.forEach((nome, idx) => {
+    if (!nomesSet.has(nome)) return;
+    for (let linha = 2; linha <= linhasComFormato + 1; linha++) {
+      const endereco = XLSX.utils.encode_cell({ r: linha - 1, c: idx });
+      if (!ws[endereco]) ws[endereco] = { t: 's', v: '' };
+      ws[endereco].z = '@';
+    }
+  });
+  const range = XLSX.utils.decode_range(ws['!ref'] as string);
+  range.e.r = Math.max(range.e.r, linhasComFormato);
+  ws['!ref'] = XLSX.utils.encode_range(range);
 }
 
 /** Gera o arquivo .xlsx modelo (3 abas: Clientes, Vendedores, Instruções)
@@ -117,10 +150,12 @@ export async function gerarPlanilhaModelo(): Promise<Blob> {
     ],
   ]);
   abaClientes['!cols'] = COL_CLIENTES.map(() => ({ wch: 24 }));
+  await aplicarFormatoTexto(XLSX, abaClientes, COL_CLIENTES, ['Código*', 'Telefone', 'CNPJ/CPF', 'Login do vendedor']);
   XLSX.utils.book_append_sheet(wb, abaClientes, 'Clientes');
 
   const abaVendedores = XLSX.utils.aoa_to_sheet([[...COL_VENDEDORES], ['Cecília Souza', 'cecilia', 'senha123', 3000]]);
   abaVendedores['!cols'] = COL_VENDEDORES.map(() => ({ wch: 22 }));
+  await aplicarFormatoTexto(XLSX, abaVendedores, COL_VENDEDORES, ['Login*', 'Senha']);
   XLSX.utils.book_append_sheet(wb, abaVendedores, 'Vendedores');
 
   const abaInstrucoes = XLSX.utils.aoa_to_sheet([
@@ -159,21 +194,50 @@ export interface LeituraPlanilha {
 export async function lerPlanilha(arquivo: File): Promise<LeituraPlanilha> {
   const XLSX = await carregarXLSX();
   const buffer = await arquivo.arrayBuffer();
-  const wb = XLSX.read(buffer, { type: 'array' });
+  // .csv não é um formato binário (ao contrário do .xlsx/.xls, que é um
+  // zip) — lendo como 'array' sem decodificar, o xlsx assume Latin-1 por
+  // padrão quando o arquivo não tem BOM UTF-8, e acentos (São Paulo,
+  // Código, Razão...) viram lixo. Decodificamos como texto UTF-8 primeiro
+  // pra CSV. Também usamos `raw: true` na leitura pra desligar a
+  // "adivinhação" de tipo do xlsx pra CSV (que auto-detecta números e
+  // datas por conteúdo): sem isso, "0001" vira número 1 (perde zero à
+  // esquerda) e "2026-01-10" vira data serial formatada "1/10/26" (não
+  // bate mais com nenhum dos formatos que paraDataISO reconhece). Deixando
+  // tudo como texto puro, quem decide o tipo são nossas próprias funções
+  // (paraNumero/paraDataISO), que já sabem interpretar texto.
+  const ehCsv = arquivo.name.toLowerCase().endsWith('.csv');
+  const wb = ehCsv
+    ? XLSX.read(new TextDecoder('utf-8').decode(buffer).replace(/^﻿/, ''), { type: 'string', raw: true })
+    : XLSX.read(buffer, { type: 'array' });
   const erros: string[] = [];
 
-  const abaClientes = wb.Sheets['Clientes'];
-  const abaVendedores = wb.Sheets['Vendedores'];
+  let abaClientes = wb.Sheets['Clientes'];
+  let abaVendedores = wb.Sheets['Vendedores'];
+
+  // Um .csv exportado direto de um banco de dados vem como uma tabela única
+  // (sem abas nomeadas "Clientes"/"Vendedores") — nesse caso, identificamos
+  // pelo cabeçalho da própria tabela, desde que use os mesmos nomes de
+  // coluna do modelo.
+  if (!abaClientes && !abaVendedores && wb.SheetNames.length === 1) {
+    const unicaAba = wb.Sheets[wb.SheetNames[0]];
+    const linhas = XLSX.utils.sheet_to_json<unknown[]>(unicaAba, { header: 1 });
+    const cabecalho = (linhas[0] ?? []).map((c) => String(c ?? '').trim());
+    if (cabecalho.includes('Código*')) abaClientes = unicaAba;
+    else if (cabecalho.includes('Login*')) abaVendedores = unicaAba;
+  }
+
   if (!abaClientes && !abaVendedores) {
     erros.push(
-      'Não encontrei nenhuma aba "Clientes" ou "Vendedores" nesse arquivo — baixe o modelo pra conferir o formato certo.'
+      'Não encontrei nenhuma aba "Clientes" ou "Vendedores" nesse arquivo (nem um .csv com o cabeçalho do modelo) — baixe o modelo pra conferir o formato certo.'
     );
   }
+
+  const opcoesLeitura = { defval: '' } as const;
 
   const clientes: Array<Omit<Cliente, 'id'>> = [];
   let clientesIgnorados = 0;
   if (abaClientes) {
-    const linhas = XLSX.utils.sheet_to_json<Record<string, unknown>>(abaClientes, { defval: '' });
+    const linhas = XLSX.utils.sheet_to_json<Record<string, unknown>>(abaClientes, opcoesLeitura);
     linhas.forEach((linha, i) => {
       if (linhaVazia(linha)) return;
       const cod = strOrUndef(linha['Código*']);
@@ -201,7 +265,7 @@ export async function lerPlanilha(arquivo: File): Promise<LeituraPlanilha> {
   const vendedores: Array<Omit<Vendedor, 'id' | 'ativo'>> = [];
   let vendedoresIgnorados = 0;
   if (abaVendedores) {
-    const linhas = XLSX.utils.sheet_to_json<Record<string, unknown>>(abaVendedores, { defval: '' });
+    const linhas = XLSX.utils.sheet_to_json<Record<string, unknown>>(abaVendedores, opcoesLeitura);
     linhas.forEach((linha, i) => {
       if (linhaVazia(linha)) return;
       const nome = strOrUndef(linha['Nome*']);
