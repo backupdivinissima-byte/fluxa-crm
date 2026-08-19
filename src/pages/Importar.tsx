@@ -72,8 +72,9 @@ export default function Importar() {
       <div className="bg-white border border-line rounded-2xl p-6 mb-4">
         <h2 className="text-sm font-extrabold text-ink mb-1">Planilha Excel</h2>
         <p className="text-sm text-ink-soft mb-5">
-          Baixe o modelo, preencha com seus dados e envie de volta aqui. O modelo já vem com as colunas certas e uma
-          aba de instruções.
+          Baixe o modelo, preencha com seus dados e envie de volta aqui. O modelo já vem com as colunas certas
+          (formatadas como texto, pra não perder zero à esquerda em código/telefone/CNPJ) e uma aba de instruções.
+          Também aceita .csv com esses mesmos nomes de coluna.
         </p>
 
         <div className="flex flex-wrap items-center gap-3 mb-5">
@@ -94,7 +95,7 @@ export default function Importar() {
             <input
               ref={inputRef}
               type="file"
-              accept=".xlsx,.xls"
+              accept=".xlsx,.xls,.csv"
               onChange={(e) => setArquivo(e.target.files?.[0] ?? null)}
               className="text-sm text-ink-soft file:mr-3 file:rounded-lg file:border-0 file:bg-surface file:px-3 file:py-2 file:text-sm file:font-bold file:text-ink hover:file:bg-line/50"
             />
@@ -106,6 +107,11 @@ export default function Importar() {
               {rodando ? 'Importando...' : 'Importar planilha'}
             </button>
           </div>
+          {!arquivo && (
+            <p className="text-xs text-ink-soft mt-2">
+              O botão "Importar planilha" só liga depois que você escolhe um arquivo em "Escolher arquivo" acima.
+            </p>
+          )}
         </div>
 
         {erro && <p className="text-xs text-red-500 mt-4">{erro}</p>}
@@ -142,13 +148,15 @@ export default function Importar() {
             Conecte o Fluxa CRM diretamente ao seu sistema atual e mantenha os dados sincronizados automaticamente.
           </p>
         </div>
-        <div className="bg-white border border-line rounded-2xl p-6 opacity-70">
-          <span className="inline-block text-xs font-bold uppercase tracking-wide px-2.5 py-1 rounded-full bg-slate-100 text-ink-soft mb-3">
-            Em breve
+        <div className="bg-white border border-line rounded-2xl p-6">
+          <span className="inline-block text-xs font-bold uppercase tracking-wide px-2.5 py-1 rounded-full bg-teal-500/10 text-teal-700 mb-3">
+            Já dá pra usar
           </span>
           <h2 className="text-sm font-extrabold text-ink mb-1">Importar via banco de dados</h2>
           <p className="text-sm text-ink-soft">
-            Conecte direto ao banco de dados do seu sistema atual pra trazer os dados sem precisar de planilha.
+            Exporte a tabela de clientes ou vendedores do seu banco de dados atual em <strong>.csv</strong>, usando os
+            mesmos nomes de coluna do modelo Excel acima (ex.: "Código*", "Nome", "Login*"). Depois é só enviar esse
+            .csv no campo "Planilha preenchida" — funciona igual à planilha.
           </p>
         </div>
       </div>
