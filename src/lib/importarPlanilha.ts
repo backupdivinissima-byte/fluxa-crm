@@ -1,5 +1,5 @@
 // Importação genérica via planilha Excel — ao contrário da antiga
-// ferramenta de migração (específica dos dados legados da Divinissima),
+// ferramenta de migração (específica de dados legados de uma empresa só),
 // esse recurso vale pra qualquer empresa do Fluxa CRM: gera um modelo
 // padronizado pra download, lê de volta a planilha preenchida pelo admin e
 // grava clientes/vendedores da empresa atual no Firestore. É idempotente
