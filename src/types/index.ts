@@ -12,6 +12,11 @@ export interface Empresa {
   atividadePrincipal?: string; // atividade principal da empresa, em texto livre
   criadoEm: string; // ISO date
   plano: 'trial' | 'starter' | 'pro';
+  // Qual produto Fluxa a empresa escolheu testar no cadastro (hoje só 'crm'
+  // tem formulário completo — os demais ainda são só "quero ser avisado").
+  // Usado, entre outras coisas, pra personalizar a tela de login por módulo
+  // quando os outros produtos tiverem cadastro próprio.
+  produto?: 'crm' | 'erp' | 'marketing' | 'prospect' | 'live';
   metas?: MetaTier[]; // faixas globais de meta/comissão da empresa
   crmFiltros?: FiltroCrm[]; // filtros personalizados do quadro CRM (até 10)
   crmColunas?: ColunaCrm[]; // colunas personalizadas do quadro CRM (até 8)
