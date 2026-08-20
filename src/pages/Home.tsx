@@ -102,7 +102,7 @@ function IconSpark() {
 
 const produtos = [
   {
-    nome: 'Fluxa CRM',
+    nome: 'Gestão de Vendas',
     status: 'Disponível agora',
     statusCls: 'bg-teal-500/10 text-teal-600',
     desc: 'Organize o funil de vendas da sua empresa: clientes, vendedores, metas e comissões, tudo num só lugar.',
@@ -210,8 +210,8 @@ const passos = [
   },
   {
     numero: '2',
-    titulo: 'Organize seu funil',
-    desc: 'Adicione seus clientes e sua equipe de vendas, e comece a mover cada negociação pelas etapas do funil.',
+    titulo: 'Organize sua gestão',
+    desc: 'Adicione seus clientes e sua equipe de vendas, defina metas e comece a mover cada negociação pelas etapas do funil.',
   },
   {
     numero: '3',
@@ -238,8 +238,10 @@ export default function Home() {
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-line">
         <div className="max-w-6xl mx-auto flex items-center gap-6 px-5 h-16">
           <Link to="/" className="flex items-center gap-2 shrink-0">
-            <img src={fluxaIcon} alt="Fluxa CRM" className="w-8 h-8" />
-            <span className="text-lg font-extrabold tracking-tight text-ink">Fluxa CRM</span>
+            <img src={fluxaIcon} alt="Fluxa Gestão e Vendas" className="w-8 h-8" />
+            <span className="text-base sm:text-lg font-extrabold tracking-tight text-ink whitespace-nowrap">
+              Fluxa Gestão e Vendas
+            </span>
           </Link>
 
           <nav className="hidden md:flex items-center gap-6 text-sm font-semibold text-ink-soft">
@@ -321,12 +323,12 @@ export default function Home() {
           Cada cliente, no momento certo do funil.
         </h1>
         <p className="text-lg text-ink-soft max-w-2xl mx-auto mb-9">
-          O CRM que organiza o funil de vendas da sua empresa, do primeiro contato até o fechamento — com clientes,
-          vendedores, metas e comissões, tudo num só lugar.
+          O sistema completo de gestão e vendas da sua empresa: funil de vendas, clientes, vendedores, metas e
+          comissões, tudo num só lugar, do primeiro contato até o fechamento.
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <a
-            href="mailto:josycampos.comercial@gmail.com?subject=Quero%20conhecer%20o%20Fluxa%20CRM"
+            href="mailto:josycampos.comercial@gmail.com?subject=Quero%20conhecer%20o%20Fluxa%20Gest%C3%A3o%20e%20Vendas"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-6 py-3.5 hover:opacity-90 transition-opacity"
           >
             Fale com vendas <span aria-hidden="true">→</span>
@@ -334,15 +336,16 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Produtos — a Fluxa CRM é o primeiro produto do ecossistema Fluxa,
-          com mais soluções (ERP e outras) a caminho. */}
+      {/* Produtos — a Gestão de Vendas é o primeiro módulo do Fluxa Gestão e
+          Vendas, com mais soluções (ERP e outras) a caminho. */}
       <section id="produtos" className="bg-surface py-16">
         <div className="max-w-6xl mx-auto px-5">
           <h2 className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight text-center mb-2">
-            Os produtos Fluxa
+            Os módulos do Fluxa Gestão e Vendas
           </h2>
           <p className="text-ink-soft text-center max-w-xl mx-auto mb-12">
-            Estamos construindo uma plataforma completa de gestão pra sua empresa. Comece agora com o Fluxa CRM.
+            Não é só um CRM: estamos construindo uma plataforma completa de gestão e vendas pra sua empresa. Comece
+            agora com o módulo de Gestão de Vendas.
           </p>
           <div className="grid sm:grid-cols-3 gap-5">
             {produtos.map((p) => (
@@ -481,7 +484,7 @@ export default function Home() {
         <p className="text-center text-xs text-ink-soft mt-8">
           Precisa de um plano sob medida para uma operação maior?{' '}
           <a
-            href="mailto:josycampos.comercial@gmail.com?subject=Quero%20conhecer%20o%20Fluxa%20CRM"
+            href="mailto:josycampos.comercial@gmail.com?subject=Quero%20conhecer%20o%20Fluxa%20Gest%C3%A3o%20e%20Vendas"
             className="font-bold text-blue-600"
           >
             Fale com vendas
@@ -510,8 +513,8 @@ export default function Home() {
       <footer className="border-t border-line">
         <div className="max-w-6xl mx-auto px-5 py-10 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <img src={fluxaIcon} alt="Fluxa CRM" className="w-6 h-6" />
-            <span className="text-sm font-extrabold text-ink">Fluxa CRM</span>
+            <img src={fluxaIcon} alt="Fluxa Gestão e Vendas" className="w-6 h-6" />
+            <span className="text-sm font-extrabold text-ink">Fluxa Gestão e Vendas</span>
           </div>
           <div className="flex items-center gap-6 text-sm font-semibold text-ink-soft">
             <Link to="/login" className="hover:text-ink transition-colors">
@@ -521,7 +524,7 @@ export default function Home() {
               Criar empresa
             </Link>
           </div>
-          <p className="text-xs text-ink-soft">© 2026 Fluxa CRM. Todos os direitos reservados.</p>
+          <p className="text-xs text-ink-soft">© 2026 Fluxa Gestão e Vendas. Todos os direitos reservados.</p>
         </div>
       </footer>
     </div>
