@@ -9,8 +9,9 @@ interface Props {
 }
 
 /** Tela dividida (estilo Bling/Ewdesa) usada no Login e no Cadastro da
- * empresa: painel colorido com a marca Fluxa CRM à esquerda, formulário à
- * direita. Mesmo padrão visual já usado no Fluxa ERP. */
+ * empresa: painel colorido com a marca Fluxa Gestão e Vendas à esquerda
+ * (identidade da plataforma como um todo), formulário à direita. Mesmo
+ * padrão visual já usado no Fluxa ERP. */
 export default function AuthShell({ titulo, subtitulo, children, rodape }: Props) {
   return (
     <div className="min-h-screen flex bg-surface">
@@ -18,8 +19,12 @@ export default function AuthShell({ titulo, subtitulo, children, rodape }: Props
         <DecoracaoFacetas />
 
         <div className="relative flex items-center gap-3">
-          <img src={fluxaIcon} alt="Fluxa CRM" className="w-10 h-10 rounded-xl ring-2 ring-white/40 shadow-lg" />
-          <span className="text-2xl font-extrabold tracking-tight">Fluxa CRM</span>
+          <img
+            src={fluxaIcon}
+            alt="Fluxa Gestão e Vendas"
+            className="w-10 h-10 rounded-xl ring-2 ring-white/40 shadow-lg"
+          />
+          <span className="text-2xl font-extrabold tracking-tight">Fluxa Gestão e Vendas</span>
         </div>
 
         <div className="relative max-w-md">
@@ -30,13 +35,13 @@ export default function AuthShell({ titulo, subtitulo, children, rodape }: Props
           </p>
         </div>
 
-        <div className="relative text-xs text-white/60">Fluxa CRM · Todos os direitos reservados</div>
+        <div className="relative text-xs text-white/60">Fluxa Gestão e Vendas · Todos os direitos reservados</div>
       </div>
 
       <div className="flex-1 flex items-center justify-center px-4 py-10">
         <div className="w-full max-w-sm">
           <div className="flex flex-col items-center mb-6 lg:hidden">
-            <img src={fluxaIcon} alt="Fluxa CRM" className="w-14 h-14 mb-3" />
+            <img src={fluxaIcon} alt="Fluxa Gestão e Vendas" className="w-14 h-14 mb-3" />
           </div>
           <h1 className="text-xl font-extrabold text-ink text-center lg:text-left">{titulo}</h1>
           <p className="text-sm text-ink-soft text-center lg:text-left mt-1 mb-8">{subtitulo}</p>
