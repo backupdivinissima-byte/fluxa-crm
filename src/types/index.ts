@@ -17,6 +17,11 @@ export interface Empresa {
   // Usado, entre outras coisas, pra personalizar a tela de login por módulo
   // quando os outros produtos tiverem cadastro próprio.
   produto?: 'crm' | 'erp' | 'marketing' | 'prospect' | 'live';
+  // Chave de API ("Importar via API", tela Importar/Sincronização) — só o
+  // hash SHA-256 fica salvo aqui, nunca a chave em texto puro (gerada e
+  // mostrada uma única vez no navegador, ver src/lib/apiKey.ts).
+  apiKeyHash?: string;
+  apiKeyGeradaEm?: string; // ISO date
   metas?: MetaTier[]; // faixas globais de meta/comissão da empresa
   crmFiltros?: FiltroCrm[]; // filtros personalizados do quadro CRM (até 10)
   crmColunas?: ColunaCrm[]; // colunas personalizadas do quadro CRM (até 8)
