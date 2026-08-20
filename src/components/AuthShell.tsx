@@ -28,7 +28,9 @@ export default function AuthShell({ titulo, subtitulo, children, rodape }: Props
         </div>
 
         <div className="relative max-w-md">
-          <h2 className="text-3xl font-extrabold leading-tight mb-4">Cada cliente, no momento certo do funil.</h2>
+          <h2 className="text-3xl font-extrabold leading-tight mb-4">
+          Toda a gestão e vendas da sua empresa, num só lugar.
+        </h2>
           <p className="text-white/80 text-sm leading-relaxed">
             Funil de vendas, clientes, vendedores e metas — organizados por empresa, feito pra equipes de
             vendas acompanharem tudo em um só lugar.
