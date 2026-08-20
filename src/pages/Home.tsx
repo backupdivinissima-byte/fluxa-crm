@@ -357,7 +357,7 @@ export default function Home() {
           Teste grátis
         </span>
         <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-ink leading-tight mb-5">
-          Cada cliente, no momento certo do funil.
+          Toda a gestão e vendas da sua empresa, num só lugar.
         </h1>
         <p className="text-lg text-ink-soft max-w-2xl mx-auto mb-9">
           O sistema completo de gestão e vendas da sua empresa: funil de vendas, clientes, vendedores, metas e
