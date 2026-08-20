@@ -182,6 +182,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ...(dados.documento ? { cnpj: dados.documento, documentoTipo: dados.documentoTipo } : {}),
       criadoEm: new Date().toISOString(),
       plano: 'trial',
+      produto: 'crm', // hoje o único produto com cadastro completo
     };
     await setDoc(empresaRef, novaEmpresa);
 
