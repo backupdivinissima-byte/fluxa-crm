@@ -4,6 +4,52 @@ import { useAuth } from '../contexts/AuthContext';
 import AuthShell from '../components/AuthShell';
 import CampoSenha from '../components/CampoSenha';
 
+/** Primeira etapa do cadastro: qual plataforma Fluxa a pessoa quer testar.
+ * Hoje só o Fluxa CRM está disponível — os demais levam pra um "quero ser
+ * avisado" por e-mail, mesmo padrão já usado na seção "Produtos" da home. */
+const PLATAFORMAS = [
+  {
+    id: 'crm',
+    nome: 'Fluxa CRM',
+    status: 'Disponível agora',
+    statusCls: 'bg-teal-500/10 text-teal-600',
+    desc: 'Funil de vendas, clientes, vendedores, metas e comissões.',
+    disponivel: true,
+  },
+  {
+    id: 'erp',
+    nome: 'Fluxa ERP',
+    status: 'Em breve',
+    statusCls: 'bg-slate-100 text-ink-soft',
+    desc: 'Financeiro, estoque e nota fiscal, integrados ao resto da empresa.',
+    disponivel: false,
+  },
+  {
+    id: 'marketing',
+    nome: 'Fluxa Marketing',
+    status: 'Em breve',
+    statusCls: 'bg-slate-100 text-ink-soft',
+    desc: 'Campanhas, automação e relacionamento com seus clientes.',
+    disponivel: false,
+  },
+  {
+    id: 'prospect',
+    nome: 'Fluxa Prospect',
+    status: 'Em breve',
+    statusCls: 'bg-slate-100 text-ink-soft',
+    desc: 'Encontre e qualifique novos clientes em potencial pro seu funil.',
+    disponivel: false,
+  },
+  {
+    id: 'live',
+    nome: 'Fluxa Live',
+    status: 'Em breve',
+    statusCls: 'bg-slate-100 text-ink-soft',
+    desc: 'Venda ao vivo em lives e redes sociais, tudo já organizado no Fluxa.',
+    disponivel: false,
+  },
+] as const;
+
 const SEGMENTOS = [
   'Varejo / loja física',
   'E-commerce / venda online',
@@ -51,6 +97,9 @@ function formatarWhatsapp(valor: string) {
 export default function Cadastrar() {
   const { cadastrar } = useAuth();
   const navigate = useNavigate();
+  // null = ainda escolhendo a plataforma (etapa 1). Só o Fluxa CRM tem
+  // formulário completo hoje; os outros abrem "quero ser avisado".
+  const [plataforma, setPlataforma] = useState<'crm' | null>(null);
   const [nomeEmpresa, setNomeEmpresa] = useState('');
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
@@ -119,6 +168,73 @@ export default function Cadastrar() {
     }
   }
 
+  // Etapa 1: qual plataforma Fluxa a pessoa quer testar.
+  if (plataforma === null) {
+    return (
+      <AuthShell
+        titulo="Qual plataforma deseja testar?"
+        subtitulo="Escolha o produto Fluxa que você quer conhecer."
+        rodape={
+          <>
+            Já tem uma empresa cadastrada?{' '}
+            <Link to="/login" className="font-bold text-blue-600">
+              Entrar
+            </Link>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          {PLATAFORMAS.map((p) =>
+            p.disponivel ? (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setPlataforma('crm')}
+                className="w-full flex items-center justify-between gap-3 rounded-xl border border-line bg-white p-4 text-left hover:border-teal-500 hover:bg-teal-500/5 transition-colors"
+              >
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-extrabold text-ink">{p.nome}</span>
+                    <span
+                      className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${p.statusCls}`}
+                    >
+                      {p.status}
+                    </span>
+                  </div>
+                  <p className="text-xs text-ink-soft mt-0.5">{p.desc}</p>
+                </div>
+                <span aria-hidden="true" className="text-ink-soft shrink-0">
+                  →
+                </span>
+              </button>
+            ) : (
+              <a
+                key={p.id}
+                href={`mailto:josycampos.comercial@gmail.com?subject=${encodeURIComponent(
+                  `Quero ser avisado sobre o ${p.nome}`
+                )}`}
+                className="w-full flex items-center justify-between gap-3 rounded-xl border border-line bg-white p-4 text-left hover:bg-surface transition-colors"
+              >
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-extrabold text-ink">{p.nome}</span>
+                    <span
+                      className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${p.statusCls}`}
+                    >
+                      {p.status}
+                    </span>
+                  </div>
+                  <p className="text-xs text-ink-soft mt-0.5">{p.desc}</p>
+                </div>
+                <span className="text-xs font-bold text-ink-soft shrink-0">Quero ser avisado</span>
+              </a>
+            )
+          )}
+        </div>
+      </AuthShell>
+    );
+  }
+
   return (
     <AuthShell
       titulo="Crie sua conta no Fluxa CRM"
@@ -132,6 +248,13 @@ export default function Cadastrar() {
         </>
       }
     >
+      <button
+        type="button"
+        onClick={() => setPlataforma(null)}
+        className="flex items-center gap-1.5 text-xs font-bold text-ink-soft hover:text-ink transition-colors mb-4"
+      >
+        <span aria-hidden="true">←</span> Escolher outra plataforma
+      </button>
       <form onSubmit={onSubmit} className="bg-white border border-line rounded-2xl p-6 space-y-4">
         <div>
           <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1.5">

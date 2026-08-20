@@ -92,17 +92,36 @@ function IconErp() {
   );
 }
 
-function IconSpark() {
+function IconMarketing() {
   return (
     <IconBaseMuted>
-      <path d="M12 3v4.5M12 16.5V21M3 12h4.5M16.5 12H21M5.6 5.6l3.2 3.2M15.2 15.2l3.2 3.2M18.4 5.6l-3.2 3.2M8.8 15.2l-3.2 3.2" />
+      <path d="M3 11v2a1 1 0 0 0 1 1h1l1 4h2l-1-4h1l9 3V7l-9 3H4a1 1 0 0 0-1 1z" />
+      <path d="M17 9v6" />
+    </IconBaseMuted>
+  );
+}
+
+function IconProspect() {
+  return (
+    <IconBaseMuted>
+      <circle cx="10" cy="10" r="6" />
+      <path d="M15 15l5 5" />
+    </IconBaseMuted>
+  );
+}
+
+function IconLive() {
+  return (
+    <IconBaseMuted>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M10 9l5 3-5 3V9z" fill="currentColor" stroke="none" />
     </IconBaseMuted>
   );
 }
 
 const produtos = [
   {
-    nome: 'Gestão de Vendas',
+    nome: 'Fluxa CRM',
     status: 'Disponível agora',
     statusCls: 'bg-teal-500/10 text-teal-600',
     desc: 'Organize o funil de vendas da sua empresa: clientes, vendedores, metas e comissões, tudo num só lugar.',
@@ -120,11 +139,29 @@ const produtos = [
     ctaTo: null,
   },
   {
-    nome: 'Novos produtos',
-    status: 'Em construção',
+    nome: 'Fluxa Marketing',
+    status: 'Em breve',
     statusCls: 'bg-slate-100 text-ink-soft',
-    desc: 'Estamos construindo mais soluções pra ajudar sua empresa a crescer. Em breve, novidades por aqui.',
-    icon: <IconSpark />,
+    desc: 'Campanhas, automação e relacionamento com seus clientes, direto integrado ao funil de vendas.',
+    icon: <IconMarketing />,
+    ctaLabel: 'Quero ser avisado',
+    ctaTo: null,
+  },
+  {
+    nome: 'Fluxa Prospect',
+    status: 'Em breve',
+    statusCls: 'bg-slate-100 text-ink-soft',
+    desc: 'Encontre e qualifique novos clientes em potencial pra alimentar o funil da sua equipe de vendas.',
+    icon: <IconProspect />,
+    ctaLabel: 'Quero ser avisado',
+    ctaTo: null,
+  },
+  {
+    nome: 'Fluxa Live',
+    status: 'Em breve',
+    statusCls: 'bg-slate-100 text-ink-soft',
+    desc: 'Venda ao vivo em lives e redes sociais, com pedidos e clientes já organizados dentro do Fluxa.',
+    icon: <IconLive />,
     ctaLabel: 'Quero ser avisado',
     ctaTo: null,
   },
@@ -345,7 +382,7 @@ export default function Home() {
           </h2>
           <p className="text-ink-soft text-center max-w-xl mx-auto mb-12">
             Não é só um CRM: estamos construindo uma plataforma completa de gestão e vendas pra sua empresa. Comece
-            agora com o módulo de Gestão de Vendas.
+            agora com o Fluxa CRM.
           </p>
           <div className="grid sm:grid-cols-3 gap-5">
             {produtos.map((p) => (
