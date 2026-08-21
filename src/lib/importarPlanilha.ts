@@ -355,6 +355,30 @@ async function extrairTabelaPdf(arquivo: File): Promise<string[][]> {
   return linhas;
 }
 
+/** Lê qualquer um dos 4 formatos suportados (.xlsx/.xls/.csv/.docx/.pdf) e
+ * devolve a tabela "crua" (linha 0 = cabeçalho, como está no arquivo, sem
+ * nenhuma interpretação de coluna) — usado por quem precisa ler uma tabela
+ * genérica do documento em vez do formato específico de clientes/vendedores
+ * (ex.: preencher automaticamente o formulário de conexão do ERP a partir de
+ * um documento de configuração). */
+export async function lerTabelaBruta(arquivo: File): Promise<string[][]> {
+  const nome = arquivo.name.toLowerCase();
+  if (nome.endsWith('.docx')) return extrairTabelaDocx(arquivo);
+  if (nome.endsWith('.pdf')) return extrairTabelaPdf(arquivo);
+
+  const XLSX = await carregarXLSX();
+  const buffer = await arquivo.arrayBuffer();
+  const ehCsv = nome.endsWith('.csv');
+  const wb = ehCsv
+    ? XLSX.read(new TextDecoder('utf-8').decode(buffer).replace(/^﻿/, ''), { type: 'string', raw: true })
+    : XLSX.read(buffer, { type: 'array' });
+  const primeiraAba = wb.Sheets[wb.SheetNames[0]];
+  if (!primeiraAba) return [];
+  return XLSX.utils
+    .sheet_to_json<unknown[]>(primeiraAba, { header: 1 })
+    .map((linha) => (linha as unknown[]).map((c) => String(c ?? '').trim()));
+}
+
 /** Processa um workbook (xlsx/xls/csv nativo, ou sintético montado a partir
  * de uma tabela extraída de .docx/.pdf) e valida linha a linha — nunca
  * lança erro por causa de uma linha ruim isolada, só ignora essa linha e
