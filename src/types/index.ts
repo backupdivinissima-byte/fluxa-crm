@@ -32,6 +32,23 @@ export interface Empresa {
   // que o Dashboard sempre sobrescreve com o valor real calculado a partir
   // dos cards do funil (nunca editável manualmente).
   vendasAnuais?: { ano: number; meses: number[] }[]; // meses: 12 posições, Jan-Dez
+  // Conexão "puxando" dados de fora (sentido oposto ao apiKeyHash acima):
+  // aqui é o Fluxa CRM que chama a API do sistema atual da empresa (ERP,
+  // e-commerce etc.) e importa a lista de clientes automaticamente. Guarda
+  // a credencial de autenticação em texto (não dá pra só hash — o backend
+  // precisa reenviá-la pra cada chamada), então nunca é reexibida na tela
+  // depois de salva (só um "•••• salvo").
+  erpConexao?: {
+    url: string;
+    autenticacao: 'nenhuma' | 'bearer' | 'header' | 'basic';
+    headerNome?: string; // nome do cabeçalho quando autenticacao === 'header'
+    valorAuth?: string; // token/senha
+    usuarioBasic?: string; // usuário quando autenticacao === 'basic'
+    listaPath?: string; // caminho até o array de clientes na resposta JSON (vazio = resposta já é a lista)
+    mapeamento: Record<string, string>; // campo do Fluxa (cod, nome, telefone...) -> caminho no JSON de cada item
+    configuradoEm?: string;
+    ultimaSincronizacao?: string;
+  };
 }
 
 // Filtro personalizado do quadro CRM — cada empresa pode criar até 10,
