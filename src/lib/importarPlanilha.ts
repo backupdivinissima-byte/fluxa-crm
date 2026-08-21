@@ -6,9 +6,14 @@
 // (usa merge:true com o código do cliente / login do vendedor como ID do
 // documento), então pode ser rodada mais de uma vez pra ressincronizar sem
 // duplicar nada.
-// A biblioteca de planilhas (xlsx) é carregada sob demanda (só quando essa
-// tela é aberta) em vez de no bundle principal — ela é pesada e a imensa
-// maioria das visitas ao site nunca chega a usar importação.
+// Além de .xlsx/.xls/.csv, também aceita .docx (Word) e .pdf: extraímos a
+// tabela de dentro do arquivo (via mammoth/pdfjs) e alimentamos o mesmo
+// pipeline de leitura de planilha, reconhecendo variações comuns de nome de
+// coluna (ex.: "CNPJ" além de "CNPJ/CPF").
+// Todas essas bibliotecas são carregadas sob demanda (só quando essa tela é
+// aberta e só a biblioteca do formato realmente enviado) em vez de no bundle
+// principal — são pesadas e a imensa maioria das visitas ao site nunca chega
+// a usar importação.
 import { collection, doc, getDocs, writeBatch } from 'firebase/firestore';
 import { db } from './firebase';
 import { idSeguro } from './crmLogic';
@@ -16,6 +21,17 @@ import type { Cliente, Vendedor } from '../types';
 
 async function carregarXLSX() {
   return await import('xlsx');
+}
+
+async function carregarMammoth() {
+  return await import('mammoth');
+}
+
+async function carregarPdfjs() {
+  const pdfjsLib = await import('pdfjs-dist');
+  const workerUrl = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+  return pdfjsLib;
 }
 
 const COL_CLIENTES = [
@@ -86,11 +102,13 @@ function paraDataISO(v: unknown): string | undefined {
  * há vírgula (aí sim é inequivocamente formato BR) — sem vírgula, o ponto é
  * tratado como separador decimal direto, que é o formato mais comum em
  * exportação de banco de dados/CSV (ex.: "999.9"). Sem essa distinção, um
- * valor como "999.9" virava 9999 (o ponto era removido por engano). */
+ * valor como "999.9" virava 9999 (o ponto era removido por engano).
+ * Também aceita um prefixo de moeda solto (ex.: "R$ 1.250,00"), comum em
+ * tabela digitada à mão em Word/PDF. */
 function paraNumero(v: unknown): number | undefined {
   if (v === '' || v == null) return undefined;
   if (typeof v === 'number') return v;
-  const s = String(v).trim();
+  const s = String(v).trim().replace(/^[^\d-]+/, '');
   if (!s) return undefined;
   if (s.includes(',')) {
     const comBr = Number(s.replace(/\./g, '').replace(',', '.'));
@@ -188,36 +206,170 @@ export interface LeituraPlanilha {
   erros: string[];
 }
 
-/** Lê o arquivo enviado e valida linha a linha — nunca lança erro por causa
- * de uma linha ruim isolada, só ignora essa linha e registra o motivo em
- * `erros`, pra uma planilha grande não travar inteira por um único typo. */
-export async function lerPlanilha(arquivo: File): Promise<LeituraPlanilha> {
-  const XLSX = await carregarXLSX();
+/** Remove acento e caixa alta/baixa pra comparar cabeçalhos de forma
+ * tolerante (ex.: "Código" e "codigo" devem casar). */
+function normalizarTexto(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+// Variações comuns de nome de coluna aceitas em .docx/.pdf digitados à mão
+// (além do nome exato do modelo Excel) — mapeadas pro nome canônico que o
+// restante da leitura já reconhece (COL_CLIENTES/COL_VENDEDORES acima).
+const SINONIMOS_CLIENTES: Record<string, string> = {
+  codigo: 'Código*',
+  'codigo*': 'Código*',
+  cod: 'Código*',
+  'cod*': 'Código*',
+  nome: 'Nome',
+  'razao social': 'Razão Social',
+  razao: 'Razão Social',
+  telefone: 'Telefone',
+  fone: 'Telefone',
+  celular: 'Telefone',
+  whatsapp: 'Telefone',
+  'cnpj/cpf': 'CNPJ/CPF',
+  cnpj: 'CNPJ/CPF',
+  cpf: 'CNPJ/CPF',
+  documento: 'CNPJ/CPF',
+  cidade: 'Cidade',
+  uf: 'UF',
+  estado: 'UF',
+  'data ultima compra (aaaa-mm-dd)': 'Data última compra (AAAA-MM-DD)',
+  'data ultima compra': 'Data última compra (AAAA-MM-DD)',
+  'ultima compra': 'Data última compra (AAAA-MM-DD)',
+  data: 'Data última compra (AAAA-MM-DD)',
+  'total geral (r$)': 'Total geral (R$)',
+  'total geral': 'Total geral (R$)',
+  'valor total': 'Total geral (R$)',
+  total: 'Total geral (R$)',
+  'login do vendedor': 'Login do vendedor',
+  'nome do vendedor': 'Nome do vendedor',
+  vendedor: 'Nome do vendedor',
+};
+
+const SINONIMOS_VENDEDORES: Record<string, string> = {
+  'nome*': 'Nome*',
+  nome: 'Nome*',
+  'login*': 'Login*',
+  login: 'Login*',
+  usuario: 'Login*',
+  senha: 'Senha',
+  'senha*': 'Senha',
+  'meta pessoal (r$)': 'Meta pessoal (R$)',
+  'meta pessoal': 'Meta pessoal (R$)',
+  meta: 'Meta pessoal (R$)',
+};
+
+const CHAVES_EXATAS_CLIENTES = new Set(['codigo', 'codigo*', 'cod', 'cod*']);
+const CHAVES_EXATAS_VENDEDORES = new Set(['login', 'login*']);
+
+/** Recebe a 1ª linha (cabeçalho) de uma tabela extraída de .docx/.pdf e
+ * devolve os nomes de coluna já traduzidos pro nome canônico do modelo
+ * (quando reconhecido), junto do tipo de tabela detectado. Detecta o tipo
+ * por presença exata de uma coluna "Código"/"Cod" (clientes) ou
+ * "Login" (vendedores) — não usa contains pra não confundir com a coluna
+ * "Login do vendedor" da tabela de clientes. */
+function normalizarCabecalho(bruto: string[]): { colunas: string[]; tipo: 'clientes' | 'vendedores' | null } {
+  const normalizados = bruto.map(normalizarTexto);
+  const tipo: 'clientes' | 'vendedores' | null = normalizados.some((h) => CHAVES_EXATAS_CLIENTES.has(h))
+    ? 'clientes'
+    : normalizados.some((h) => CHAVES_EXATAS_VENDEDORES.has(h))
+      ? 'vendedores'
+      : null;
+  const mapa = tipo === 'vendedores' ? SINONIMOS_VENDEDORES : SINONIMOS_CLIENTES;
+  const colunas = bruto.map((h, i) => mapa[normalizados[i]] ?? h);
+  return { colunas, tipo };
+}
+
+/** Extrai a 1ª tabela de um .docx como matriz de células (linha 0 =
+ * cabeçalho). Se o documento não tiver uma tabela de verdade (só texto
+ * corrido), tenta interpretar cada parágrafo como uma linha com colunas
+ * separadas por tabulação — comum em texto colado de uma planilha. */
+async function extrairTabelaDocx(arquivo: File): Promise<string[][]> {
+  const mammoth = await carregarMammoth();
+  const arrayBuffer = await arquivo.arrayBuffer();
+  const { value: html } = await mammoth.convertToHtml({ arrayBuffer });
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const tabela = doc.querySelector('table');
+  if (tabela) {
+    return Array.from(tabela.querySelectorAll('tr')).map((tr) =>
+      Array.from(tr.querySelectorAll('td,th')).map((celula) => (celula.textContent ?? '').trim())
+    );
+  }
+  const paragrafos = Array.from(doc.querySelectorAll('p'))
+    .map((p) => (p.textContent ?? '').trim())
+    .filter((t) => t !== '');
+  return paragrafos.map((linha) => linha.split('\t').map((c) => c.trim()));
+}
+
+/** Extrai texto de um .pdf e tenta reconstruir a tabela por posição: agrupa
+ * itens de texto que ficam na mesma altura (linha) e quebra em colunas onde
+ * o espaço horizontal entre um item e o próximo é bem maior que o espaço
+ * normal entre palavras. É uma heurística — funciona bem pra PDF exportado
+ * de planilha/sistema com colunas alinhadas; não faz OCR, então PDF
+ * escaneado (imagem) não é lido. */
+async function extrairTabelaPdf(arquivo: File): Promise<string[][]> {
+  const pdfjsLib = await carregarPdfjs();
   const buffer = await arquivo.arrayBuffer();
-  // .csv não é um formato binário (ao contrário do .xlsx/.xls, que é um
-  // zip) — lendo como 'array' sem decodificar, o xlsx assume Latin-1 por
-  // padrão quando o arquivo não tem BOM UTF-8, e acentos (São Paulo,
-  // Código, Razão...) viram lixo. Decodificamos como texto UTF-8 primeiro
-  // pra CSV. Também usamos `raw: true` na leitura pra desligar a
-  // "adivinhação" de tipo do xlsx pra CSV (que auto-detecta números e
-  // datas por conteúdo): sem isso, "0001" vira número 1 (perde zero à
-  // esquerda) e "2026-01-10" vira data serial formatada "1/10/26" (não
-  // bate mais com nenhum dos formatos que paraDataISO reconhece). Deixando
-  // tudo como texto puro, quem decide o tipo são nossas próprias funções
-  // (paraNumero/paraDataISO), que já sabem interpretar texto.
-  const ehCsv = arquivo.name.toLowerCase().endsWith('.csv');
-  const wb = ehCsv
-    ? XLSX.read(new TextDecoder('utf-8').decode(buffer).replace(/^﻿/, ''), { type: 'string', raw: true })
-    : XLSX.read(buffer, { type: 'array' });
+  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+  const linhas: string[][] = [];
+
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const conteudo = await page.getTextContent();
+    const itens = (conteudo.items as Array<{ str: string; width: number; transform: number[] }>)
+      .filter((it) => typeof it.str === 'string' && it.str.trim() !== '')
+      .map((it) => ({ str: it.str, x: it.transform[4], y: it.transform[5], largura: it.width ?? 0 }));
+
+    const porLinha = new Map<number, typeof itens>();
+    for (const it of itens) {
+      const chaveY = Math.round(it.y / 3) * 3; // tolerância de 3pt na mesma linha
+      const grupo = porLinha.get(chaveY);
+      if (grupo) grupo.push(it);
+      else porLinha.set(chaveY, [it]);
+    }
+
+    const ysOrdenados = [...porLinha.keys()].sort((a, b) => b - a); // topo pra baixo
+    for (const y of ysOrdenados) {
+      const itensLinha = porLinha.get(y)!.sort((a, b) => a.x - b.x);
+      const celulas: string[] = [];
+      let atual = '';
+      let xFimAnterior: number | null = null;
+      for (const it of itensLinha) {
+        const gap = xFimAnterior === null ? 0 : it.x - xFimAnterior;
+        if (xFimAnterior !== null && gap > 10) {
+          celulas.push(atual.trim());
+          atual = '';
+        }
+        atual += it.str;
+        xFimAnterior = it.x + it.largura;
+      }
+      if (atual.trim()) celulas.push(atual.trim());
+      if (celulas.length > 0) linhas.push(celulas);
+    }
+  }
+  return linhas;
+}
+
+/** Processa um workbook (xlsx/xls/csv nativo, ou sintético montado a partir
+ * de uma tabela extraída de .docx/.pdf) e valida linha a linha — nunca
+ * lança erro por causa de uma linha ruim isolada, só ignora essa linha e
+ * registra o motivo em `erros`, pra uma planilha grande não travar inteira
+ * por um único typo. */
+function processarWorkbook(wb: ReturnType<Awaited<ReturnType<typeof carregarXLSX>>['read']>, XLSX: Awaited<ReturnType<typeof carregarXLSX>>): LeituraPlanilha {
   const erros: string[] = [];
 
   let abaClientes = wb.Sheets['Clientes'];
   let abaVendedores = wb.Sheets['Vendedores'];
 
-  // Um .csv exportado direto de um banco de dados vem como uma tabela única
-  // (sem abas nomeadas "Clientes"/"Vendedores") — nesse caso, identificamos
-  // pelo cabeçalho da própria tabela, desde que use os mesmos nomes de
-  // coluna do modelo.
+  // Uma tabela única (sem abas nomeadas "Clientes"/"Vendedores") — caso do
+  // .csv exportado de banco de dados, e sempre o caso de .docx/.pdf.
+  // Identificamos pelo cabeçalho da própria tabela, desde que use os
+  // mesmos nomes de coluna do modelo (ou uma variação reconhecida).
   if (!abaClientes && !abaVendedores && wb.SheetNames.length === 1) {
     const unicaAba = wb.Sheets[wb.SheetNames[0]];
     const linhas = XLSX.utils.sheet_to_json<unknown[]>(unicaAba, { header: 1 });
@@ -228,7 +380,7 @@ export async function lerPlanilha(arquivo: File): Promise<LeituraPlanilha> {
 
   if (!abaClientes && !abaVendedores) {
     erros.push(
-      'Não encontrei nenhuma aba "Clientes" ou "Vendedores" nesse arquivo (nem um .csv com o cabeçalho do modelo) — baixe o modelo pra conferir o formato certo.'
+      'Não encontrei nenhuma aba "Clientes" ou "Vendedores" nesse arquivo (nem uma tabela com o cabeçalho do modelo) — baixe o modelo pra conferir o formato certo.'
     );
   }
 
@@ -285,6 +437,76 @@ export async function lerPlanilha(arquivo: File): Promise<LeituraPlanilha> {
   }
 
   return { clientes, vendedores, clientesIgnorados, vendedoresIgnorados, erros };
+}
+
+/** Monta um workbook "sintético" (1 aba só) a partir de uma tabela já
+ * extraída de .docx/.pdf, com o cabeçalho traduzido pro nome canônico —
+ * assim o resto do pipeline (processarWorkbook) trata do mesmo jeito que
+ * uma planilha de verdade. */
+function workbookDeTabela(XLSX: Awaited<ReturnType<typeof carregarXLSX>>, tabela: string[][]) {
+  const wb = XLSX.utils.book_new();
+  if (tabela.length === 0) return wb;
+  const { colunas } = normalizarCabecalho(tabela[0]);
+  const linhas = [colunas, ...tabela.slice(1)];
+  const ws = XLSX.utils.aoa_to_sheet(linhas);
+  XLSX.utils.book_append_sheet(wb, ws, 'Dados');
+  return wb;
+}
+
+/** Lê o arquivo enviado (.xlsx, .xls, .csv, .docx ou .pdf) e devolve os
+ * clientes/vendedores encontrados, já validados linha a linha. */
+export async function lerPlanilha(arquivo: File): Promise<LeituraPlanilha> {
+  const XLSX = await carregarXLSX();
+  const nome = arquivo.name.toLowerCase();
+
+  if (nome.endsWith('.docx')) {
+    const tabela = await extrairTabelaDocx(arquivo);
+    if (tabela.length === 0) {
+      return {
+        clientes: [],
+        vendedores: [],
+        clientesIgnorados: 0,
+        vendedoresIgnorados: 0,
+        erros: ['Não encontrei nenhuma tabela nesse .docx — cole os dados numa tabela do Word, com o cabeçalho igual ao do modelo Excel.'],
+      };
+    }
+    return processarWorkbook(workbookDeTabela(XLSX, tabela), XLSX);
+  }
+
+  if (nome.endsWith('.pdf')) {
+    const tabela = await extrairTabelaPdf(arquivo);
+    if (tabela.length === 0) {
+      return {
+        clientes: [],
+        vendedores: [],
+        clientesIgnorados: 0,
+        vendedoresIgnorados: 0,
+        erros: [
+          'Não consegui extrair texto desse .pdf — se for um PDF escaneado (imagem), não é lido; use um PDF gerado direto do sistema/planilha, ou envie em .xlsx/.csv/.docx.',
+        ],
+      };
+    }
+    return processarWorkbook(workbookDeTabela(XLSX, tabela), XLSX);
+  }
+
+  // .xlsx / .xls / .csv
+  const buffer = await arquivo.arrayBuffer();
+  // .csv não é um formato binário (ao contrário do .xlsx/.xls, que é um
+  // zip) — lendo como 'array' sem decodificar, o xlsx assume Latin-1 por
+  // padrão quando o arquivo não tem BOM UTF-8, e acentos (São Paulo,
+  // Código, Razão...) viram lixo. Decodificamos como texto UTF-8 primeiro
+  // pra CSV. Também usamos `raw: true` na leitura pra desligar a
+  // "adivinhação" de tipo do xlsx pra CSV (que auto-detecta números e
+  // datas por conteúdo): sem isso, "0001" vira número 1 (perde zero à
+  // esquerda) e "2026-01-10" vira data serial formatada "1/10/26" (não
+  // bate mais com nenhum dos formatos que paraDataISO reconhece). Deixando
+  // tudo como texto puro, quem decide o tipo são nossas próprias funções
+  // (paraNumero/paraDataISO), que já sabem interpretar texto.
+  const ehCsv = nome.endsWith('.csv');
+  const wb = ehCsv
+    ? XLSX.read(new TextDecoder('utf-8').decode(buffer).replace(/^﻿/, ''), { type: 'string', raw: true })
+    : XLSX.read(buffer, { type: 'array' });
+  return processarWorkbook(wb, XLSX);
 }
 
 export interface ResultadoImportacaoPlanilha {
