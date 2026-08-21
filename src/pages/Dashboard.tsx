@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { ouvirClientes, ouvirEmpresa, ouvirVendedores, salvarVendasAnuais } from '../lib/crmData';
+import { ouvirClientes, ouvirEmpresa, ouvirVendedores, salvarDiasInatividade, salvarVendasAnuais } from '../lib/crmData';
 import { CRM_COLUNAS_PADRAO, type Cliente, type ColunaCrm, type Vendedor } from '../types';
 import {
+  DIAS_INATIVIDADE_PADRAO,
   formatarMoeda,
   funilAtendimento,
   rankingVendedores,
@@ -10,6 +11,8 @@ import {
   vendasMesAtualEmpresa,
   vendasTotalEmpresa,
 } from '../lib/crmLogic';
+
+const OPCOES_PRAZO_INATIVIDADE = [30, 60, 90];
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 const MESES_EXTENSO = [
@@ -56,6 +59,9 @@ export default function Dashboard() {
   const [editando, setEditando] = useState(false);
   const [novoAno, setNovoAno] = useState('');
   const [salvando, setSalvando] = useState(false);
+  const [diasInatividade, setDiasInatividade] = useState<number>(empresa?.diasInatividade ?? DIAS_INATIVIDADE_PADRAO);
+  const [personalizarPrazo, setPersonalizarPrazo] = useState(false);
+  const [prazoPersonalizadoInput, setPrazoPersonalizadoInput] = useState('');
 
   useEffect(() => {
     if (!empresaId) return;
@@ -64,6 +70,7 @@ export default function Dashboard() {
     const unsubE = ouvirEmpresa(empresaId, (emp) => {
       setColunas(emp?.crmColunas && emp.crmColunas.length > 0 ? emp.crmColunas : CRM_COLUNAS_PADRAO);
       setVendasAnuais((atual) => (editando ? atual : (emp?.vendasAnuais ?? [])));
+      setDiasInatividade(emp?.diasInatividade ?? DIAS_INATIVIDADE_PADRAO);
     });
     return () => {
       unsubC();
@@ -80,7 +87,7 @@ export default function Dashboard() {
   const mesAtualIdx = agora.getMonth(); // 0-11
 
   const resumo = useMemo(() => resumoAtendimento(clientes), [clientes]);
-  const funil = useMemo(() => funilAtendimento(clientes), [clientes]);
+  const funil = useMemo(() => funilAtendimento(clientes, diasInatividade), [clientes, diasInatividade]);
   const vendasTotal = useMemo(() => vendasTotalEmpresa(clientes), [clientes]);
   const vendasMes = useMemo(() => vendasMesAtualEmpresa(clientes, colunasFechamentoIds), [clientes, colunasFechamentoIds]);
 
@@ -177,6 +184,19 @@ export default function Dashboard() {
     }
   }
 
+  async function alterarPrazoInatividade(dias: number) {
+    if (!dias || dias < 1) return;
+    setDiasInatividade(dias);
+    setPersonalizarPrazo(false);
+    if (!empresaId) return;
+    try {
+      await salvarDiasInatividade(empresaId, dias);
+    } catch (err) {
+      console.error('Erro ao salvar prazo de inatividade:', err);
+      alert('Não foi possível salvar o prazo de inatividade. Tente novamente em instantes.');
+    }
+  }
+
   if (!ehAdmin) {
     return (
       <div className="p-8 w-full">
@@ -194,7 +214,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="p-6 md:p-8 w-full max-w-6xl">
+    <div className="p-6 md:p-8 w-full">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <h1 className="text-xl font-extrabold text-ink tracking-tight">Visão geral</h1>
         <span className="text-xs font-bold text-ink-soft bg-white border border-line rounded-full px-3 py-1.5">
@@ -206,40 +226,40 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
         <div className="bg-white border border-line rounded-2xl p-4">
           <p className="text-xs font-bold text-ink-soft uppercase tracking-wide mb-1">Total de clientes</p>
-          <p className="text-2xl font-extrabold text-ink">{resumo.total.toLocaleString('pt-BR')}</p>
+          <p className="text-2xl font-extrabold text-ink tabular-nums">{resumo.total.toLocaleString('pt-BR')}</p>
           <p className="text-[11px] text-ink-soft mt-1">base completa</p>
         </div>
         <div className="bg-white border border-line rounded-2xl p-4">
           <p className="text-xs font-bold text-ink-soft uppercase tracking-wide mb-1">Com atendimento</p>
-          <p className="text-2xl font-extrabold" style={{ color: '#27AE60' }}>
+          <p className="text-2xl font-extrabold tabular-nums" style={{ color: '#27AE60' }}>
             {resumo.comAtendimento.toLocaleString('pt-BR')}
           </p>
-          <p className="text-[11px] mt-1" style={{ color: '#27AE60' }}>
+          <p className="text-[11px] mt-1 tabular-nums" style={{ color: '#27AE60' }}>
             {resumo.pctCom}% da base
           </p>
         </div>
         <div className="bg-white border border-line rounded-2xl p-4">
           <p className="text-xs font-bold text-ink-soft uppercase tracking-wide mb-1">Sem atendimento</p>
-          <p className="text-2xl font-extrabold" style={{ color: '#C0392B' }}>
+          <p className="text-2xl font-extrabold tabular-nums" style={{ color: '#C0392B' }}>
             {resumo.semAtendimento.toLocaleString('pt-BR')}
           </p>
-          <p className="text-[11px] mt-1" style={{ color: '#C0392B' }}>
+          <p className="text-[11px] mt-1 tabular-nums" style={{ color: '#C0392B' }}>
             {resumo.pctSem}% da base
           </p>
         </div>
         <div className="bg-white border border-line rounded-2xl p-4">
           <p className="text-xs font-bold text-ink-soft uppercase tracking-wide mb-1">Vendas total</p>
-          <p className="text-2xl font-extrabold text-ink">{formatarMoeda(vendasTotal)}</p>
+          <p className="text-2xl font-extrabold text-ink tabular-nums">{formatarMoeda(vendasTotal)}</p>
           <p className="text-[11px] text-ink-soft mt-1">todos os clientes</p>
         </div>
         <div className="bg-white border border-line rounded-2xl p-4">
           <p className="text-xs font-bold text-ink-soft uppercase tracking-wide mb-1">
             Vendas {MESES_EXTENSO[mesAtualIdx]}/{anoAtual}
           </p>
-          <p className="text-2xl font-extrabold" style={{ color: '#27AE60' }}>
+          <p className="text-2xl font-extrabold tabular-nums" style={{ color: '#27AE60' }}>
             {formatarMoeda(vendasMes.total)}
           </p>
-          <p className="text-[11px] mt-1" style={{ color: vendasMes.variacaoPct != null && vendasMes.variacaoPct < 0 ? '#C0392B' : '#27AE60' }}>
+          <p className="text-[11px] mt-1 tabular-nums" style={{ color: vendasMes.variacaoPct != null && vendasMes.variacaoPct < 0 ? '#C0392B' : '#27AE60' }}>
             {vendasMes.variacaoPct != null
               ? `${vendasMes.variacaoPct >= 0 ? '▲' : '▼'} ${Math.abs(Math.round(vendasMes.variacaoPct))}%`
               : 'sem mês anterior p/ comparar'}
@@ -297,7 +317,7 @@ export default function Dashboard() {
                     return (
                       <div key={ano} className="flex flex-col items-center justify-end h-full w-3.5" title={`${ano}: ${formatarMoeda(valor)}`}>
                         {valor > 0 && (
-                          <span className="text-[9px] font-bold text-ink-soft mb-0.5 rotate-0 whitespace-nowrap">
+                          <span className="text-[9px] font-bold text-ink-soft mb-0.5 rotate-0 whitespace-nowrap tabular-nums">
                             {formatarCompacto(valor)}
                           </span>
                         )}
@@ -368,61 +388,113 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Funil de atendimento */}
-      <div className="bg-white border border-line rounded-2xl p-5 mb-6">
-        <h2 className="text-sm font-extrabold text-ink mb-4">Funil de atendimento</h2>
-        <div className="space-y-2">
-          <BarraFunil label="Total na base" valor={funil.total} pct={funil.pctTotal} cor="#0EA5A0" />
-          <BarraFunil label="Com vendedor" valor={funil.comVendedor} pct={funil.pctComVendedor} cor="#2563EB" />
-          <BarraFunil label="Ativos (≤30d)" valor={funil.ativos} pct={funil.pctAtivos} cor="#27AE60" estreita />
-          <BarraFunil label="31 a 40 dias" valor={funil.risco} pct={funil.pctRisco} cor="#E67E22" estreita />
-          <BarraFunil label="Inativos (+40d)" valor={funil.inativos} pct={funil.pctInativos} cor="#C0392B" />
-        </div>
-      </div>
-
-      {/* Ranking de vendedores */}
-      <div className="bg-white border border-line rounded-2xl p-5">
-        <h2 className="text-sm font-extrabold text-ink mb-4">🏆 Ranking de vendedores</h2>
-        <div className="space-y-3">
-          {ranking.map((r, i) => (
-            <div key={r.vendedor.id} className="flex items-center gap-3">
-              <span
-                className={`w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-[11px] font-extrabold ${
-                  i === 0 ? 'bg-amber-200 text-amber-800' : i === 1 ? 'bg-slate-200 text-slate-700' : i === 2 ? 'bg-orange-200 text-orange-800' : 'bg-surface text-ink-soft'
+      {/* Funil de atendimento + Ranking de vendedores, lado a lado */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white border border-line rounded-2xl p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-1">
+            <h2 className="text-sm font-extrabold text-ink">Funil de atendimento</h2>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            <span className="text-[11px] font-bold text-ink-soft uppercase tracking-wide mr-1">
+              Considerar inativo após:
+            </span>
+            {OPCOES_PRAZO_INATIVIDADE.map((dias) => (
+              <button
+                key={dias}
+                onClick={() => alterarPrazoInatividade(dias)}
+                className={`rounded-lg text-xs font-bold px-3 py-1.5 border ${
+                  diasInatividade === dias && !personalizarPrazo
+                    ? 'bg-ink text-white border-ink'
+                    : 'border-line text-ink hover:bg-surface'
                 }`}
               >
-                {i + 1}
+                {dias} dias
+              </button>
+            ))}
+            <button
+              onClick={() => {
+                setPersonalizarPrazo(true);
+                setPrazoPersonalizadoInput(String(diasInatividade));
+              }}
+              className={`rounded-lg text-xs font-bold px-3 py-1.5 border ${
+                personalizarPrazo || !OPCOES_PRAZO_INATIVIDADE.includes(diasInatividade)
+                  ? 'bg-ink text-white border-ink'
+                  : 'border-line text-ink hover:bg-surface'
+              }`}
+            >
+              Personalizar
+            </button>
+            {(personalizarPrazo || !OPCOES_PRAZO_INATIVIDADE.includes(diasInatividade)) && (
+              <span className="flex items-center gap-1.5">
+                <input
+                  type="number"
+                  min={1}
+                  value={prazoPersonalizadoInput}
+                  onChange={(e) => setPrazoPersonalizadoInput(e.target.value)}
+                  className="w-16 rounded-lg border border-line px-2 py-1.5 text-xs"
+                />
+                <button
+                  onClick={() => alterarPrazoInatividade(Number(prazoPersonalizadoInput))}
+                  className="rounded-lg bg-gradient-to-br from-teal-500 to-blue-600 text-white text-xs font-bold px-3 py-1.5 hover:opacity-90"
+                >
+                  Aplicar
+                </button>
               </span>
-              <span className="w-9 h-9 shrink-0 rounded-full bg-teal-500/10 text-teal-700 font-extrabold text-xs flex items-center justify-center">
-                {iniciais(r.vendedor.nome)}
-              </span>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-extrabold text-ink truncate">{r.vendedor.nome}</p>
-                <p className="text-[11px] text-ink-soft">
-                  {r.clientesCount} cliente{r.clientesCount === 1 ? '' : 's'}
-                  {r.pctMeta != null ? ` · ${r.pctMeta}% da meta` : ''}
-                </p>
-                {r.pctMeta != null && (
-                  <div className="h-1.5 bg-surface rounded-full overflow-hidden mt-1 max-w-xs">
-                    <div
-                      className="h-full rounded-full"
-                      style={{ width: `${r.pctMeta}%`, background: r.pctMeta >= 50 ? '#0EA5A0' : '#C0392B' }}
-                    />
-                  </div>
-                )}
+            )}
+          </div>
+          <div className="space-y-2">
+            <BarraFunil label="Total na base" valor={funil.total} pct={funil.pctTotal} cor="#0EA5A0" />
+            <BarraFunil label="Com vendedor" valor={funil.comVendedor} pct={funil.pctComVendedor} cor="#2563EB" />
+            <BarraFunil label="Ativos" valor={funil.ativos} pct={funil.pctAtivos} cor="#27AE60" estreita />
+            <BarraFunil label="Inativos" valor={funil.inativos} pct={funil.pctInativos} cor="#C0392B" estreita />
+          </div>
+        </div>
+
+        <div className="bg-white border border-line rounded-2xl p-5">
+          <h2 className="text-sm font-extrabold text-ink mb-4">🏆 Ranking de vendedores</h2>
+          <div className="space-y-3">
+            {ranking.map((r, i) => (
+              <div key={r.vendedor.id} className="flex items-center gap-3">
+                <span
+                  className={`w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-[11px] font-extrabold ${
+                    i === 0 ? 'bg-amber-200 text-amber-800' : i === 1 ? 'bg-slate-200 text-slate-700' : i === 2 ? 'bg-orange-200 text-orange-800' : 'bg-surface text-ink-soft'
+                  }`}
+                >
+                  {i + 1}
+                </span>
+                <span className="w-9 h-9 shrink-0 rounded-full bg-teal-500/10 text-teal-700 font-extrabold text-xs flex items-center justify-center">
+                  {iniciais(r.vendedor.nome)}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-extrabold text-ink truncate">{r.vendedor.nome}</p>
+                  <p className="text-[11px] text-ink-soft">
+                    {r.clientesCount} cliente{r.clientesCount === 1 ? '' : 's'}
+                    {r.pctMeta != null ? ` · ${r.pctMeta}% da meta` : ''}
+                  </p>
+                  {r.pctMeta != null && (
+                    <div className="h-1.5 bg-surface rounded-full overflow-hidden mt-1 max-w-xs">
+                      <div
+                        className="h-full rounded-full"
+                        style={{ width: `${r.pctMeta}%`, background: r.pctMeta >= 50 ? '#0EA5A0' : '#C0392B' }}
+                      />
+                    </div>
+                  )}
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-xs font-extrabold tabular-nums" style={{ color: r.vendasMes > 0 ? '#0EA5A0' : undefined }}>
+                    {formatarMoeda(r.vendasMes)}
+                  </p>
+                  <p className="text-[10px] text-ink-soft">
+                    {MESES[mesAtualIdx]}/{anoAtual}
+                  </p>
+                  <p className="text-[11px] font-bold text-ink-soft mt-0.5 tabular-nums">
+                    {formatarMoeda(r.totalHistorico)} · total histórico
+                  </p>
+                </div>
               </div>
-              <div className="text-right shrink-0">
-                <p className="text-xs font-extrabold text-ink">{formatarMoeda(r.totalHistorico)}</p>
-                <p className="text-[10px] text-ink-soft">total histórico</p>
-                <p className="text-[11px] font-bold mt-0.5" style={{ color: r.vendasMes > 0 ? '#0EA5A0' : undefined }}>
-                  {r.vendasMes > 0
-                    ? `${formatarMoeda(r.vendasMes)} · ${MESES[mesAtualIdx]}/${anoAtual}`
-                    : 'sem venda no mês'}
-                </p>
-              </div>
-            </div>
-          ))}
-          {ranking.length === 0 && <p className="text-sm text-ink-soft py-6 text-center">Nenhum vendedor cadastrado ainda.</p>}
+            ))}
+            {ranking.length === 0 && <p className="text-sm text-ink-soft py-6 text-center">Nenhum vendedor cadastrado ainda.</p>}
+          </div>
         </div>
       </div>
     </div>
@@ -448,7 +520,7 @@ function BarraFunil({
       style={{ background: cor, width: estreita ? `${Math.max(pct, 14)}%` : '100%', minWidth: 190 }}
     >
       <span className="truncate">{label}</span>
-      <span className="whitespace-nowrap ml-3">
+      <span className="whitespace-nowrap ml-3 tabular-nums">
         {valor.toLocaleString('pt-BR')} ({pct}%)
       </span>
     </div>
