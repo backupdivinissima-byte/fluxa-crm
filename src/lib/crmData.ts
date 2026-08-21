@@ -106,6 +106,12 @@ export async function salvarVendasAnuais(empresaId: string, vendasAnuais: { ano:
   await updateDoc(doc(db, 'empresas', empresaId), { vendasAnuais });
 }
 
+// Histórico de clientes ativos por ano/mês — mesmo padrão de vendasAnuais,
+// exibido junto no gráfico "Evolução de vendas por mês".
+export async function salvarClientesAtivosAnuais(empresaId: string, clientesAtivosAnuais: { ano: number; meses: number[] }[]) {
+  await updateDoc(doc(db, 'empresas', empresaId), { clientesAtivosAnuais });
+}
+
 // Prazo de inatividade do funil de atendimento do Dashboard — mesmo padrão.
 export async function salvarDiasInatividade(empresaId: string, diasInatividade: number) {
   await updateDoc(doc(db, 'empresas', empresaId), { diasInatividade });
