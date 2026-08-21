@@ -32,6 +32,12 @@ export interface Empresa {
   // que o Dashboard sempre sobrescreve com o valor real calculado a partir
   // dos cards do funil (nunca editável manualmente).
   vendasAnuais?: { ano: number; meses: number[] }[]; // meses: 12 posições, Jan-Dez
+  // Prazo (em dias sem compra/atendimento) que o funil de atendimento do
+  // Dashboard usa pra separar "Ativos" de "Inativos" — configurável pelo
+  // admin (botões 30/60/90/personalizado). Padrão 30 se não definido.
+  // Só vale pro funil do Dashboard; o corte fixo usado em Clientes/detalhe
+  // do cliente continua como antes.
+  diasInatividade?: number;
   // Conexão "puxando" dados de fora (sentido oposto ao apiKeyHash acima):
   // aqui é o Fluxa CRM que chama a API do sistema atual da empresa (ERP,
   // e-commerce etc.) e importa a lista de clientes automaticamente. Guarda
