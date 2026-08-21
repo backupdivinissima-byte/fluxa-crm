@@ -25,6 +25,13 @@ export interface Empresa {
   metas?: MetaTier[]; // faixas globais de meta/comissão da empresa
   crmFiltros?: FiltroCrm[]; // filtros personalizados do quadro CRM (até 10)
   crmColunas?: ColunaCrm[]; // colunas personalizadas do quadro CRM (até 8)
+  // Histórico de vendas por ano/mês pro gráfico do Dashboard ("Evolução de
+  // vendas por mês"). Não existe registro histórico de vendas por
+  // transação no sistema, então isso é preenchido manualmente pela empresa
+  // (botão "+ Ano" no Dashboard) — EXCETO o mês corrente do ano corrente,
+  // que o Dashboard sempre sobrescreve com o valor real calculado a partir
+  // dos cards do funil (nunca editável manualmente).
+  vendasAnuais?: { ano: number; meses: number[] }[]; // meses: 12 posições, Jan-Dez
 }
 
 // Filtro personalizado do quadro CRM — cada empresa pode criar até 10,
