@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { ouvirClientes, ouvirEmpresa, ouvirVendedores, salvarDiasInatividade, salvarVendasAnuais } from '../lib/crmData';
+import {
+  ouvirClientes,
+  ouvirEmpresa,
+  ouvirVendedores,
+  salvarClientesAtivosAnuais,
+  salvarDiasInatividade,
+  salvarVendasAnuais,
+} from '../lib/crmData';
 import { CRM_COLUNAS_PADRAO, type Cliente, type ColunaCrm, type Vendedor } from '../types';
 import {
   DIAS_INATIVIDADE_PADRAO,
@@ -55,6 +62,9 @@ export default function Dashboard() {
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [colunas, setColunas] = useState<ColunaCrm[]>(empresa?.crmColunas ?? CRM_COLUNAS_PADRAO);
   const [vendasAnuais, setVendasAnuais] = useState<{ ano: number; meses: number[] }[]>(empresa?.vendasAnuais ?? []);
+  const [clientesAtivosAnuais, setClientesAtivosAnuais] = useState<{ ano: number; meses: number[] }[]>(
+    empresa?.clientesAtivosAnuais ?? []
+  );
   const [anosSelecionados, setAnosSelecionados] = useState<Set<number> | null>(null);
   const [editando, setEditando] = useState(false);
   const [novoAno, setNovoAno] = useState('');
@@ -70,6 +80,7 @@ export default function Dashboard() {
     const unsubE = ouvirEmpresa(empresaId, (emp) => {
       setColunas(emp?.crmColunas && emp.crmColunas.length > 0 ? emp.crmColunas : CRM_COLUNAS_PADRAO);
       setVendasAnuais((atual) => (editando ? atual : (emp?.vendasAnuais ?? [])));
+      setClientesAtivosAnuais((atual) => (editando ? atual : (emp?.clientesAtivosAnuais ?? [])));
       setDiasInatividade(emp?.diasInatividade ?? DIAS_INATIVIDADE_PADRAO);
     });
     return () => {
@@ -100,10 +111,10 @@ export default function Dashboard() {
   // O ano corrente sempre aparece no gráfico (mesmo sem nenhum valor
   // lançado ainda), pra garantir que o mês atual real sempre esteja visível.
   const anosDisponiveis = useMemo(() => {
-    const anos = new Set(vendasAnuais.map((a) => a.ano));
+    const anos = new Set([...vendasAnuais.map((a) => a.ano), ...clientesAtivosAnuais.map((a) => a.ano)]);
     anos.add(anoAtual);
     return Array.from(anos).sort((a, b) => a - b);
-  }, [vendasAnuais, anoAtual]);
+  }, [vendasAnuais, clientesAtivosAnuais, anoAtual]);
 
   const selecionados = anosSelecionados ?? new Set(anosDisponiveis);
 
@@ -113,6 +124,33 @@ export default function Dashboard() {
     while (base.length < 12) base.push(0);
     if (ano === anoAtual) base[mesAtualIdx] = vendasMes.total; // mês atual sempre real, nunca manual
     return base;
+  }
+
+  // Nº de clientes ativos por mês (mesmo padrão de mesesDoAno) — o mês
+  // corrente também é sempre "congelado" com o valor real calculado agora,
+  // nunca editável manualmente.
+  function ativosDoAno(ano: number): number[] {
+    const registro = clientesAtivosAnuais.find((a) => a.ano === ano);
+    const base = registro ? [...registro.meses] : new Array(12).fill(0);
+    while (base.length < 12) base.push(0);
+    if (ano === anoAtual) base[mesAtualIdx] = funil.ativos;
+    return base;
+  }
+
+  // % de variação de "valor" no mês mesIdx/ano em relação ao mês anterior
+  // (Dez do ano anterior, se mesIdx for Janeiro) — undefined se não houver
+  // base de comparação (evita indicador enganoso tipo "+∞%").
+  function pctVsMesAnterior(ano: number, mesIdx: number): number | undefined {
+    const atual = mesesDoAno(ano)[mesIdx];
+    const anterior = mesIdx === 0 ? mesesDoAno(ano - 1)[11] : mesesDoAno(ano)[mesIdx - 1];
+    return anterior > 0 ? ((atual - anterior) / anterior) * 100 : undefined;
+  }
+
+  // % de variação de "valor" em relação ao mesmo mês do ano anterior.
+  function pctVsAnoAnterior(ano: number, mesIdx: number): number | undefined {
+    const atual = mesesDoAno(ano)[mesIdx];
+    const anterior = mesesDoAno(ano - 1)[mesIdx];
+    return anterior > 0 ? ((atual - anterior) / anterior) * 100 : undefined;
   }
 
   const maxValor = useMemo(() => {
@@ -141,14 +179,19 @@ export default function Dashboard() {
       if (atual.some((a) => a.ano === ano)) return atual;
       return [...atual, { ano, meses: new Array(12).fill(0) }].sort((a, b) => a.ano - b.ano);
     });
+    setClientesAtivosAnuais((atual) => {
+      if (atual.some((a) => a.ano === ano)) return atual;
+      return [...atual, { ano, meses: new Array(12).fill(0) }].sort((a, b) => a.ano - b.ano);
+    });
     setAnosSelecionados((sel) => new Set([...(sel ?? anosDisponiveis), ano]));
     setNovoAno('');
     setEditando(true);
   }
 
-  function atualizarMes(ano: number, mesIdx: number, valor: string) {
+  function atualizarValor(tipo: 'vendas' | 'ativos', ano: number, mesIdx: number, valor: string) {
     if (ano === anoAtual && mesIdx === mesAtualIdx) return; // mês atual não é editável manualmente
-    setVendasAnuais((atual) => {
+    const setter = tipo === 'vendas' ? setVendasAnuais : setClientesAtivosAnuais;
+    setter((atual) => {
       const existe = atual.some((a) => a.ano === ano);
       const base = existe ? atual : [...atual, { ano, meses: new Array(12).fill(0) }];
       return base
@@ -168,17 +211,21 @@ export default function Dashboard() {
     setSalvando(true);
     try {
       // Nunca persiste o mês atual manualmente — ele é sempre recalculado.
-      const paraSalvar = vendasAnuais.map((a) => {
-        if (a.ano !== anoAtual) return a;
-        const meses = [...a.meses];
-        meses[mesAtualIdx] = 0; // não guarda o valor "congelado", ele é sempre lido ao vivo
-        return { ...a, meses };
-      });
-      await salvarVendasAnuais(empresaId, paraSalvar);
+      const zerarMesAtual = (lista: { ano: number; meses: number[] }[]) =>
+        lista.map((a) => {
+          if (a.ano !== anoAtual) return a;
+          const meses = [...a.meses];
+          meses[mesAtualIdx] = 0; // não guarda o valor "congelado", ele é sempre lido ao vivo
+          return { ...a, meses };
+        });
+      await Promise.all([
+        salvarVendasAnuais(empresaId, zerarMesAtual(vendasAnuais)),
+        salvarClientesAtivosAnuais(empresaId, zerarMesAtual(clientesAtivosAnuais)),
+      ]);
       setEditando(false);
     } catch (err) {
-      console.error('Erro ao salvar histórico de vendas:', err);
-      alert('Não foi possível salvar o histórico de vendas. Tente novamente em instantes.');
+      console.error('Erro ao salvar histórico:', err);
+      alert('Não foi possível salvar o histórico. Tente novamente em instantes.');
     } finally {
       setSalvando(false);
     }
@@ -304,32 +351,53 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* Barras */}
+        {/* Barras, com valor/variações/clientes ativos abaixo de cada uma */}
         <div className="overflow-x-auto">
-          <div className="flex items-end gap-4 min-w-[720px] h-56 border-b border-line pb-1">
+          <div className="flex items-end gap-5 min-w-max h-48 border-b border-line pb-1">
             {MESES.map((mesLabel, mesIdx) => (
-              <div key={mesLabel} className="flex flex-col items-center justify-end flex-1 h-full">
-                <div className="flex items-end gap-1 h-full">
-                  {anosDisponiveis.map((ano, i) => {
+              <div key={mesLabel} className="flex items-end gap-1.5 h-full shrink-0">
+                {anosDisponiveis.map((ano, i) => {
+                  if (!selecionados.has(ano)) return null;
+                  const valor = mesesDoAno(ano)[mesIdx];
+                  const alturaPct = Math.max(valor > 0 ? 3 : 0, (valor / maxValor) * 100);
+                  return (
+                    <div key={ano} className="h-full flex items-end justify-center w-16" title={`${ano}: ${formatarMoeda(valor)}`}>
+                      <div
+                        className="w-8 rounded-t-sm"
+                        style={{ height: `${alturaPct}%`, background: CORES_ANOS[i % CORES_ANOS.length] }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+          {/* Rótulos + indicadores por barra, alinhados com as colunas acima */}
+          <div className="flex items-start gap-5 min-w-max mt-1.5">
+            {MESES.map((mesLabel, mesIdx) => (
+              <div key={mesLabel} className="flex flex-col items-center shrink-0">
+                <span className="text-[10px] font-bold text-ink-soft mb-1">{mesLabel}</span>
+                <div className="flex items-start gap-1.5">
+                  {anosDisponiveis.map((ano) => {
                     if (!selecionados.has(ano)) return null;
                     const valor = mesesDoAno(ano)[mesIdx];
-                    const alturaPct = Math.max(valor > 0 ? 3 : 0, (valor / maxValor) * 100);
+                    const pctMes = pctVsMesAnterior(ano, mesIdx);
+                    const pctAno = pctVsAnoAnterior(ano, mesIdx);
+                    const ativosMes = ativosDoAno(ano)[mesIdx];
                     return (
-                      <div key={ano} className="flex flex-col items-center justify-end h-full w-3.5" title={`${ano}: ${formatarMoeda(valor)}`}>
-                        {valor > 0 && (
-                          <span className="text-[9px] font-bold text-ink-soft mb-0.5 rotate-0 whitespace-nowrap tabular-nums">
-                            {formatarCompacto(valor)}
-                          </span>
-                        )}
-                        <div
-                          className="w-full rounded-t-sm"
-                          style={{ height: `${alturaPct}%`, background: CORES_ANOS[i % CORES_ANOS.length] }}
-                        />
+                      <div key={ano} className="w-16 text-center text-[9px] leading-tight tabular-nums">
+                        <div className="font-bold text-ink">{valor > 0 ? formatarCompacto(valor) : '—'}</div>
+                        <div style={{ color: pctMes == null ? undefined : pctMes >= 0 ? '#27AE60' : '#C0392B' }} className={pctMes == null ? 'text-ink-soft' : ''}>
+                          {pctMes == null ? '· mês ant.' : `${pctMes >= 0 ? '▲' : '▼'} ${Math.abs(Math.round(pctMes))}% mês`}
+                        </div>
+                        <div style={{ color: pctAno == null ? undefined : pctAno >= 0 ? '#27AE60' : '#C0392B' }} className={pctAno == null ? 'text-ink-soft' : ''}>
+                          {pctAno == null ? '· ano ant.' : `${pctAno >= 0 ? '▲' : '▼'} ${Math.abs(Math.round(pctAno))}% ano`}
+                        </div>
+                        <div className="text-ink-soft">{ativosMes > 0 ? `${ativosMes} ativos` : '—'}</div>
                       </div>
                     );
                   })}
                 </div>
-                <span className="text-[10px] font-bold text-ink-soft mt-1">{mesLabel}</span>
               </div>
             ))}
           </div>
@@ -337,11 +405,14 @@ export default function Dashboard() {
 
         {editando && (
           <div className="mt-5 overflow-x-auto border-t border-line pt-4">
-            <p className="text-xs text-ink-soft mb-3">
-              Lance aqui o faturamento de anos anteriores (sem histórico automático no sistema). O mês atual (
-              {MESES_EXTENSO[mesAtualIdx]}/{anoAtual}) é sempre calculado ao vivo e não pode ser editado.
+            <p className="text-xs text-ink-soft mb-4">
+              Lance aqui o faturamento e o nº de clientes ativos de anos anteriores (sem histórico automático no
+              sistema). O mês atual ({MESES_EXTENSO[mesAtualIdx]}/{anoAtual}) é sempre calculado ao vivo e não pode
+              ser editado.
             </p>
-            <table className="text-xs min-w-[600px]">
+
+            <p className="text-[11px] font-bold text-ink uppercase tracking-wide mb-2">Vendas (R$)</p>
+            <table className="text-xs min-w-[600px] mb-5">
               <thead>
                 <tr>
                   <th className="text-left pr-3 pb-2 text-ink-soft font-bold">Mês</th>
@@ -366,7 +437,7 @@ export default function Dashboard() {
                             <input
                               type="number"
                               value={mesesDoAno(ano)[mesIdx] || ''}
-                              onChange={(e) => atualizarMes(ano, mesIdx, e.target.value)}
+                              onChange={(e) => atualizarValor('vendas', ano, mesIdx, e.target.value)}
                               className="w-24 rounded-lg border border-line px-1.5 py-1 text-right"
                             />
                           )}
@@ -377,6 +448,45 @@ export default function Dashboard() {
                 ))}
               </tbody>
             </table>
+
+            <p className="text-[11px] font-bold text-ink uppercase tracking-wide mb-2">Clientes ativos (nº)</p>
+            <table className="text-xs min-w-[600px]">
+              <thead>
+                <tr>
+                  <th className="text-left pr-3 pb-2 text-ink-soft font-bold">Mês</th>
+                  {anosDisponiveis.map((ano) => (
+                    <th key={ano} className="text-right px-2 pb-2 text-ink-soft font-bold">
+                      {ano}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {MESES.map((mesLabel, mesIdx) => (
+                  <tr key={mesLabel} className="border-t border-line">
+                    <td className="py-1.5 pr-3 text-ink-soft font-bold">{mesLabel}</td>
+                    {anosDisponiveis.map((ano) => {
+                      const travado = ano === anoAtual && mesIdx === mesAtualIdx;
+                      return (
+                        <td key={ano} className="py-1.5 px-2 text-right">
+                          {travado ? (
+                            <span className="text-ink-soft italic">{funil.ativos} (atual)</span>
+                          ) : (
+                            <input
+                              type="number"
+                              value={ativosDoAno(ano)[mesIdx] || ''}
+                              onChange={(e) => atualizarValor('ativos', ano, mesIdx, e.target.value)}
+                              className="w-24 rounded-lg border border-line px-1.5 py-1 text-right"
+                            />
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
             <button
               onClick={salvarHistorico}
               disabled={salvando}
