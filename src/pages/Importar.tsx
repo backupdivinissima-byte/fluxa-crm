@@ -223,11 +223,15 @@ export default function Importar() {
       </p>
 
       <div className="bg-white border border-line rounded-2xl p-6 mb-4">
-        <h2 className="text-sm font-extrabold text-ink mb-1">Planilha Excel</h2>
+        <h2 className="text-sm font-extrabold text-ink mb-1">Importar arquivo</h2>
         <p className="text-sm text-ink-soft mb-5">
           Baixe o modelo, preencha com seus dados e envie de volta aqui. O modelo já vem com as colunas certas
           (formatadas como texto, pra não perder zero à esquerda em código/telefone/CNPJ) e uma aba de instruções.
-          Também aceita .csv com esses mesmos nomes de coluna.
+          Além de .xlsx/.xls, também aceita <strong>.csv</strong>, <strong>.docx</strong> (Word) e <strong>.pdf</strong> —
+          desde que o arquivo tenha uma tabela com os mesmos nomes de coluna do modelo (ou uma variação parecida, ex.:
+          "CNPJ" no lugar de "CNPJ/CPF"). Excel/CSV é o formato mais confiável; em Word funciona bem se os dados
+          estiverem numa tabela de verdade; em PDF é um "melhor esforço" que depende de como o arquivo foi gerado —
+          não funciona com PDF escaneado (imagem), só com texto de verdade.
         </p>
 
         <div className="flex flex-wrap items-center gap-3 mb-5">
@@ -242,13 +246,13 @@ export default function Importar() {
 
         <div className="border-t border-line pt-5">
           <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-2">
-            Planilha preenchida
+            Arquivo preenchido (Excel, CSV, Word ou PDF)
           </label>
           <div className="flex flex-wrap items-center gap-3">
             <input
               ref={inputRef}
               type="file"
-              accept=".xlsx,.xls,.csv"
+              accept=".xlsx,.xls,.csv,.docx,.pdf"
               onChange={(e) => setArquivo(e.target.files?.[0] ?? null)}
               className="text-sm text-ink-soft file:mr-3 file:rounded-lg file:border-0 file:bg-surface file:px-3 file:py-2 file:text-sm file:font-bold file:text-ink hover:file:bg-line/50"
             />
@@ -257,12 +261,12 @@ export default function Importar() {
               disabled={!arquivo || rodando}
               className="rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-5 py-2.5 hover:opacity-90 disabled:opacity-60"
             >
-              {rodando ? 'Importando...' : 'Importar planilha'}
+              {rodando ? 'Importando...' : 'Importar arquivo'}
             </button>
           </div>
           {!arquivo && (
             <p className="text-xs text-ink-soft mt-2">
-              O botão "Importar planilha" só liga depois que você escolhe um arquivo em "Escolher arquivo" acima.
+              O botão "Importar arquivo" só liga depois que você escolhe um arquivo em "Escolher arquivo" acima.
             </p>
           )}
         </div>
@@ -571,7 +575,7 @@ export default function Importar() {
         <p className="text-sm text-ink-soft">
           Exporte a tabela de clientes ou vendedores do seu banco de dados atual em <strong>.csv</strong>, usando os
           mesmos nomes de coluna do modelo Excel acima (ex.: "Código*", "Nome", "Login*"). Depois é só enviar esse
-          .csv no campo "Planilha preenchida" — funciona igual à planilha.
+          .csv no campo "Arquivo preenchido" acima — funciona igual à planilha.
         </p>
       </div>
     </div>
