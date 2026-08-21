@@ -32,6 +32,11 @@ export interface Empresa {
   // que o Dashboard sempre sobrescreve com o valor real calculado a partir
   // dos cards do funil (nunca editável manualmente).
   vendasAnuais?: { ano: number; meses: number[] }[]; // meses: 12 posições, Jan-Dez
+  // Mesmo padrão de vendasAnuais, mas pra número de clientes ativos por
+  // mês — usado nos indicadores abaixo de cada barra do gráfico "Evolução
+  // de vendas por mês". O mês corrente também é sempre recalculado ao vivo
+  // (nº de clientes ativos nesse momento), nunca editável manualmente.
+  clientesAtivosAnuais?: { ano: number; meses: number[] }[];
   // Prazo (em dias sem compra/atendimento) que o funil de atendimento do
   // Dashboard usa pra separar "Ativos" de "Inativos" — configurável pelo
   // admin (botões 30/60/90/personalizado). Padrão 30 se não definido.
