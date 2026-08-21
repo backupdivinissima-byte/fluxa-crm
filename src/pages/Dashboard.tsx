@@ -404,7 +404,7 @@ export default function Dashboard() {
                 onClick={() => alterarPrazoInatividade(dias)}
                 className={`rounded-lg text-xs font-bold px-3 py-1.5 border ${
                   diasInatividade === dias && !personalizarPrazo
-                    ? 'bg-ink text-white border-ink'
+                    ? 'bg-gradient-to-br from-teal-500 to-blue-600 text-white border-transparent'
                     : 'border-line text-ink hover:bg-surface'
                 }`}
               >
@@ -418,7 +418,7 @@ export default function Dashboard() {
               }}
               className={`rounded-lg text-xs font-bold px-3 py-1.5 border ${
                 personalizarPrazo || !OPCOES_PRAZO_INATIVIDADE.includes(diasInatividade)
-                  ? 'bg-ink text-white border-ink'
+                  ? 'bg-gradient-to-br from-teal-500 to-blue-600 text-white border-transparent'
                   : 'border-line text-ink hover:bg-surface'
               }`}
             >
@@ -451,13 +451,15 @@ export default function Dashboard() {
         </div>
 
         <div className="bg-white border border-line rounded-2xl p-5">
-          <h2 className="text-sm font-extrabold text-ink mb-4">🏆 Ranking de vendedores</h2>
+          <h2 className="text-sm font-extrabold text-ink mb-4">Ranking de vendedores</h2>
           <div className="space-y-3">
             {ranking.map((r, i) => (
               <div key={r.vendedor.id} className="flex items-center gap-3">
                 <span
                   className={`w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-[11px] font-extrabold ${
-                    i === 0 ? 'bg-amber-200 text-amber-800' : i === 1 ? 'bg-slate-200 text-slate-700' : i === 2 ? 'bg-orange-200 text-orange-800' : 'bg-surface text-ink-soft'
+                    i === 0
+                      ? 'bg-gradient-to-br from-teal-500 to-blue-600 text-white'
+                      : 'bg-surface text-ink-soft border border-line'
                   }`}
                 >
                   {i + 1}
