@@ -1,13 +1,17 @@
 import { useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import {
-  gerarPlanilhaModelo,
-  importarPlanilha,
-  lerPlanilha,
-  type LeituraPlanilha,
-  type ResultadoImportacaoPlanilha,
-} from '../lib/importarPlanilha';
+import { gerarPlanilhaModelo, importarPlanilha, type ResultadoImportacaoPlanilha } from '../lib/importarPlanilha';
 import { gerarChaveApi, revogarChaveApi } from '../lib/apiKey';
+import {
+  CAMPOS_MAPEAVEIS,
+  MAPEAMENTO_PADRAO,
+  gerarModeloConfigErp,
+  lerConfigDeDocumento,
+  salvarConexaoErp,
+  sincronizarComErp,
+  type ErpConexao,
+  type ResultadoSincronizacaoErp,
+} from '../lib/erpConexao';
 import { IconImportar } from '../components/NavIcons';
 
 // URL fixa da API (região e nome de função previsíveis — ver functions/index.js).
@@ -19,7 +23,7 @@ const API_BASE_URL = 'https://us-central1-fluxa-crm.cloudfunctions.net/api';
  * cliente) e explicação de como usar a mesma planilha pra exportar de um
  * banco de dados. */
 export default function Importar() {
-  const { empresa, papel } = useAuth();
+  const { empresa, papel, usuario } = useAuth();
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [rodando, setRodando] = useState(false);
   const [baixando, setBaixando] = useState(false);
@@ -33,17 +37,31 @@ export default function Importar() {
   const [erroChave, setErroChave] = useState('');
   const [copiado, setCopiado] = useState(false);
 
-  // Conecte seu ERP — anexa um documento com todos os dados (mesmo pipeline
-  // de leitura do card "Importar arquivo" acima), com um passo de conferência
-  // ("Testar conexão", só lê e mostra o que encontrou) antes de gravar de
-  // verdade ("Sincronizar agora").
-  const [arquivoErp, setArquivoErp] = useState<File | null>(null);
-  const inputRefErp = useRef<HTMLInputElement>(null);
+  // Conectar seu ERP (Fluxa puxando dados de fora) — inicializa com o que
+  // já estiver salvo na empresa, se houver.
+  const conexaoSalva = empresa?.erpConexao;
+  const [erpUrl, setErpUrl] = useState(conexaoSalva?.url ?? '');
+  const [erpAutenticacao, setErpAutenticacao] = useState<ErpConexao['autenticacao']>(conexaoSalva?.autenticacao ?? 'nenhuma');
+  const [erpHeaderNome, setErpHeaderNome] = useState(conexaoSalva?.headerNome ?? '');
+  const [erpValorAuth, setErpValorAuth] = useState('');
+  const [erpUsuarioBasic, setErpUsuarioBasic] = useState(conexaoSalva?.usuarioBasic ?? '');
+  const [erpListaPath, setErpListaPath] = useState(conexaoSalva?.listaPath ?? '');
+  const [erpMapeamento, setErpMapeamento] = useState<Record<string, string>>(conexaoSalva?.mapeamento ?? MAPEAMENTO_PADRAO);
+  const [salvandoErp, setSalvandoErp] = useState(false);
   const [erroErp, setErroErp] = useState('');
   const [testandoErp, setTestandoErp] = useState(false);
-  const [resultadoTesteErp, setResultadoTesteErp] = useState<LeituraPlanilha | null>(null);
+  const [resultadoTesteErp, setResultadoTesteErp] = useState<ResultadoSincronizacaoErp | null>(null);
   const [sincronizandoErp, setSincronizandoErp] = useState(false);
-  const [resultadoSyncErp, setResultadoSyncErp] = useState<ResultadoImportacaoPlanilha | null>(null);
+  const [resultadoSyncErp, setResultadoSyncErp] = useState<ResultadoSincronizacaoErp | null>(null);
+
+  // Preencher dados automaticamente a partir de um documento (em vez de
+  // digitar URL/token/mapeamento campo a campo à mão).
+  const [arquivoConfigErp, setArquivoConfigErp] = useState<File | null>(null);
+  const inputRefConfigErp = useRef<HTMLInputElement>(null);
+  const [baixandoModeloConfig, setBaixandoModeloConfig] = useState(false);
+  const [preenchendoConfig, setPreenchendoConfig] = useState(false);
+  const [erroConfig, setErroConfig] = useState('');
+  const [configPreenchida, setConfigPreenchida] = useState(false);
 
   if (papel !== 'admin' || !empresa) {
     return (
@@ -136,35 +154,115 @@ export default function Importar() {
     }
   }
 
+  function montarConfigErp(): ErpConexao {
+    return {
+      url: erpUrl.trim(),
+      autenticacao: erpAutenticacao,
+      headerNome: erpAutenticacao === 'header' ? erpHeaderNome.trim() : undefined,
+      valorAuth: erpValorAuth.trim() || undefined,
+      usuarioBasic: erpAutenticacao === 'basic' ? erpUsuarioBasic.trim() : undefined,
+      listaPath: erpListaPath.trim() || undefined,
+      mapeamento: erpMapeamento,
+      configuradoEm: conexaoSalva?.configuradoEm,
+      ultimaSincronizacao: conexaoSalva?.ultimaSincronizacao,
+    };
+  }
+
+  async function salvarErp() {
+    setSalvandoErp(true);
+    setErroErp('');
+    try {
+      await salvarConexaoErp(empresaId, montarConfigErp(), {
+        valorAuth: conexaoSalva?.valorAuth,
+        usuarioBasic: conexaoSalva?.usuarioBasic,
+      });
+      setErpValorAuth('');
+    } catch (e) {
+      setErroErp(e instanceof Error ? e.message : 'Erro ao salvar a configuração.');
+      throw e;
+    } finally {
+      setSalvandoErp(false);
+    }
+  }
+
+  async function handleBaixarModeloConfig() {
+    setBaixandoModeloConfig(true);
+    try {
+      const blob = await gerarModeloConfigErp();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'modelo-configuracao-erp-fluxa-crm.xlsx';
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setBaixandoModeloConfig(false);
+    }
+  }
+
+  async function handlePreencherDados() {
+    if (!arquivoConfigErp) return;
+    setPreenchendoConfig(true);
+    setErroConfig('');
+    setConfigPreenchida(false);
+    try {
+      const config = await lerConfigDeDocumento(arquivoConfigErp);
+      if (config.url) setErpUrl(config.url);
+      if (config.autenticacao) setErpAutenticacao(config.autenticacao);
+      if (config.headerNome) setErpHeaderNome(config.headerNome);
+      if (config.valorAuth) setErpValorAuth(config.valorAuth);
+      if (config.usuarioBasic) setErpUsuarioBasic(config.usuarioBasic);
+      if (config.listaPath) setErpListaPath(config.listaPath);
+      if (Object.keys(config.mapeamento).length > 0) {
+        setErpMapeamento((atual) => ({ ...atual, ...config.mapeamento }));
+      }
+      if (!config.url && !config.autenticacao && Object.keys(config.mapeamento).length === 0) {
+        setErroConfig(
+          'Não encontrei nenhum campo reconhecido nesse documento — baixe o modelo acima pra conferir o formato certo.'
+        );
+      } else {
+        setConfigPreenchida(true);
+      }
+    } catch (e) {
+      setErroConfig(e instanceof Error ? e.message : 'Erro ao ler o documento de configuração.');
+    } finally {
+      setPreenchendoConfig(false);
+    }
+  }
+
   async function handleTestarErp() {
-    if (!arquivoErp) return;
+    if (!usuario) return;
     setTestandoErp(true);
     setErroErp('');
     setResultadoTesteErp(null);
     setResultadoSyncErp(null);
     try {
-      const r = await lerPlanilha(arquivoErp);
+      await salvarErp();
+      const idToken = await usuario.getIdToken();
+      const r = await sincronizarComErp(idToken, true);
       setResultadoTesteErp(r);
     } catch (e) {
-      setErroErp(e instanceof Error ? e.message : 'Erro ao ler o documento.');
+      setErroErp(e instanceof Error ? e.message : 'Erro ao testar a conexão com o ERP.');
     } finally {
       setTestandoErp(false);
     }
   }
 
   async function handleSincronizarErp() {
-    if (!arquivoErp) return;
-    const ok = window.confirm('Importar os dados desse documento pro Fluxa CRM agora?');
+    if (!usuario) return;
+    const ok = window.confirm('Buscar os dados no seu ERP agora e importar pro Fluxa CRM?');
     if (!ok) return;
     setSincronizandoErp(true);
     setErroErp('');
     setResultadoTesteErp(null);
     setResultadoSyncErp(null);
     try {
-      const r = await importarPlanilha(empresaId, arquivoErp);
+      await salvarErp();
+      const idToken = await usuario.getIdToken();
+      const r = await sincronizarComErp(idToken, false);
       setResultadoSyncErp(r);
     } catch (e) {
-      setErroErp(e instanceof Error ? e.message : 'Erro ao sincronizar o documento.');
+      setErroErp(e instanceof Error ? e.message : 'Erro ao sincronizar com o ERP.');
     } finally {
       setSincronizandoErp(false);
     }
@@ -340,29 +438,171 @@ export default function Importar() {
         </span>
         <h2 className="text-sm font-extrabold text-ink mb-1">Conecte seu ERP</h2>
         <p className="text-sm text-ink-soft mb-5">
-          Anexe um documento (Excel, CSV, Word ou PDF) com todos os dados de clientes/vendedores exportados do seu
-          ERP ou sistema atual. Clique em "Testar conexão" pra conferir o que foi encontrado no arquivo antes de
-          confirmar, e em "Sincronizar agora" pra trazer os dados pro Fluxa CRM de verdade — é seguro repetir, os
-          dados não duplicam, só atualizam.
+          Caminho inverso do card acima: aqui é o Fluxa CRM que busca os dados direto na API do seu sistema atual
+          (ERP, e-commerce etc.), em vez de você precisar programar o envio. Informe a URL, a autenticação e o
+          mapeamento de campos uma vez — depois é só clicar em "Sincronizar agora" sempre que quiser trazer os dados
+          mais recentes (é seguro repetir, os dados não duplicam).
         </p>
 
-        <div className="border-t border-line pt-5">
+        {conexaoSalva?.ultimaSincronizacao && (
+          <div className="flex items-center gap-2 text-sm text-ink-soft mb-4">
+            <span className="inline-block w-2 h-2 rounded-full bg-teal-500" />
+            Última sincronização: {new Date(conexaoSalva.ultimaSincronizacao).toLocaleString('pt-BR')}
+          </div>
+        )}
+
+        <div className="bg-surface rounded-xl p-4 mb-5">
           <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-2">
-            Arquivo preenchido (Excel, CSV, Word ou PDF)
+            Preencher automaticamente por documento
           </label>
+          <p className="text-xs text-ink-soft mb-3">
+            Em vez de digitar campo por campo abaixo: baixe o modelo, preencha com a URL/token/mapeamento do seu ERP
+            e anexe aqui — os campos do formulário são preenchidos sozinhos. Aceita Excel, CSV, Word ou PDF.
+          </p>
+          <div className="flex flex-wrap items-center gap-3 mb-3">
+            <button
+              type="button"
+              onClick={handleBaixarModeloConfig}
+              disabled={baixandoModeloConfig}
+              className="rounded-xl border border-line text-ink text-sm font-bold px-4 py-2.5 hover:bg-white disabled:opacity-60"
+            >
+              {baixandoModeloConfig ? 'Preparando...' : 'Baixar modelo de configuração'}
+            </button>
+          </div>
           <div className="flex flex-wrap items-center gap-3">
             <input
-              ref={inputRefErp}
+              ref={inputRefConfigErp}
               type="file"
               accept=".xlsx,.xls,.csv,.docx,.pdf"
               onChange={(e) => {
-                setArquivoErp(e.target.files?.[0] ?? null);
-                setResultadoTesteErp(null);
-                setResultadoSyncErp(null);
-                setErroErp('');
+                setArquivoConfigErp(e.target.files?.[0] ?? null);
+                setErroConfig('');
+                setConfigPreenchida(false);
               }}
-              className="text-sm text-ink-soft file:mr-3 file:rounded-lg file:border-0 file:bg-surface file:px-3 file:py-2 file:text-sm file:font-bold file:text-ink hover:file:bg-line/50"
+              className="text-sm text-ink-soft file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-2 file:text-sm file:font-bold file:text-ink hover:file:bg-line/50"
             />
+            <button
+              type="button"
+              onClick={handlePreencherDados}
+              disabled={!arquivoConfigErp || preenchendoConfig}
+              className="rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-4 py-2.5 hover:opacity-90 disabled:opacity-60"
+            >
+              {preenchendoConfig ? 'Preenchendo...' : 'Preencher dados'}
+            </button>
+          </div>
+          {erroConfig && <p className="text-xs text-red-500 mt-3">{erroConfig}</p>}
+          {configPreenchida && (
+            <p className="text-xs text-teal-700 mt-3 font-bold">
+              Dados preenchidos abaixo — confira os campos antes de testar/sincronizar.
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1.5">
+              URL da API do seu ERP
+            </label>
+            <input
+              value={erpUrl}
+              onChange={(e) => setErpUrl(e.target.value)}
+              placeholder="https://meuerp.com.br/api/clientes"
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1.5">
+              Autenticação
+            </label>
+            <select
+              value={erpAutenticacao}
+              onChange={(e) => setErpAutenticacao(e.target.value as ErpConexao['autenticacao'])}
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm bg-white"
+            >
+              <option value="nenhuma">Nenhuma (API pública)</option>
+              <option value="bearer">Bearer Token</option>
+              <option value="header">Cabeçalho personalizado (ex.: X-Api-Key)</option>
+              <option value="basic">Usuário e senha (Basic Auth)</option>
+            </select>
+          </div>
+
+          {erpAutenticacao === 'header' && (
+            <div>
+              <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1.5">
+                Nome do cabeçalho
+              </label>
+              <input
+                value={erpHeaderNome}
+                onChange={(e) => setErpHeaderNome(e.target.value)}
+                placeholder="X-Api-Key"
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+              />
+            </div>
+          )}
+
+          {erpAutenticacao === 'basic' && (
+            <div>
+              <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1.5">Usuário</label>
+              <input
+                value={erpUsuarioBasic}
+                onChange={(e) => setErpUsuarioBasic(e.target.value)}
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+              />
+            </div>
+          )}
+
+          {erpAutenticacao !== 'nenhuma' && (
+            <div>
+              <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1.5">
+                {erpAutenticacao === 'basic' ? 'Senha' : 'Token/Chave'}
+              </label>
+              <input
+                type="password"
+                value={erpValorAuth}
+                onChange={(e) => setErpValorAuth(e.target.value)}
+                placeholder={conexaoSalva?.valorAuth ? '•••• (salvo — deixe em branco pra manter)' : ''}
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+              />
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1.5">
+              Caminho da lista na resposta (opcional)
+            </label>
+            <input
+              value={erpListaPath}
+              onChange={(e) => setErpListaPath(e.target.value)}
+              placeholder="Deixe em branco se a resposta já for uma lista. Ex.: data.clientes"
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div className="border-t border-line pt-4">
+            <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-2">
+              Mapeamento de campos
+            </label>
+            <p className="text-xs text-ink-soft mb-3">
+              Pra cada campo do Fluxa, informe o nome (ou caminho) do campo correspondente na resposta da API do seu
+              ERP. "Código do cliente" é obrigatório — é o identificador que evita duplicar ao sincronizar de novo.
+            </p>
+            <div className="space-y-2">
+              {CAMPOS_MAPEAVEIS.map(({ campo, label, obrigatorio }) => (
+                <div key={campo} className="flex items-center gap-3">
+                  <span className="w-40 shrink-0 text-xs font-bold text-ink">
+                    {label}
+                    {obrigatorio && <span className="text-red-500">*</span>}
+                  </span>
+                  <input
+                    value={erpMapeamento[campo] ?? ''}
+                    onChange={(e) => setErpMapeamento((atual) => ({ ...atual, [campo]: e.target.value }))}
+                    placeholder="caminho no JSON (ex.: nome ou dados.nome)"
+                    className="flex-1 rounded-lg border border-line px-2.5 py-1.5 text-sm"
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -370,7 +610,7 @@ export default function Importar() {
           <button
             type="button"
             onClick={handleTestarErp}
-            disabled={!arquivoErp || testandoErp || sincronizandoErp}
+            disabled={!erpUrl.trim() || !erpMapeamento.cod?.trim() || testandoErp || sincronizandoErp || salvandoErp}
             className="rounded-xl border border-line text-ink text-sm font-bold px-4 py-2.5 hover:bg-surface disabled:opacity-60"
           >
             {testandoErp ? 'Testando...' : 'Testar conexão'}
@@ -378,15 +618,15 @@ export default function Importar() {
           <button
             type="button"
             onClick={handleSincronizarErp}
-            disabled={!arquivoErp || sincronizandoErp || testandoErp}
+            disabled={!erpUrl.trim() || !erpMapeamento.cod?.trim() || sincronizandoErp || testandoErp || salvandoErp}
             className="rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-4 py-2.5 hover:opacity-90 disabled:opacity-60"
           >
             {sincronizandoErp ? 'Sincronizando...' : 'Sincronizar agora'}
           </button>
         </div>
-        {!arquivoErp && (
+        {!erpMapeamento.cod?.trim() && (
           <p className="text-xs text-ink-soft mt-2">
-            Escolha um documento acima pra habilitar os botões.
+            Preencha ao menos o mapeamento de "Código do cliente" pra habilitar os botões acima.
           </p>
         )}
         {erroErp && <p className="text-xs text-red-500 mt-3">{erroErp}</p>}
@@ -394,15 +634,14 @@ export default function Importar() {
         {resultadoTesteErp && (
           <div className="mt-4 bg-teal-500/10 rounded-xl p-4 text-sm">
             <p className="font-bold text-ink mb-1">
-              Teste ok — {resultadoTesteErp.clientes.length} cliente(s) e {resultadoTesteErp.vendedores.length}{' '}
-              vendedor(es) encontrado(s) no documento.
+              Teste ok — {resultadoTesteErp.totalRecebido} item(ns) recebido(s) do ERP.
             </p>
-            {resultadoTesteErp.clientes.length > 0 && (
+            {resultadoTesteErp.amostra && resultadoTesteErp.amostra.length > 0 && (
               <pre className="text-[11px] bg-ink text-white rounded-xl p-3 mt-2 overflow-x-auto">
-                {JSON.stringify(resultadoTesteErp.clientes.slice(0, 5), null, 2)}
+                {JSON.stringify(resultadoTesteErp.amostra, null, 2)}
               </pre>
             )}
-            <p className="text-ink-soft mt-2">Confira se os dados bateram certo antes de clicar em "Sincronizar agora".</p>
+            <p className="text-ink-soft mt-2">Confira se os campos acima bateram certo antes de clicar em "Sincronizar agora".</p>
             {resultadoTesteErp.erros.length > 0 && (
               <ul className="mt-3 space-y-1 text-xs text-amber-700">
                 {resultadoTesteErp.erros.slice(0, 10).map((e, i) => (
@@ -418,11 +657,7 @@ export default function Importar() {
             <p className="font-bold text-ink mb-1">Sincronização concluída!</p>
             <p className="text-ink-soft">{resultadoSyncErp.clientesImportados} cliente(s) importado(s)</p>
             {resultadoSyncErp.clientesIgnorados > 0 && (
-              <p className="text-ink-soft">{resultadoSyncErp.clientesIgnorados} linha(s) de cliente ignorada(s)</p>
-            )}
-            <p className="text-ink-soft">{resultadoSyncErp.vendedoresImportados} vendedor(es) importado(s)</p>
-            {resultadoSyncErp.vendedoresIgnorados > 0 && (
-              <p className="text-ink-soft">{resultadoSyncErp.vendedoresIgnorados} linha(s) de vendedor ignorada(s)</p>
+              <p className="text-ink-soft">{resultadoSyncErp.clientesIgnorados} item(ns) ignorado(s)</p>
             )}
             {resultadoSyncErp.erros.length > 0 && (
               <ul className="mt-3 space-y-1 text-xs text-amber-700">
