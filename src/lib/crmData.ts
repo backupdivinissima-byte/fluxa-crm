@@ -100,6 +100,12 @@ export async function salvarColunasCrm(empresaId: string, colunas: ColunaCrm[]) 
   await updateDoc(doc(db, 'empresas', empresaId), { crmColunas: colunas });
 }
 
+// Histórico de vendas por ano/mês (gráfico "Evolução de vendas por mês" do
+// Dashboard) — mesmo padrão de `crmFiltros`/`crmColunas`.
+export async function salvarVendasAnuais(empresaId: string, vendasAnuais: { ano: number; meses: number[] }[]) {
+  await updateDoc(doc(db, 'empresas', empresaId), { vendasAnuais });
+}
+
 export function ouvirEmpresa(empresaId: string, cb: (empresa: Empresa | null) => void): Unsubscribe {
   return onSnapshot(doc(db, 'empresas', empresaId), (snap) => {
     cb(snap.exists() ? ({ id: snap.id, ...snap.data() } as Empresa) : null);

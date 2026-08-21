@@ -1,5 +1,5 @@
 // Funções puras de regra de negócio do CRM.
-import type { Cliente, FiltroCrm } from '../types';
+import type { Cliente, FiltroCrm, Vendedor } from '../types';
 
 /** Transforma um código/login em um ID de documento Firestore seguro e
  * determinístico (mesmo valor de entrada sempre vira o mesmo ID) — usado
@@ -105,4 +105,120 @@ export function vendasMesVendedor(clientes: Cliente[], login: string, colunasFec
     .filter((c) => c.crmColunaId && colunasFechamentoIds.includes(c.crmColunaId) && c.crmVendedorLogin === login)
     .filter((c) => (c.crmColunaChangedAt ?? '').slice(0, 7) === mesRef)
     .reduce((soma, c) => soma + (c.crmOrcamentoValor ?? c.totalGeral ?? 0), 0);
+}
+
+// ===== Agregações do Dashboard =====
+
+/** "YYYY-MM" de um mês relativo a hoje (offsetMeses=0 é o mês corrente,
+ * -1 é o mês anterior etc.). */
+function mesRefRelativo(offsetMeses: number): string {
+  const d = new Date();
+  d.setDate(1); // evita virar mês errado em dias 29-31
+  d.setMonth(d.getMonth() + offsetMeses);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/** Soma de vendas fechadas (qualquer vendedor) num mês de referência
+ * ("YYYY-MM"). Generaliza `vendasMesVendedor` pra empresa inteira. */
+export function vendasEmpresaNoMes(clientes: Cliente[], colunasFechamentoIds: string[], mesRef: string): number {
+  if (colunasFechamentoIds.length === 0) return 0;
+  return clientes
+    .filter((c) => c.crmColunaId && colunasFechamentoIds.includes(c.crmColunaId))
+    .filter((c) => (c.crmColunaChangedAt ?? '').slice(0, 7) === mesRef)
+    .reduce((soma, c) => soma + (c.crmOrcamentoValor ?? c.totalGeral ?? 0), 0);
+}
+
+/** Vendas do mês corrente da empresa (todos os vendedores) + comparação
+ * percentual com o mês anterior (undefined se não houver base de
+ * comparação, pra evitar indicador enganoso). */
+export function vendasMesAtualEmpresa(
+  clientes: Cliente[],
+  colunasFechamentoIds: string[]
+): { total: number; mesRef: string; variacaoPct?: number } {
+  const mesRef = mesRefRelativo(0);
+  const total = vendasEmpresaNoMes(clientes, colunasFechamentoIds, mesRef);
+  const anterior = vendasEmpresaNoMes(clientes, colunasFechamentoIds, mesRefRelativo(-1));
+  const variacaoPct = anterior > 0 ? ((total - anterior) / anterior) * 100 : undefined;
+  return { total, mesRef, variacaoPct };
+}
+
+/** Soma histórica (todo o período) do valor de todos os clientes da base. */
+export function vendasTotalEmpresa(clientes: Cliente[]): number {
+  return clientes.reduce((soma, c) => soma + valorCliente(c), 0);
+}
+
+/** Um cliente conta como "com vendedor" se já tiver um responsável
+ * vinculado no funil ou de origem cadastral. */
+export function temVendedor(c: Cliente): boolean {
+  return Boolean(c.crmVendedorLogin || c.cod_vendedor);
+}
+
+/** Divisão com/sem atendimento pra base inteira, reaproveitando o mesmo
+ * corte de 40 dias já usado em Clientes/ClienteDetalheModal: "sem
+ * atendimento" = Inativo (+40 dias), "com atendimento" = Ativo ou Risco. */
+export function resumoAtendimento(clientes: Cliente[]) {
+  const total = clientes.length;
+  const semAtendimento = clientes.filter((c) => diasSemAtend(c) > 40).length;
+  const comAtendimento = total - semAtendimento;
+  return {
+    total,
+    comAtendimento,
+    semAtendimento,
+    pctCom: total > 0 ? Math.round((comAtendimento / total) * 100) : 0,
+    pctSem: total > 0 ? Math.round((semAtendimento / total) * 100) : 0,
+  };
+}
+
+/** Funil de atendimento: total na base -> com vendedor -> ativos / 31-40
+ * dias (risco) / inativos. Percentuais sempre em relação ao total da base. */
+export function funilAtendimento(clientes: Cliente[]) {
+  const total = clientes.length;
+  const comVendedor = clientes.filter(temVendedor).length;
+  const ativos = clientes.filter((c) => diasSemAtend(c) <= 30).length;
+  const risco = clientes.filter((c) => {
+    const d = diasSemAtend(c);
+    return d > 30 && d <= 40;
+  }).length;
+  const inativos = clientes.filter((c) => diasSemAtend(c) > 40).length;
+  const pct = (n: number) => (total > 0 ? Math.round((n / total) * 100) : 0);
+  return {
+    total,
+    comVendedor,
+    ativos,
+    risco,
+    inativos,
+    pctTotal: 100,
+    pctComVendedor: pct(comVendedor),
+    pctAtivos: pct(ativos),
+    pctRisco: pct(risco),
+    pctInativos: pct(inativos),
+  };
+}
+
+export interface RankingVendedor {
+  vendedor: Vendedor;
+  clientesCount: number;
+  totalHistorico: number;
+  vendasMes: number;
+  pctMeta: number | null; // null = sem faixa de meta cadastrada pra comparar
+}
+
+/** Ranking de vendedores por total histórico vendido (soma do valor de
+ * todos os clientes vinculados a cada um), com vendas do mês corrente e %
+ * da maior faixa de meta da empresa (referência de progresso). */
+export function rankingVendedores(
+  vendedores: Vendedor[],
+  clientes: Cliente[],
+  colunasFechamentoIds: string[],
+  metaReferencia?: number
+): RankingVendedor[] {
+  return vendedores
+    .map((v) => {
+      const meus = clientes.filter((c) => c.crmVendedorLogin === v.login || c.cod_vendedor === v.login);
+      const totalHistorico = meus.reduce((soma, c) => soma + valorCliente(c), 0);
+      const vendasMes = vendasMesVendedor(clientes, v.login, colunasFechamentoIds);
+      const pctMeta = metaReferencia && metaReferencia > 0 ? Math.min(100, Math.round((vendasMes / metaReferencia) * 100)) : null;
+      return { vendedor: v, clientesCount: meus.length, totalHistorico, vendasMes, pctMeta };
+    })
+    .sort((a, b) => b.totalHistorico - a.totalHistorico);
 }
