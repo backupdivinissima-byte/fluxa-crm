@@ -27,9 +27,23 @@ export function diasSemAtend(c: Cliente): number {
   return Math.floor(diffMs / (1000 * 60 * 60 * 24));
 }
 
-export function statusInfo(dias: number): { label: string; cor: string } {
-  if (dias > 40) return { label: 'Inativo', cor: '#C0392B' };
-  if (dias > 30) return { label: 'Risco', cor: '#E67E22' };
+// Prazo (em dias sem compra/atendimento) que separa Ativo de Inativo,
+// configurável por empresa no Dashboard (botões 30/60/90/personalizado —
+// ver Empresa.diasInatividade). Usado tanto pelo funil do Dashboard quanto
+// por statusInfo/Clientes/detalhe do cliente — um único parâmetro pra tudo.
+export const DIAS_INATIVIDADE_PADRAO = 30;
+
+/** Status do cliente conforme o prazo de inatividade configurado pela
+ * empresa: "Risco" são os últimos 10 dias antes de virar Inativo (ex.: se
+ * o prazo é 60 dias, de 50 a 60 dias o cliente já aparece em Risco),
+ * "Inativo" é passar do prazo, "Ativo" é o resto. */
+export function statusInfo(
+  dias: number,
+  diasInatividade: number = DIAS_INATIVIDADE_PADRAO
+): { label: string; cor: string } {
+  const inicioRisco = Math.max(0, diasInatividade - 10);
+  if (dias > diasInatividade) return { label: 'Inativo', cor: '#C0392B' };
+  if (dias >= inicioRisco) return { label: 'Risco', cor: '#E67E22' };
   return { label: 'Ativo', cor: '#27AE60' };
 }
 
@@ -153,12 +167,12 @@ export function temVendedor(c: Cliente): boolean {
   return Boolean(c.crmVendedorLogin || c.cod_vendedor);
 }
 
-/** Divisão com/sem atendimento pra base inteira, reaproveitando o mesmo
- * corte de 40 dias já usado em Clientes/ClienteDetalheModal: "sem
- * atendimento" = Inativo (+40 dias), "com atendimento" = Ativo ou Risco. */
-export function resumoAtendimento(clientes: Cliente[]) {
+/** Divisão com/sem atendimento pra base inteira, usando o mesmo prazo
+ * configurável de Empresa.diasInatividade: "sem atendimento" = Inativo
+ * (passou do prazo), "com atendimento" = Ativo ou Risco. */
+export function resumoAtendimento(clientes: Cliente[], diasInatividade: number = DIAS_INATIVIDADE_PADRAO) {
   const total = clientes.length;
-  const semAtendimento = clientes.filter((c) => diasSemAtend(c) > 40).length;
+  const semAtendimento = clientes.filter((c) => diasSemAtend(c) > diasInatividade).length;
   const comAtendimento = total - semAtendimento;
   return {
     total,
@@ -169,14 +183,11 @@ export function resumoAtendimento(clientes: Cliente[]) {
   };
 }
 
-export const DIAS_INATIVIDADE_PADRAO = 30;
-
 /** Funil de atendimento: total na base -> com vendedor -> ativos / inativos.
- * O prazo que separa ativo de inativo é configurável por empresa (30, 60,
- * 90 ou um valor personalizado, ver Empresa.diasInatividade no Dashboard)
- * — não usa mais o corte fixo de 30/40 dias do resto do app (Clientes,
- * detalhe do cliente), que continua como estava. Percentuais sempre em
- * relação ao total da base. */
+ * Usa o mesmo prazo configurável de Empresa.diasInatividade (30/60/90/
+ * personalizado, ver botões no Dashboard) que também governa statusInfo —
+ * um único parâmetro pra tudo (Dashboard, Clientes, detalhe do cliente).
+ * Percentuais sempre em relação ao total da base. */
 export function funilAtendimento(clientes: Cliente[], diasInatividade: number = DIAS_INATIVIDADE_PADRAO) {
   const total = clientes.length;
   const comVendedor = clientes.filter(temVendedor).length;
