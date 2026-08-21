@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Cliente, Vendedor } from '../types';
-import { diasSemAtend, formatarMoeda, statusInfo } from '../lib/crmLogic';
+import { DIAS_INATIVIDADE_PADRAO, diasSemAtend, formatarMoeda, statusInfo } from '../lib/crmLogic';
 import { atualizarCampoCliente, removerCliente } from '../lib/crmData';
 
 interface Props {
@@ -8,11 +8,22 @@ interface Props {
   cliente: Cliente;
   vendedores: Vendedor[];
   ehAdmin: boolean;
+  // Prazo de inatividade configurado no Dashboard (30/60/90/personalizado)
+  // — opcional só pra não quebrar quem ainda não repassa a prop; usa o
+  // padrão de 30 dias nesse caso.
+  diasInatividade?: number;
   onClose: () => void;
 }
 
 /** Modal de detalhe/edição de um cliente — usado no Kanban e na tela de Clientes. */
-export default function ClienteDetalheModal({ empresaId, cliente, vendedores, ehAdmin, onClose }: Props) {
+export default function ClienteDetalheModal({
+  empresaId,
+  cliente,
+  vendedores,
+  ehAdmin,
+  diasInatividade = DIAS_INATIVIDADE_PADRAO,
+  onClose,
+}: Props) {
   const [cnpj, setCnpj] = useState(cliente.cnpj ?? '');
   const [telefone, setTelefone] = useState(cliente.telefone ?? '');
   const [cidade, setCidade] = useState(cliente.cidade ?? '');
@@ -20,7 +31,7 @@ export default function ClienteDetalheModal({ empresaId, cliente, vendedores, eh
   const [salvando, setSalvando] = useState(false);
 
   const dias = diasSemAtend(cliente);
-  const status = statusInfo(dias);
+  const status = statusInfo(dias, diasInatividade);
   const nomeVendedorAtual = vendedores.find((v) => v.login === cliente.crmVendedorLogin)?.nome;
 
   const compras = [cliente.c1, cliente.c2, cliente.c3].filter((v): v is number => typeof v === 'number' && v > 0);

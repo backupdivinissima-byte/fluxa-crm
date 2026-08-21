@@ -10,15 +10,11 @@ import {
   IconMetas,
   IconLinks,
   IconImportar,
-  IconOrcamento,
 } from './NavIcons';
 
 const itens = [
   { to: '/dashboard', label: 'Dashboard', icon: <IconDashboard />, fim: true },
   { to: '/crm', label: 'CRM', icon: <IconCrm /> },
-  // Atalho pra lançar orçamento (cai direto na coluna de Orçamento do
-  // CRM) — visível pra admin e vendedor, com destaque visual.
-  { to: '/lancar-orcamento', label: '+ Lançar orçamento', icon: <IconOrcamento />, destaque: true },
   { to: '/clientes', label: 'Clientes', icon: <IconClientes /> },
   { to: '/vendedores', label: 'Vendedores', icon: <IconVendedores /> },
   { to: '/metas', label: 'Metas & Comissões', icon: <IconMetas /> },
@@ -59,13 +55,7 @@ export default function Layout() {
                   end={item.fim}
                   className={({ isActive }) =>
                     `flex items-center gap-2 px-3 h-9 rounded-lg text-sm font-semibold whitespace-nowrap transition-colors ${
-                      item.destaque
-                        ? isActive
-                          ? 'border border-teal-500 bg-teal-500/10 text-teal-600'
-                          : 'border border-teal-500/40 text-teal-600 hover:bg-teal-500/10'
-                        : isActive
-                          ? 'bg-teal-500/10 text-teal-500'
-                          : 'text-ink-soft hover:bg-surface'
+                      isActive ? 'bg-teal-500/10 text-teal-500' : 'text-ink-soft hover:bg-surface'
                     }`
                   }
                 >
