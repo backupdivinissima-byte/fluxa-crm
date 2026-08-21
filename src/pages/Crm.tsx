@@ -9,7 +9,7 @@ import {
   salvarColunasCrm,
 } from '../lib/crmData';
 import { CRM_COLUNAS_PADRAO, MAX_COLUNAS_CRM, type Cliente, type ColunaCrm, type FiltroCrm, type Vendedor } from '../types';
-import { cartaoVisivelPara, clientePassaFiltro, formatarMoeda, valorCliente } from '../lib/crmLogic';
+import { DIAS_INATIVIDADE_PADRAO, cartaoVisivelPara, clientePassaFiltro, formatarMoeda, valorCliente } from '../lib/crmLogic';
 import ClienteDetalheModal from '../components/ClienteDetalheModal';
 import { IconCrm } from '../components/NavIcons';
 
@@ -62,6 +62,7 @@ export default function Crm() {
   const [modalFiltro, setModalFiltro] = useState<{ editandoId: string | null } | null>(null);
   const [formFiltro, setFormFiltro] = useState(FILTRO_VAZIO);
   const [salvandoFiltro, setSalvandoFiltro] = useState(false);
+  const [diasInatividade, setDiasInatividade] = useState<number>(empresa?.diasInatividade ?? DIAS_INATIVIDADE_PADRAO);
 
   useEffect(() => {
     if (!empresaId) return;
@@ -70,6 +71,7 @@ export default function Crm() {
     const unsubE = ouvirEmpresa(empresaId, (emp) => {
       setFiltros(emp?.crmFiltros ?? []);
       setColunas(emp?.crmColunas && emp.crmColunas.length > 0 ? emp.crmColunas : CRM_COLUNAS_PADRAO);
+      setDiasInatividade(emp?.diasInatividade ?? DIAS_INATIVIDADE_PADRAO);
     });
     return () => {
       unsubC();
@@ -489,6 +491,7 @@ export default function Crm() {
           cliente={detalheCliente}
           vendedores={vendedores}
           ehAdmin={ehAdmin}
+          diasInatividade={diasInatividade}
           onClose={() => setDetalheCliente(null)}
         />
       )}

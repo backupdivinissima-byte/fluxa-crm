@@ -86,7 +86,7 @@ export default function Dashboard() {
   const anoAtual = agora.getFullYear();
   const mesAtualIdx = agora.getMonth(); // 0-11
 
-  const resumo = useMemo(() => resumoAtendimento(clientes), [clientes]);
+  const resumo = useMemo(() => resumoAtendimento(clientes, diasInatividade), [clientes, diasInatividade]);
   const funil = useMemo(() => funilAtendimento(clientes, diasInatividade), [clientes, diasInatividade]);
   const vendasTotal = useMemo(() => vendasTotalEmpresa(clientes), [clientes]);
   const vendasMes = useMemo(() => vendasMesAtualEmpresa(clientes, colunasFechamentoIds), [clientes, colunasFechamentoIds]);

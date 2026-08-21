@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { ouvirClientes, ouvirVendedores } from '../lib/crmData';
+import { ouvirClientes, ouvirEmpresa, ouvirVendedores } from '../lib/crmData';
 import type { Cliente, Vendedor } from '../types';
-import { diasSemAtend, formatarMoeda, matchVendedor, statusInfo } from '../lib/crmLogic';
+import { DIAS_INATIVIDADE_PADRAO, diasSemAtend, formatarMoeda, matchVendedor, statusInfo } from '../lib/crmLogic';
 import ClienteDetalheModal from '../components/ClienteDetalheModal';
 import { IconClientes } from '../components/NavIcons';
 
-type FiltroStatus = 'todos' | 'com' | 'sem' | 'inat' | '31_40' | 'at';
+type FiltroStatus = 'todos' | 'com' | 'sem' | 'inat' | 'risco' | 'at';
 
 /** Lista de clientes com busca e filtros. */
 export default function Clientes() {
@@ -17,14 +17,23 @@ export default function Clientes() {
   const [busca, setBusca] = useState('');
   const [filtro, setFiltro] = useState<FiltroStatus>('todos');
   const [selecionado, setSelecionado] = useState<Cliente | null>(null);
+  // Prazo de inatividade configurado pelo admin no Dashboard (30/60/90/
+  // personalizado) — mesmo parâmetro usado ali, pra "Risco"/"Inativo" aqui
+  // baterem com o funil de atendimento.
+  const [diasInatividade, setDiasInatividade] = useState<number>(empresa?.diasInatividade ?? DIAS_INATIVIDADE_PADRAO);
+  const inicioRisco = Math.max(0, diasInatividade - 10);
 
   useEffect(() => {
     if (!empresaId) return;
     const unsubC = ouvirClientes(empresaId, setClientes);
     const unsubV = ouvirVendedores(empresaId, setVendedores);
+    const unsubE = ouvirEmpresa(empresaId, (emp) => {
+      setDiasInatividade(emp?.diasInatividade ?? DIAS_INATIVIDADE_PADRAO);
+    });
     return () => {
       unsubC();
       unsubV();
+      unsubE();
     };
   }, [empresaId]);
 
@@ -42,9 +51,9 @@ export default function Clientes() {
     let lista = listaBase;
     if (filtro === 'com') lista = lista.filter((c) => !!c.cod_vendedor);
     if (filtro === 'sem') lista = lista.filter((c) => !c.cod_vendedor);
-    if (filtro === 'inat') lista = lista.filter((c) => diasSemAtend(c) > 40);
-    if (filtro === '31_40') lista = lista.filter((c) => diasSemAtend(c) > 30 && diasSemAtend(c) <= 40);
-    if (filtro === 'at') lista = lista.filter((c) => diasSemAtend(c) <= 30);
+    if (filtro === 'inat') lista = lista.filter((c) => diasSemAtend(c) > diasInatividade);
+    if (filtro === 'risco') lista = lista.filter((c) => diasSemAtend(c) >= inicioRisco && diasSemAtend(c) <= diasInatividade);
+    if (filtro === 'at') lista = lista.filter((c) => diasSemAtend(c) < inicioRisco);
 
     if (busca.trim()) {
       const termo = busca.trim().toLowerCase();
@@ -56,7 +65,7 @@ export default function Clientes() {
       );
     }
     return lista;
-  }, [listaBase, filtro, busca]);
+  }, [listaBase, filtro, busca, diasInatividade, inicioRisco]);
 
   if (!empresaId) return null;
 
@@ -75,9 +84,11 @@ export default function Clientes() {
             <option value="todos">Todos</option>
             <option value="com">Com vendedor</option>
             <option value="sem">Sem vendedor</option>
-            <option value="inat">Inativos (+40 dias)</option>
-            <option value="31_40">Risco (31-40 dias)</option>
-            <option value="at">Ativos (até 30 dias)</option>
+            <option value="inat">Inativos (+{diasInatividade} dias)</option>
+            <option value="risco">
+              Risco ({inicioRisco}-{diasInatividade} dias)
+            </option>
+            <option value="at">Ativos (até {Math.max(0, inicioRisco - 1)} dias)</option>
           </select>
           <input
             value={busca}
@@ -102,7 +113,7 @@ export default function Clientes() {
           <tbody>
             {listaFiltrada.map((c) => {
               const dias = diasSemAtend(c);
-              const status = statusInfo(dias);
+              const status = statusInfo(dias, diasInatividade);
               const vend = vendedores.find((v) => v.login === c.cod_vendedor);
               return (
                 <tr
@@ -145,6 +156,7 @@ export default function Clientes() {
           cliente={selecionado}
           vendedores={vendedores}
           ehAdmin={ehAdmin}
+          diasInatividade={diasInatividade}
           onClose={() => setSelecionado(null)}
         />
       )}
