@@ -169,28 +169,28 @@ export function resumoAtendimento(clientes: Cliente[]) {
   };
 }
 
-/** Funil de atendimento: total na base -> com vendedor -> ativos / 31-40
- * dias (risco) / inativos. Percentuais sempre em relação ao total da base. */
-export function funilAtendimento(clientes: Cliente[]) {
+export const DIAS_INATIVIDADE_PADRAO = 30;
+
+/** Funil de atendimento: total na base -> com vendedor -> ativos / inativos.
+ * O prazo que separa ativo de inativo é configurável por empresa (30, 60,
+ * 90 ou um valor personalizado, ver Empresa.diasInatividade no Dashboard)
+ * — não usa mais o corte fixo de 30/40 dias do resto do app (Clientes,
+ * detalhe do cliente), que continua como estava. Percentuais sempre em
+ * relação ao total da base. */
+export function funilAtendimento(clientes: Cliente[], diasInatividade: number = DIAS_INATIVIDADE_PADRAO) {
   const total = clientes.length;
   const comVendedor = clientes.filter(temVendedor).length;
-  const ativos = clientes.filter((c) => diasSemAtend(c) <= 30).length;
-  const risco = clientes.filter((c) => {
-    const d = diasSemAtend(c);
-    return d > 30 && d <= 40;
-  }).length;
-  const inativos = clientes.filter((c) => diasSemAtend(c) > 40).length;
+  const ativos = clientes.filter((c) => diasSemAtend(c) <= diasInatividade).length;
+  const inativos = total - ativos;
   const pct = (n: number) => (total > 0 ? Math.round((n / total) * 100) : 0);
   return {
     total,
     comVendedor,
     ativos,
-    risco,
     inativos,
     pctTotal: 100,
     pctComVendedor: pct(comVendedor),
     pctAtivos: pct(ativos),
-    pctRisco: pct(risco),
     pctInativos: pct(inativos),
   };
 }
@@ -203,9 +203,11 @@ export interface RankingVendedor {
   pctMeta: number | null; // null = sem faixa de meta cadastrada pra comparar
 }
 
-/** Ranking de vendedores por total histórico vendido (soma do valor de
- * todos os clientes vinculados a cada um), com vendas do mês corrente e %
- * da maior faixa de meta da empresa (referência de progresso). */
+/** Ranking de vendedores pelas vendas do mês corrente (quem vendeu mais
+ * agora fica em 1º — inclusive um vendedor com R$0 no mês pode cair pra
+ * trás de quem vendeu algo, mesmo tendo total histórico maior). O total
+ * histórico (soma de todos os clientes vinculados) e a % da maior faixa
+ * de meta da empresa continuam disponíveis, só não decidem mais a ordem. */
 export function rankingVendedores(
   vendedores: Vendedor[],
   clientes: Cliente[],
@@ -220,5 +222,5 @@ export function rankingVendedores(
       const pctMeta = metaReferencia && metaReferencia > 0 ? Math.min(100, Math.round((vendasMes / metaReferencia) * 100)) : null;
       return { vendedor: v, clientesCount: meus.length, totalHistorico, vendasMes, pctMeta };
     })
-    .sort((a, b) => b.totalHistorico - a.totalHistorico);
+    .sort((a, b) => b.vendasMes - a.vendasMes);
 }

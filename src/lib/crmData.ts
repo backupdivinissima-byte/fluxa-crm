@@ -106,6 +106,11 @@ export async function salvarVendasAnuais(empresaId: string, vendasAnuais: { ano:
   await updateDoc(doc(db, 'empresas', empresaId), { vendasAnuais });
 }
 
+// Prazo de inatividade do funil de atendimento do Dashboard — mesmo padrão.
+export async function salvarDiasInatividade(empresaId: string, diasInatividade: number) {
+  await updateDoc(doc(db, 'empresas', empresaId), { diasInatividade });
+}
+
 export function ouvirEmpresa(empresaId: string, cb: (empresa: Empresa | null) => void): Unsubscribe {
   return onSnapshot(doc(db, 'empresas', empresaId), (snap) => {
     cb(snap.exists() ? ({ id: snap.id, ...snap.data() } as Empresa) : null);
