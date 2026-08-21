@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import AuthShell from '../components/AuthShell';
 import CampoSenha from '../components/CampoSenha';
@@ -97,9 +97,13 @@ function formatarWhatsapp(valor: string) {
 export default function Cadastrar() {
   const { cadastrar } = useAuth();
   const navigate = useNavigate();
-  // null = ainda escolhendo a plataforma (etapa 1). Só o Fluxa CRM tem
-  // formulário completo hoje; os outros abrem "quero ser avisado".
-  const [plataforma, setPlataforma] = useState<'crm' | null>(null);
+  const [params] = useSearchParams();
+  // Quem chega pelo CTA de um produto específico (ex.: card "Fluxa CRM")
+  // já disse qual plataforma quer — pula direto pro formulário. Só quem
+  // entra pelo "Teste grátis" genérico (menu, hero, planos) vê a etapa de
+  // escolha. null = ainda escolhendo a plataforma (etapa 1); só o Fluxa CRM
+  // tem formulário completo hoje, os outros abrem "quero ser avisado".
+  const [plataforma, setPlataforma] = useState<'crm' | null>(params.get('plataforma') === 'crm' ? 'crm' : null);
   const [nomeEmpresa, setNomeEmpresa] = useState('');
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');

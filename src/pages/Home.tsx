@@ -127,7 +127,9 @@ const produtos = [
     desc: 'Organize o funil de vendas da sua empresa: clientes, vendedores, metas e comissões, tudo num só lugar.',
     icon: <IconFunil />,
     ctaLabel: 'Teste grátis',
-    ctaTo: '/cadastrar',
+    // ?plataforma=crm pula a etapa "Qual plataforma deseja testar?" no
+    // cadastro — quem clicou aqui já disse qual produto quer.
+    ctaTo: '/cadastrar?plataforma=crm',
   },
   {
     nome: 'Fluxa ERP',
@@ -381,8 +383,8 @@ export default function Home() {
             Os módulos do Fluxa Gestão e Vendas
           </h2>
           <p className="text-ink-soft text-center max-w-xl mx-auto mb-12">
-            Não é só um CRM: estamos construindo uma plataforma completa de gestão e vendas pra sua empresa. Comece
-            agora com o Fluxa CRM.
+            Não é só um CRM: é uma plataforma completa de gestão e vendas pra sua empresa, com cada módulo cuidando
+            de uma parte do negócio.
           </p>
           <div className="grid sm:grid-cols-3 gap-5">
             {produtos.map((p) => (
