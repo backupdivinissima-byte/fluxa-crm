@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore } from 'firebase/firestore';
 
 // Projeto Firebase próprio do Fluxa CRM (fluxa-crm) — os dados foram
 // migrados do projeto antigo (divinissima-crm), que segue existindo
@@ -18,4 +18,9 @@ export const isFirebaseConfigured = true;
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+// ignoreUndefinedProperties: várias telas (ex.: conexão com ERP) montam
+// objetos com campos opcionais que ficam `undefined` quando não usados
+// (ex.: nome do cabeçalho só se autenticação = header). Sem essa opção, o
+// Firestore rejeita a escrita inteira com "Unsupported field value:
+// undefined" em vez de simplesmente ignorar esses campos.
+export const db = initializeFirestore(app, { ignoreUndefinedProperties: true });
