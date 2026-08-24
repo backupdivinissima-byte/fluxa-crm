@@ -46,6 +46,8 @@ const COL_CLIENTES = [
   'Total geral (R$)',
   'Login do vendedor',
   'Nome do vendedor',
+  'Produto/Categoria',
+  'Quantidade',
 ] as const;
 
 const COL_VENDEDORES = ['Nome*', 'Login*', 'Senha', 'Meta pessoal (R$)'] as const;
@@ -165,7 +167,12 @@ export async function gerarPlanilhaModelo(): Promise<Blob> {
       1250,
       'cecilia',
       'Cecília',
+      'Brincos',
+      3,
     ],
+    // Mesmo código ("C001") repetido numa 2ª linha, só pra ilustrar como
+    // registrar mais de um produto pro mesmo cliente — ver instrução 10.
+    ['C001', '', '', '', '', '', '', '', '', '', '', 'Colares', 1],
   ]);
   abaClientes['!cols'] = COL_CLIENTES.map(() => ({ wch: 24 }));
   await aplicarFormatoTexto(XLSX, abaClientes, COL_CLIENTES, ['Código*', 'Telefone', 'CNPJ/CPF', 'Login do vendedor']);
@@ -188,6 +195,9 @@ export async function gerarPlanilhaModelo(): Promise<Blob> {
     ['7. Datas no formato AAAA-MM-DD (ex.: 2026-07-15).'],
     ['8. Pode apagar a linha de exemplo antes de importar — ela é só ilustrativa.'],
     ['9. É seguro importar a mesma planilha mais de uma vez: os dados não duplicam, só atualizam.'],
+    [
+      '10. "Produto/Categoria" e "Quantidade" são opcionais e alimentam o ranking "Produtos mais comprados" de cada cliente (na tela Clientes). Pra registrar mais de um produto pro mesmo cliente, repita o "Código*" em várias linhas, uma por produto — só precisa preencher os outros campos (nome, telefone...) numa delas, as demais podem deixar em branco. As quantidades de cada produto são somadas entre as linhas repetidas.',
+    ],
   ]);
   abaInstrucoes['!cols'] = [{ wch: 100 }];
   XLSX.utils.book_append_sheet(wb, abaInstrucoes, 'Instruções');
@@ -249,6 +259,12 @@ const SINONIMOS_CLIENTES: Record<string, string> = {
   'login do vendedor': 'Login do vendedor',
   'nome do vendedor': 'Nome do vendedor',
   vendedor: 'Nome do vendedor',
+  'produto/categoria': 'Produto/Categoria',
+  produto: 'Produto/Categoria',
+  categoria: 'Produto/Categoria',
+  quantidade: 'Quantidade',
+  qtd: 'Quantidade',
+  qtde: 'Quantidade',
 };
 
 const SINONIMOS_VENDEDORES: Record<string, string> = {
@@ -410,7 +426,13 @@ function processarWorkbook(wb: ReturnType<Awaited<ReturnType<typeof carregarXLSX
 
   const opcoesLeitura = { defval: '' } as const;
 
-  const clientes: Array<Omit<Cliente, 'id'>> = [];
+  // Acumula por "Código*" em vez de 1 linha = 1 cliente: assim dá pra
+  // repetir o mesmo código em várias linhas (uma por produto comprado) sem
+  // criar clientes duplicados — os campos escalares (nome, telefone...)
+  // usam o 1º valor não vazio encontrado, a data usa a mais recente entre
+  // as linhas, e as quantidades de "Produto/Categoria" são somadas.
+  const acumulado = new Map<string, Omit<Cliente, 'id'>>();
+  const ordemCod: string[] = [];
   let clientesIgnorados = 0;
   if (abaClientes) {
     const linhas = XLSX.utils.sheet_to_json<Record<string, unknown>>(abaClientes, opcoesLeitura);
@@ -422,21 +444,36 @@ function processarWorkbook(wb: ReturnType<Awaited<ReturnType<typeof carregarXLSX
         erros.push(`Clientes, linha ${i + 2}: sem "Código*" preenchido — linha ignorada.`);
         return;
       }
-      clientes.push({
-        cod,
-        nome: strOrUndef(linha['Nome']),
-        razao: strOrUndef(linha['Razão Social']),
-        telefone: strOrUndef(linha['Telefone']),
-        cnpj: strOrUndef(linha['CNPJ/CPF']),
-        cidade: strOrUndef(linha['Cidade']),
-        uf: strOrUndef(linha['UF']),
-        dtUltCompra: paraDataISO(linha['Data última compra (AAAA-MM-DD)']),
-        totalGeral: paraNumero(linha['Total geral (R$)']),
-        cod_vendedor: strOrUndef(linha['Login do vendedor']),
-        vend_nome: strOrUndef(linha['Nome do vendedor']),
-      });
+
+      let c = acumulado.get(cod);
+      if (!c) {
+        c = { cod };
+        acumulado.set(cod, c);
+        ordemCod.push(cod);
+      }
+
+      c.nome ??= strOrUndef(linha['Nome']);
+      c.razao ??= strOrUndef(linha['Razão Social']);
+      c.telefone ??= strOrUndef(linha['Telefone']);
+      c.cnpj ??= strOrUndef(linha['CNPJ/CPF']);
+      c.cidade ??= strOrUndef(linha['Cidade']);
+      c.uf ??= strOrUndef(linha['UF']);
+      c.totalGeral ??= paraNumero(linha['Total geral (R$)']);
+      c.cod_vendedor ??= strOrUndef(linha['Login do vendedor']);
+      c.vend_nome ??= strOrUndef(linha['Nome do vendedor']);
+
+      const data = paraDataISO(linha['Data última compra (AAAA-MM-DD)']);
+      if (data && (!c.dtUltCompra || data > c.dtUltCompra)) c.dtUltCompra = data;
+
+      const produto = strOrUndef(linha['Produto/Categoria']);
+      if (produto) {
+        const qtd = paraNumero(linha['Quantidade']) ?? 1;
+        c.produtos ??= {};
+        c.produtos[produto] = (c.produtos[produto] ?? 0) + qtd;
+      }
     });
   }
+  const clientes: Array<Omit<Cliente, 'id'>> = ordemCod.map((cod) => acumulado.get(cod)!);
 
   const vendedores: Array<Omit<Vendedor, 'id' | 'ativo'>> = [];
   let vendedoresIgnorados = 0;
