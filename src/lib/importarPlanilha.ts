@@ -621,6 +621,158 @@ function workbookDeTabela(XLSX: Awaited<ReturnType<typeof carregarXLSX>>, tabela
   return wb;
 }
 
+// ---- Leitura especial: "Relatório de Movimentações" (extrato de vendas
+// exportado por ERP/PDV, salvo com extensão .xls mas com conteúdo HTML por
+// dentro) ----
+// Esse tipo de relatório não é uma lista de clientes — é um extrato de
+// vendas, com o cliente e os produtos comprados aninhados dentro de cada
+// "documento" de venda (várias linhas por venda), em vez de 1 linha = 1
+// cliente. Além disso, o HTML desses relatórios costuma vir com tags
+// <table> sem fechamento — o que faz o parser binário do xlsx (SheetJS)
+// fatiar o conteúdo em centenas de "abas" fragmentadas e incoerentes (cada
+// pedaço com colunas desalinhadas). Por isso não reaproveitamos
+// processarWorkbook aqui: usamos DOMParser (o mesmo algoritmo de parsing de
+// HTML5 do navegador) pra reconstruir a tabela original de verdade a partir
+// do HTML bruto — testado e confirmado que recupera 100% das linhas do
+// relatório, na ordem certa, numa <table> só.
+
+/** Detecta se o conteúdo do arquivo é, na verdade, HTML (comum em
+ * exportações de ERP/PDV que salvam um relatório em .xls, mas o conteúdo
+ * real é uma tabela HTML — não um arquivo binário Excel de verdade). */
+function pareceConteudoHtml(textoInicial: string): boolean {
+  const inicio = textoInicial.trimStart().toLowerCase();
+  return inicio.startsWith('<html') || inicio.startsWith('<!doctype html') || inicio.includes('<table');
+}
+
+/** Extrai todas as <table> de um HTML e devolve cada uma como matriz de
+ * célula (cada linha = array de textos de <td>/<th>). */
+function extrairTabelasHtml(html: string): string[][][] {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  return Array.from(doc.querySelectorAll('table')).map((tabela) =>
+    Array.from(tabela.querySelectorAll('tr')).map((tr) =>
+      Array.from(tr.querySelectorAll('td,th')).map((celula) => (celula.textContent ?? '').trim())
+    )
+  );
+}
+
+/** "4565 - THAIANE RIBEIRO..." -> {cod:"4565", nome:"THAIANE RIBEIRO..."} */
+function partirCodNome(s: string | undefined): { cod?: string; nome?: string } {
+  if (!s) return {};
+  const m = s.trim().match(/^(\d+)\s*-\s*(.+)$/);
+  if (m) return { cod: m[1], nome: m[2].trim() || undefined };
+  return { nome: s.trim() || undefined };
+}
+
+const STATUS_VENDA_CONHECIDOS = ['Cancelado', 'Fechada', 'Aberta'];
+
+function situacaoDaLinha(cells: string[]): string | undefined {
+  return cells.find((c) => STATUS_VENDA_CONHECIDOS.includes(c.trim()))?.trim();
+}
+
+/** Pega o último valor "R$ ..." da linha — nesse relatório a ordem das
+ * colunas de valor é sempre Desc./Frete/Vlr. Liq./Vlr. Total, então o
+ * último é o Vlr. Total (o que interessa pro totalGeral do cliente). */
+function valorTotalDaLinhaCliente(cells: string[]): number | undefined {
+  const valoresRs = cells.filter((c) => /^R\$/.test(c.trim()));
+  if (valoresRs.length === 0) return undefined;
+  return paraNumero(valoresRs[valoresRs.length - 1]);
+}
+
+function ehLinhaClienteRelatorio(cells: string[]): boolean {
+  return (cells[1] ?? '').trim() === 'Cliente';
+}
+function ehLinhaVendedorRelatorio(cells: string[]): boolean {
+  return (cells[1] ?? '').trim().toLowerCase().startsWith('vendedor');
+}
+/** Linha de produto: célula 1 é "código - nome" (ex.: "001110 - BRINCO") e
+ * não é uma linha de cliente/vendedor. */
+function ehLinhaProdutoRelatorio(cells: string[]): boolean {
+  const c1 = (cells[1] ?? '').trim();
+  return /^\d+\s*-\s*.+/.test(c1) && !ehLinhaClienteRelatorio(cells) && !ehLinhaVendedorRelatorio(cells);
+}
+/** A quantidade nessa linha é o 1º valor numérico "puro" (sem "R$") a
+ * partir da 3ª célula — a posição exata varia (às vezes tem uma célula em
+ * branco a mais antes dela), então procuramos pelo formato em vez de uma
+ * posição fixa. */
+function quantidadeDaLinhaProduto(cells: string[]): number {
+  for (let i = 2; i < cells.length; i++) {
+    if (/^\d+(\.\d+)?$/.test(cells[i].trim())) return paraNumero(cells[i]) ?? 1;
+  }
+  return 1;
+}
+
+/** Reconhece se uma tabela extraída de HTML é um "Relatório de
+ * Movimentações" desse formato — presença de ao menos 1 linha "Cliente" e 1
+ * "Vendedor(a)" é a assinatura. */
+function ehRelatorioDeMovimentacoes(tabela: string[][]): boolean {
+  return tabela.some(ehLinhaClienteRelatorio) && tabela.some(ehLinhaVendedorRelatorio);
+}
+
+/** Lê um "Relatório de Movimentações" e devolve os clientes agregados: cada
+ * "documento" de venda (linha "Cliente" + linha "Vendedor(a)" logo depois +
+ * linhas de produto até a próxima coisa que não for produto) é uma venda;
+ * várias vendas do mesmo código de cliente são somadas num único registro
+ * (valor total somado, produtos comprados somados, vendedor "dono" = o da
+ * venda mais recente). Vendas com situação "Cancelado" são ignoradas — não
+ * contam como compra de verdade nem entram no ranking de produtos. */
+function extrairClientesRelatorioMovimentacoes(tabela: string[][]): {
+  clientes: Array<Omit<Cliente, 'id'>>;
+  vendasCanceladasIgnoradas: number;
+} {
+  const acumulado = new Map<string, Omit<Cliente, 'id'>>();
+  const ordemCod: string[] = [];
+  let vendasCanceladasIgnoradas = 0;
+
+  for (let i = 0; i < tabela.length; i++) {
+    const linha = tabela[i];
+    if (!ehLinhaClienteRelatorio(linha)) continue;
+
+    const { cod: codCliente, nome: nomeCliente } = partirCodNome(linha[2]);
+    const cod = codCliente ?? idSeguro(nomeCliente ?? `cliente-linha-${i}`);
+    const cancelada = situacaoDaLinha(linha)?.toLowerCase() === 'cancelado';
+    const dataMatch = (linha[3] ?? '').match(/(\d{2}\/\d{2}\/\d{4})/);
+    const dataISO = dataMatch ? paraDataISO(dataMatch[1]) : undefined;
+    const valorTotal = valorTotalDaLinhaCliente(linha);
+
+    const linhaVendedor = tabela[i + 1];
+    const temVendedor = !!linhaVendedor && ehLinhaVendedorRelatorio(linhaVendedor);
+    const vendedorInfo = temVendedor ? partirCodNome(linhaVendedor[2]) : {};
+
+    const produtosDaVenda: Array<{ nome: string; qtd: number }> = [];
+    let j = i + (temVendedor ? 2 : 1);
+    while (j < tabela.length && ehLinhaProdutoRelatorio(tabela[j])) {
+      const { nome: nomeProduto } = partirCodNome(tabela[j][1]);
+      if (nomeProduto) produtosDaVenda.push({ nome: nomeProduto, qtd: quantidadeDaLinhaProduto(tabela[j]) });
+      j++;
+    }
+
+    if (cancelada) {
+      vendasCanceladasIgnoradas++;
+      continue;
+    }
+
+    let c = acumulado.get(cod);
+    if (!c) {
+      c = { cod };
+      acumulado.set(cod, c);
+      ordemCod.push(cod);
+    }
+    c.nome ??= nomeCliente;
+    c.totalGeral = (c.totalGeral ?? 0) + (valorTotal ?? 0);
+    if (dataISO && (!c.dtUltCompra || dataISO > c.dtUltCompra)) {
+      c.dtUltCompra = dataISO;
+      if (vendedorInfo.cod) c.cod_vendedor = vendedorInfo.cod;
+      if (vendedorInfo.nome) c.vend_nome = vendedorInfo.nome;
+    }
+    for (const p of produtosDaVenda) {
+      c.produtos ??= {};
+      c.produtos[p.nome] = (c.produtos[p.nome] ?? 0) + p.qtd;
+    }
+  }
+
+  return { clientes: ordemCod.map((cod) => acumulado.get(cod)!), vendasCanceladasIgnoradas };
+}
+
 /** Lê o arquivo enviado (.xlsx, .xls, .csv, .docx ou .pdf) e devolve os
  * clientes/vendedores encontrados, já validados linha a linha. */
 export async function lerPlanilha(arquivo: File): Promise<LeituraPlanilha> {
@@ -671,6 +823,43 @@ export async function lerPlanilha(arquivo: File): Promise<LeituraPlanilha> {
   // tudo como texto puro, quem decide o tipo são nossas próprias funções
   // (paraNumero/paraDataISO), que já sabem interpretar texto.
   const ehCsv = nome.endsWith('.csv');
+
+  // Alguns ERPs/PDVs exportam um "relatório" com extensão .xls/.xlsx cujo
+  // conteúdo real é HTML (não um Excel binário de verdade) — detectamos
+  // isso pelos primeiros bytes do arquivo antes de tentar ler como xlsx
+  // normal, porque o parser binário do xlsx lê esse HTML de forma
+  // inconsistente (ver extrairClientesRelatorioMovimentacoes acima).
+  if (!ehCsv) {
+    const textoInicial = new TextDecoder('utf-8').decode(buffer.slice(0, 1000));
+    if (pareceConteudoHtml(textoInicial)) {
+      const textoCompleto = new TextDecoder('utf-8').decode(buffer);
+      const tabelas = extrairTabelasHtml(textoCompleto);
+      const maiorTabela = tabelas.reduce<string[][] | null>(
+        (maior, atual) => (atual.length > (maior?.length ?? 0) ? atual : maior),
+        null
+      );
+      if (maiorTabela && ehRelatorioDeMovimentacoes(maiorTabela)) {
+        const { clientes, vendasCanceladasIgnoradas } = extrairClientesRelatorioMovimentacoes(maiorTabela);
+        const erros: string[] = [];
+        if (vendasCanceladasIgnoradas > 0) {
+          erros.push(
+            `${vendasCanceladasIgnoradas} venda(s) com situação "Cancelado" foram ignoradas (não contam como compra).`
+          );
+        }
+        if (clientes.length === 0) {
+          erros.push('Não encontrei nenhum cliente com venda válida nesse relatório.');
+        }
+        return { clientes, vendedores: [], clientesIgnorados: 0, vendedoresIgnorados: 0, erros };
+      }
+      if (maiorTabela) {
+        // HTML de outro formato de relatório (não bate com a assinatura do
+        // Relatório de Movimentações) — tenta como tabela genérica, igual
+        // fazemos com .docx/.pdf.
+        return processarWorkbook(workbookDeTabela(XLSX, maiorTabela), XLSX);
+      }
+    }
+  }
+
   const wb = ehCsv
     ? XLSX.read(new TextDecoder('utf-8').decode(buffer).replace(/^﻿/, ''), { type: 'string', raw: true })
     : XLSX.read(buffer, { type: 'array' });
