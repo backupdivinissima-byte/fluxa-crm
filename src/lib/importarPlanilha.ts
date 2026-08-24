@@ -280,25 +280,131 @@ const SINONIMOS_VENDEDORES: Record<string, string> = {
   meta: 'Meta pessoal (R$)',
 };
 
-const CHAVES_EXATAS_CLIENTES = new Set(['codigo', 'codigo*', 'cod', 'cod*']);
-const CHAVES_EXATAS_VENDEDORES = new Set(['login', 'login*']);
+const CHAVES_EXATAS_CLIENTES = new Set([
+  'codigo',
+  'codigo*',
+  'cod',
+  'cod*',
+  'codigo do cliente',
+  'codigo cliente',
+  'id',
+  'id do cliente',
+  'cod cliente',
+]);
+const CHAVES_EXATAS_VENDEDORES = new Set(['login', 'login*', 'usuario', 'login do vendedor']);
 
-/** Recebe a 1ª linha (cabeçalho) de uma tabela extraída de .docx/.pdf e
- * devolve os nomes de coluna já traduzidos pro nome canônico do modelo
- * (quando reconhecido), junto do tipo de tabela detectado. Detecta o tipo
- * por presença exata de uma coluna "Código"/"Cod" (clientes) ou
- * "Login" (vendedores) — não usa contains pra não confundir com a coluna
- * "Login do vendedor" da tabela de clientes. */
-function normalizarCabecalho(bruto: string[]): { colunas: string[]; tipo: 'clientes' | 'vendedores' | null } {
+// Reconhecimento por "contém", usado só pra PREENCHER colunas depois que o
+// tipo da tabela (clientes/vendedores) já foi decidido por uma chave exata
+// acima — nunca pra decidir o tipo, pra não arriscar interpretar planilha
+// errada. Testado em ordem: o 1º padrão que bater vence, então padrões
+// mais específicos vêm antes dos mais genéricos (ex.: "nome do vendedor"
+// antes de "nome").
+const CONTEM_CLIENTES: Array<[RegExp, string]> = [
+  [/codigo|\bcod\b|\bid\b/, 'Código*'],
+  [/nome.*vendedor/, 'Nome do vendedor'],
+  [/login.*vendedor/, 'Login do vendedor'],
+  [/vendedor/, 'Nome do vendedor'],
+  [/raz.*social/, 'Razão Social'],
+  [/nome/, 'Nome'],
+  [/fone|celular|whats/, 'Telefone'],
+  [/cnpj|cpf/, 'CNPJ/CPF'],
+  [/cidade|municipio/, 'Cidade'],
+  [/^uf$|^estado$/, 'UF'],
+  [/data.*compra|ultima.*compra|data/, 'Data última compra (AAAA-MM-DD)'],
+  [/total|valor/, 'Total geral (R$)'],
+  [/produto|categoria/, 'Produto/Categoria'],
+  [/quantidade|^qtd/, 'Quantidade'],
+];
+
+const CONTEM_VENDEDORES: Array<[RegExp, string]> = [
+  [/senha/, 'Senha'],
+  [/meta/, 'Meta pessoal (R$)'],
+  [/nome/, 'Nome*'],
+  [/login|usuario/, 'Login*'],
+];
+
+/** Recebe a 1ª linha (cabeçalho) de uma tabela — de .xlsx/.xls/.csv,
+ * .docx ou .pdf, tanto faz — e devolve os nomes de coluna já traduzidos
+ * pro nome canônico do modelo (quando reconhecido), junto do tipo de
+ * tabela detectado. Detecta o tipo por presença exata de uma coluna
+ * "Código"/"Cod"/"ID" (clientes) ou "Login" (vendedores) — só essa
+ * detecção de TIPO usa correspondência exata, pra não confundir tabelas
+ * (ex.: uma planilha de produtos que por acaso tem coluna "Nome"). Depois
+ * de decidido o tipo, as DEMAIS colunas aceitam também correspondência
+ * "contém" (CONTEM_CLIENTES/CONTEM_VENDEDORES) — mais tolerante a nomes de
+ * coluna fora do padrão exato do modelo (ex.: "Nome do Cliente", "Cidade/UF"). */
+function normalizarCabecalho(
+  bruto: string[],
+  tipoForcado?: 'clientes' | 'vendedores'
+): { colunas: string[]; tipo: 'clientes' | 'vendedores' | null } {
   const normalizados = bruto.map(normalizarTexto);
-  const tipo: 'clientes' | 'vendedores' | null = normalizados.some((h) => CHAVES_EXATAS_CLIENTES.has(h))
+  const tipoDetectado: 'clientes' | 'vendedores' | null = normalizados.some((h) => CHAVES_EXATAS_CLIENTES.has(h))
     ? 'clientes'
     : normalizados.some((h) => CHAVES_EXATAS_VENDEDORES.has(h))
       ? 'vendedores'
       : null;
-  const mapa = tipo === 'vendedores' ? SINONIMOS_VENDEDORES : SINONIMOS_CLIENTES;
-  const colunas = bruto.map((h, i) => mapa[normalizados[i]] ?? h);
-  return { colunas, tipo };
+  const tipoParaTraducao = tipoDetectado ?? tipoForcado ?? null;
+  const mapaExato = tipoParaTraducao === 'vendedores' ? SINONIMOS_VENDEDORES : SINONIMOS_CLIENTES;
+  const padroesContem = tipoParaTraducao === 'vendedores' ? CONTEM_VENDEDORES : CONTEM_CLIENTES;
+  const colunas = bruto.map((h, i) => {
+    const norm = normalizados[i];
+    if (mapaExato[norm]) return mapaExato[norm];
+    const achado = padroesContem.find(([re]) => re.test(norm));
+    return achado ? achado[1] : h;
+  });
+  return { colunas, tipo: tipoDetectado };
+}
+
+/** Uma aba literalmente chamada "Clientes" ou "Vendedores" é um sinal forte
+ * o bastante do tipo de dado ali dentro (mesmo que o cabeçalho da tabela
+ * use nomes de coluna fora do padrão) — usado como fallback quando nenhuma
+ * coluna bate com as chaves exatas de tipo. */
+function tipoForcadoPorNomeAba(nomeAba: string): 'clientes' | 'vendedores' | undefined {
+  const n = normalizarTexto(nomeAba);
+  if (n === 'clientes' || n === 'cliente') return 'clientes';
+  if (n === 'vendedores' || n === 'vendedor') return 'vendedores';
+  return undefined;
+}
+
+const MAX_LINHAS_BUSCA_CABECALHO = 15;
+
+function linhaTemConteudoSuficiente(linha: unknown[]): boolean {
+  return linha.filter((c) => String(c ?? '').trim() !== '').length >= 2;
+}
+
+/** Varre uma aba procurando a linha de cabeçalho de verdade dentro das
+ * primeiras linhas — nem toda planilha/relatório exportado tem o
+ * cabeçalho na linha 1 (é comum ter linha(s) de título do relatório
+ * acima, como "RELATÓRIO DE MOVIMENTAÇÕES" ou o nome da empresa). Devolve
+ * o cabeçalho já traduzido, o tipo detectado, e as linhas de dados (tudo
+ * que vem depois do cabeçalho) — ou null se não achar nada reconhecível
+ * nessa aba dentro do limite de linhas verificado. */
+function extrairTabelaDaAba(
+  aba: ReturnType<Awaited<ReturnType<typeof carregarXLSX>>['read']>['Sheets'][string],
+  XLSX: Awaited<ReturnType<typeof carregarXLSX>>,
+  tipoForcado?: 'clientes' | 'vendedores'
+): { tipo: 'clientes' | 'vendedores'; colunas: string[]; linhasDados: unknown[][] } | null {
+  const matriz = XLSX.utils.sheet_to_json<unknown[]>(aba, { header: 1, defval: '' }) as unknown[][];
+  const limite = Math.min(matriz.length, MAX_LINHAS_BUSCA_CABECALHO);
+  for (let i = 0; i < limite; i++) {
+    const bruto = matriz[i] ?? [];
+    if (!linhaTemConteudoSuficiente(bruto)) continue;
+    const brutoStr = bruto.map((c) => String(c ?? '').trim());
+    const { colunas, tipo } = normalizarCabecalho(brutoStr, tipoForcado);
+    const tipoFinal = tipo ?? tipoForcado;
+    if (tipoFinal) return { tipo: tipoFinal, colunas, linhasDados: matriz.slice(i + 1) };
+  }
+  return null;
+}
+
+function linhasParaRegistros(colunas: string[], linhasDados: unknown[][]): Record<string, unknown>[] {
+  return linhasDados.map((linha) => {
+    const registro: Record<string, unknown> = {};
+    colunas.forEach((col, idx) => {
+      registro[col] = linha[idx] ?? '';
+    });
+    return registro;
+  });
 }
 
 /** Extrai a 1ª tabela de um .docx como matriz de células (linha 0 =
@@ -403,99 +509,100 @@ export async function lerTabelaBruta(arquivo: File): Promise<string[][]> {
 function processarWorkbook(wb: ReturnType<Awaited<ReturnType<typeof carregarXLSX>>['read']>, XLSX: Awaited<ReturnType<typeof carregarXLSX>>): LeituraPlanilha {
   const erros: string[] = [];
 
-  let abaClientes = wb.Sheets['Clientes'];
-  let abaVendedores = wb.Sheets['Vendedores'];
+  // Varre TODAS as abas do arquivo (não só uma aba única, e não só abas
+  // chamadas exatamente "Clientes"/"Vendedores") procurando tabelas de
+  // cliente/vendedor — cada aba pode ter linhas de título acima do
+  // cabeçalho de verdade (ver extrairTabelaDaAba). Uma aba chamada
+  // "Clientes"/"Vendedores" força esse tipo mesmo se o cabeçalho usar
+  // nomes de coluna fora do padrão exato do modelo.
+  const registrosClientes: Record<string, unknown>[] = [];
+  const registrosVendedores: Record<string, unknown>[] = [];
+  const cabecalhosEncontrados: string[] = [];
 
-  // Uma tabela única (sem abas nomeadas "Clientes"/"Vendedores") — caso do
-  // .csv exportado de banco de dados, e sempre o caso de .docx/.pdf.
-  // Identificamos pelo cabeçalho da própria tabela, desde que use os
-  // mesmos nomes de coluna do modelo (ou uma variação reconhecida).
-  if (!abaClientes && !abaVendedores && wb.SheetNames.length === 1) {
-    const unicaAba = wb.Sheets[wb.SheetNames[0]];
-    const linhas = XLSX.utils.sheet_to_json<unknown[]>(unicaAba, { header: 1 });
-    const cabecalho = (linhas[0] ?? []).map((c) => String(c ?? '').trim());
-    if (cabecalho.includes('Código*')) abaClientes = unicaAba;
-    else if (cabecalho.includes('Login*')) abaVendedores = unicaAba;
+  for (const nomeAba of wb.SheetNames) {
+    const aba = wb.Sheets[nomeAba];
+    if (!aba) continue;
+    const achado = extrairTabelaDaAba(aba, XLSX, tipoForcadoPorNomeAba(nomeAba));
+    if (!achado) continue;
+    cabecalhosEncontrados.push(`"${nomeAba}" (${achado.tipo}): ${achado.colunas.join(', ')}`);
+    const registros = linhasParaRegistros(achado.colunas, achado.linhasDados);
+    if (achado.tipo === 'clientes') registrosClientes.push(...registros);
+    else registrosVendedores.push(...registros);
   }
 
-  if (!abaClientes && !abaVendedores) {
+  if (registrosClientes.length === 0 && registrosVendedores.length === 0) {
     erros.push(
-      'Não encontrei nenhuma aba "Clientes" ou "Vendedores" nesse arquivo (nem uma tabela com o cabeçalho do modelo) — baixe o modelo pra conferir o formato certo.'
+      cabecalhosEncontrados.length > 0
+        ? `Não encontrei uma coluna de código de cliente ("Código"/"Cod"/"ID") nem de login de vendedor em nenhuma aba. Cabeçalhos encontrados — ${cabecalhosEncontrados.join(' | ')} — baixe o modelo pra conferir os nomes de coluna esperados.`
+        : 'Não encontrei nenhuma linha com dado nesse arquivo — confira se a planilha não está vazia ou baixe o modelo pra conferir o formato.'
     );
   }
 
-  const opcoesLeitura = { defval: '' } as const;
-
   // Acumula por "Código*" em vez de 1 linha = 1 cliente: assim dá pra
-  // repetir o mesmo código em várias linhas (uma por produto comprado) sem
-  // criar clientes duplicados — os campos escalares (nome, telefone...)
-  // usam o 1º valor não vazio encontrado, a data usa a mais recente entre
-  // as linhas, e as quantidades de "Produto/Categoria" são somadas.
+  // repetir o mesmo código em várias linhas (uma por produto comprado, ou
+  // vindo de abas diferentes) sem criar clientes duplicados — os campos
+  // escalares (nome, telefone...) usam o 1º valor não vazio encontrado, a
+  // data usa a mais recente entre as linhas, e as quantidades de
+  // "Produto/Categoria" são somadas.
   const acumulado = new Map<string, Omit<Cliente, 'id'>>();
   const ordemCod: string[] = [];
   let clientesIgnorados = 0;
-  if (abaClientes) {
-    const linhas = XLSX.utils.sheet_to_json<Record<string, unknown>>(abaClientes, opcoesLeitura);
-    linhas.forEach((linha, i) => {
-      if (linhaVazia(linha)) return;
-      const cod = strOrUndef(linha['Código*']);
-      if (!cod) {
-        clientesIgnorados++;
-        erros.push(`Clientes, linha ${i + 2}: sem "Código*" preenchido — linha ignorada.`);
-        return;
-      }
+  registrosClientes.forEach((linha, i) => {
+    if (linhaVazia(linha)) return;
+    const cod = strOrUndef(linha['Código*']);
+    if (!cod) {
+      clientesIgnorados++;
+      erros.push(`Clientes, linha ${i + 2}: sem "Código*" preenchido — linha ignorada.`);
+      return;
+    }
 
-      let c = acumulado.get(cod);
-      if (!c) {
-        c = { cod };
-        acumulado.set(cod, c);
-        ordemCod.push(cod);
-      }
+    let c = acumulado.get(cod);
+    if (!c) {
+      c = { cod };
+      acumulado.set(cod, c);
+      ordemCod.push(cod);
+    }
 
-      c.nome ??= strOrUndef(linha['Nome']);
-      c.razao ??= strOrUndef(linha['Razão Social']);
-      c.telefone ??= strOrUndef(linha['Telefone']);
-      c.cnpj ??= strOrUndef(linha['CNPJ/CPF']);
-      c.cidade ??= strOrUndef(linha['Cidade']);
-      c.uf ??= strOrUndef(linha['UF']);
-      c.totalGeral ??= paraNumero(linha['Total geral (R$)']);
-      c.cod_vendedor ??= strOrUndef(linha['Login do vendedor']);
-      c.vend_nome ??= strOrUndef(linha['Nome do vendedor']);
+    c.nome ??= strOrUndef(linha['Nome']);
+    c.razao ??= strOrUndef(linha['Razão Social']);
+    c.telefone ??= strOrUndef(linha['Telefone']);
+    c.cnpj ??= strOrUndef(linha['CNPJ/CPF']);
+    c.cidade ??= strOrUndef(linha['Cidade']);
+    c.uf ??= strOrUndef(linha['UF']);
+    c.totalGeral ??= paraNumero(linha['Total geral (R$)']);
+    c.cod_vendedor ??= strOrUndef(linha['Login do vendedor']);
+    c.vend_nome ??= strOrUndef(linha['Nome do vendedor']);
 
-      const data = paraDataISO(linha['Data última compra (AAAA-MM-DD)']);
-      if (data && (!c.dtUltCompra || data > c.dtUltCompra)) c.dtUltCompra = data;
+    const data = paraDataISO(linha['Data última compra (AAAA-MM-DD)']);
+    if (data && (!c.dtUltCompra || data > c.dtUltCompra)) c.dtUltCompra = data;
 
-      const produto = strOrUndef(linha['Produto/Categoria']);
-      if (produto) {
-        const qtd = paraNumero(linha['Quantidade']) ?? 1;
-        c.produtos ??= {};
-        c.produtos[produto] = (c.produtos[produto] ?? 0) + qtd;
-      }
-    });
-  }
+    const produto = strOrUndef(linha['Produto/Categoria']);
+    if (produto) {
+      const qtd = paraNumero(linha['Quantidade']) ?? 1;
+      c.produtos ??= {};
+      c.produtos[produto] = (c.produtos[produto] ?? 0) + qtd;
+    }
+  });
   const clientes: Array<Omit<Cliente, 'id'>> = ordemCod.map((cod) => acumulado.get(cod)!);
 
   const vendedores: Array<Omit<Vendedor, 'id' | 'ativo'>> = [];
   let vendedoresIgnorados = 0;
-  if (abaVendedores) {
-    const linhas = XLSX.utils.sheet_to_json<Record<string, unknown>>(abaVendedores, opcoesLeitura);
-    linhas.forEach((linha, i) => {
-      if (linhaVazia(linha)) return;
-      const nome = strOrUndef(linha['Nome*']);
-      const login = strOrUndef(linha['Login*']);
-      if (!nome || !login) {
-        vendedoresIgnorados++;
-        erros.push(`Vendedores, linha ${i + 2}: preencha "Nome*" e "Login*" — linha ignorada.`);
-        return;
-      }
-      vendedores.push({
-        nome,
-        login,
-        senha: strOrUndef(linha['Senha']) ?? '',
-        meta: paraNumero(linha['Meta pessoal (R$)']),
-      });
+  registrosVendedores.forEach((linha, i) => {
+    if (linhaVazia(linha)) return;
+    const nome = strOrUndef(linha['Nome*']);
+    const login = strOrUndef(linha['Login*']);
+    if (!nome || !login) {
+      vendedoresIgnorados++;
+      erros.push(`Vendedores, linha ${i + 2}: preencha "Nome*" e "Login*" — linha ignorada.`);
+      return;
+    }
+    vendedores.push({
+      nome,
+      login,
+      senha: strOrUndef(linha['Senha']) ?? '',
+      meta: paraNumero(linha['Meta pessoal (R$)']),
     });
-  }
+  });
 
   return { clientes, vendedores, clientesIgnorados, vendedoresIgnorados, erros };
 }
@@ -578,13 +685,18 @@ export interface ResultadoImportacaoPlanilha {
   erros: string[];
 }
 
-/** Lê a planilha e grava clientes/vendedores da empresa atual em lote no
- * Firestore. Vendedor novo sem senha preenchida recebe uma senha aleatória
- * (visível no resultado só se precisar reenviar pro vendedor); vendedor já
- * existente com senha em branco mantém a senha atual. */
-export async function importarPlanilha(empresaId: string, arquivo: File): Promise<ResultadoImportacaoPlanilha> {
-  const { clientes, vendedores, clientesIgnorados, vendedoresIgnorados, erros } = await lerPlanilha(arquivo);
-
+/** Grava clientes/vendedores já lidos (de onde vieram — planilha comum ou
+ * leitura por IA — não importa mais a partir daqui) em lote no Firestore.
+ * Vendedor novo sem senha preenchida recebe uma senha aleatória (visível no
+ * resultado só se precisar reenviar pro vendedor); vendedor já existente
+ * com senha em branco mantém a senha atual. Extraído de `importarPlanilha`
+ * pra ser reaproveitado também pela leitura por IA (`importarIA.ts`), que
+ * chega nos mesmos formatos de `clientes`/`vendedores` por outro caminho. */
+export async function salvarClientesEVendedores(
+  empresaId: string,
+  clientes: Array<Omit<Cliente, 'id'>>,
+  vendedores: Array<Omit<Vendedor, 'id' | 'ativo'>>
+): Promise<{ clientesImportados: number; vendedoresImportados: number }> {
   const vendedoresExistentesSnap = await getDocs(vendedoresCol(empresaId));
   const loginsExistentes = new Set(
     vendedoresExistentesSnap.docs.map((d) => (d.data() as Vendedor).login).filter(Boolean)
@@ -626,5 +738,14 @@ export async function importarPlanilha(empresaId: string, arquivo: File): Promis
 
   if (operacoesNoLote > 0) await lote.commit();
 
+  return { clientesImportados, vendedoresImportados };
+}
+
+/** Lê a planilha e grava clientes/vendedores da empresa atual — caminho
+ * "rápido" (sem IA), reconhece só os nomes de coluna do modelo e suas
+ * variações mais comuns (ver SINONIMOS_CLIENTES). */
+export async function importarPlanilha(empresaId: string, arquivo: File): Promise<ResultadoImportacaoPlanilha> {
+  const { clientes, vendedores, clientesIgnorados, vendedoresIgnorados, erros } = await lerPlanilha(arquivo);
+  const { clientesImportados, vendedoresImportados } = await salvarClientesEVendedores(empresaId, clientes, vendedores);
   return { clientesImportados, clientesIgnorados, vendedoresImportados, vendedoresIgnorados, erros };
 }
