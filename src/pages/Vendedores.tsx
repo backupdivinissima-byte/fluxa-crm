@@ -47,6 +47,29 @@ export default function Vendedores() {
     return mapa;
   }, [clientes]);
 
+  // Total histórico importado por vendedor (planilha/relatório do
+  // ERP) — agrega o "totalGeral" de cada cliente pelo "cod_vendedor" que
+  // veio junto na importação. Isso é DIFERENTE de "Vendas no mês" acima:
+  // aquela coluna é sobre o quadro CRM (cards arrastados pra uma coluna de
+  // fechamento neste mês civil), não tem relação com o valor importado da
+  // planilha. Serve pra comparar com um relatório tipo "Curva ABC
+  // Vendedores" do ERP — usa o código/nome do vendedor de dentro dos
+  // próprios clientes (não depende do "Login" cadastrado aqui no Fluxa
+  // bater com o código do ERP, que são espaços de identificador
+  // diferentes).
+  const totalImportadoPorVendedor = useMemo(() => {
+    const mapa = new Map<string, { nome: string; total: number; clientes: number }>();
+    for (const c of clientes) {
+      if (!c.cod_vendedor) continue;
+      const atual = mapa.get(c.cod_vendedor) ?? { nome: c.vend_nome ?? c.cod_vendedor, total: 0, clientes: 0 };
+      atual.total += c.totalGeral ?? 0;
+      atual.clientes += 1;
+      if (!atual.nome || atual.nome === c.cod_vendedor) atual.nome = c.vend_nome ?? atual.nome;
+      mapa.set(c.cod_vendedor, atual);
+    }
+    return [...mapa.entries()].sort((a, b) => b[1].total - a[1].total);
+  }, [clientes]);
+
   function abrirNovo() {
     setEditando(null);
     setNome('');
@@ -150,7 +173,9 @@ export default function Vendedores() {
               <th className="text-left px-4 py-2.5 font-bold">Vendedor</th>
               <th className="text-left px-4 py-2.5 font-bold">Login</th>
               <th className="text-right px-4 py-2.5 font-bold">Clientes</th>
-              <th className="text-right px-4 py-2.5 font-bold">Vendas no mês</th>
+              <th className="text-right px-4 py-2.5 font-bold" title="Cards arrastados pra uma coluna de fechamento do quadro CRM neste mês — não é o total importado da planilha/ERP.">
+                Vendas no mês
+              </th>
               <th className="text-right px-4 py-2.5 font-bold">Ações</th>
             </tr>
           </thead>
@@ -183,6 +208,49 @@ export default function Vendedores() {
           </tbody>
         </table>
       </div>
+
+      {totalImportadoPorVendedor.length > 0 && (
+        <div className="bg-white border border-line rounded-2xl overflow-hidden mt-4">
+          <div className="px-4 pt-4">
+            <h2 className="text-sm font-extrabold text-ink">Total importado por vendedor</h2>
+            <p className="text-xs text-ink-soft mt-1 mb-3">
+              Soma do valor total dos clientes trazidos por planilha/relatório do ERP, agrupada pelo código de
+              vendedor que veio na importação — não tem relação com a coluna "Vendas no mês" acima (essa aqui é o
+              histórico importado; a de cima é o quadro CRM deste mês). Use pra comparar com um relatório do tipo
+              "Curva ABC Vendedores" do seu sistema.
+            </p>
+          </div>
+          <table className="w-full text-sm">
+            <thead className="bg-surface text-ink-soft text-xs uppercase tracking-wide">
+              <tr>
+                <th className="text-left px-4 py-2.5 font-bold">Vendedor (do import)</th>
+                <th className="text-right px-4 py-2.5 font-bold">Clientes</th>
+                <th className="text-right px-4 py-2.5 font-bold">Total importado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {totalImportadoPorVendedor.map(([cod, dados]) => (
+                <tr key={cod} className="border-t border-line">
+                  <td className="px-4 py-2.5 font-bold text-ink">
+                    {cod} - {dados.nome}
+                  </td>
+                  <td className="px-4 py-2.5 text-right text-ink-soft">{dados.clientes}</td>
+                  <td className="px-4 py-2.5 text-right font-bold text-ink">{formatarMoeda(dados.total)}</td>
+                </tr>
+              ))}
+              <tr className="border-t border-line bg-surface">
+                <td className="px-4 py-2.5 font-bold text-ink">Total geral</td>
+                <td className="px-4 py-2.5 text-right text-ink-soft">
+                  {totalImportadoPorVendedor.reduce((s, [, d]) => s + d.clientes, 0)}
+                </td>
+                <td className="px-4 py-2.5 text-right font-bold text-ink">
+                  {formatarMoeda(totalImportadoPorVendedor.reduce((s, [, d]) => s + d.total, 0))}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {modalAberto && (
         <div className="fixed inset-0 z-50 bg-ink/40 flex items-center justify-center p-4" onClick={() => setModalAberto(false)}>
