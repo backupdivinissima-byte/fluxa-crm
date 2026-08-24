@@ -1,6 +1,10 @@
 import { useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { gerarPlanilhaModelo, importarPlanilha, type ResultadoImportacaoPlanilha } from '../lib/importarPlanilha';
+import {
+  gerarPlanilhaModelo,
+  importarVariasPlanilhas,
+  type ResultadoImportacaoPlanilha,
+} from '../lib/importarPlanilha';
 import { gerarChaveApi, revogarChaveApi } from '../lib/apiKey';
 import {
   CAMPOS_MAPEAVEIS,
@@ -24,10 +28,12 @@ const API_BASE_URL = 'https://us-central1-fluxa-crm.cloudfunctions.net/api';
  * banco de dados. */
 export default function Importar() {
   const { empresa, papel, usuario } = useAuth();
-  const [arquivo, setArquivo] = useState<File | null>(null);
+  const [arquivos, setArquivos] = useState<File[]>([]);
   const [rodando, setRodando] = useState(false);
   const [baixando, setBaixando] = useState(false);
-  const [resultado, setResultado] = useState<ResultadoImportacaoPlanilha | null>(null);
+  const [resultado, setResultado] = useState<
+    (ResultadoImportacaoPlanilha & { arquivosComErro?: Array<{ nome: string; mensagem: string }> }) | null
+  >(null);
   const [erro, setErro] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -91,14 +97,14 @@ export default function Importar() {
   }
 
   async function rodarImportacao() {
-    if (!arquivo) return;
+    if (arquivos.length === 0) return;
     setRodando(true);
     setErro('');
     setResultado(null);
     try {
-      const r = await importarPlanilha(empresaId, arquivo);
+      const r = await importarVariasPlanilhas(empresaId, arquivos);
       setResultado(r);
-      setArquivo(null);
+      setArquivos([]);
       if (inputRef.current) inputRef.current.value = '';
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Erro desconhecido ao importar a planilha.');
@@ -302,28 +308,44 @@ export default function Importar() {
 
         <div className="border-t border-line pt-5">
           <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-2">
-            Arquivo preenchido (Excel, CSV, Word ou PDF)
+            Arquivo(s) preenchido(s) (Excel, CSV, Word ou PDF)
           </label>
+          <p className="text-xs text-ink-soft mb-3">
+            Pode selecionar mais de um arquivo de uma vez (ex.: um relatório por mês) — clientes com o mesmo código
+            que aparecem em mais de um arquivo são somados num registro só, em vez de duplicar.
+          </p>
           <div className="flex flex-wrap items-center gap-3">
             <input
               ref={inputRef}
               type="file"
+              multiple
               accept=".xlsx,.xls,.csv,.docx,.pdf"
-              onChange={(e) => setArquivo(e.target.files?.[0] ?? null)}
+              onChange={(e) => setArquivos(Array.from(e.target.files ?? []))}
               className="text-sm text-ink-soft file:mr-3 file:rounded-lg file:border-0 file:bg-surface file:px-3 file:py-2 file:text-sm file:font-bold file:text-ink hover:file:bg-line/50"
             />
             <button
               onClick={rodarImportacao}
-              disabled={!arquivo || rodando}
+              disabled={arquivos.length === 0 || rodando}
               className="rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-5 py-2.5 hover:opacity-90 disabled:opacity-60"
             >
-              {rodando ? 'Importando...' : 'Importar arquivo'}
+              {rodando
+                ? 'Importando...'
+                : arquivos.length > 1
+                  ? `Importar ${arquivos.length} arquivos`
+                  : 'Importar arquivo'}
             </button>
           </div>
-          {!arquivo && (
+          {arquivos.length === 0 ? (
             <p className="text-xs text-ink-soft mt-2">
-              O botão "Importar arquivo" só liga depois que você escolhe um arquivo em "Escolher arquivo" acima.
+              O botão "Importar arquivo" só liga depois que você escolhe pelo menos 1 arquivo em "Escolher arquivos"
+              acima.
             </p>
+          ) : (
+            <ul className="text-xs text-ink-soft mt-2 space-y-0.5">
+              {arquivos.map((f, i) => (
+                <li key={i}>• {f.name}</li>
+              ))}
+            </ul>
           )}
         </div>
 
@@ -339,6 +361,18 @@ export default function Importar() {
             <p className="text-ink-soft">{resultado.vendedoresImportados} vendedor(es) importado(s)</p>
             {resultado.vendedoresIgnorados > 0 && (
               <p className="text-ink-soft">{resultado.vendedoresIgnorados} linha(s) de vendedor ignorada(s)</p>
+            )}
+            {resultado.arquivosComErro && resultado.arquivosComErro.length > 0 && (
+              <div className="mt-3">
+                <p className="text-xs font-bold text-red-600">Não consegui ler estes arquivos:</p>
+                <ul className="mt-1 space-y-1 text-xs text-red-600">
+                  {resultado.arquivosComErro.map((a, i) => (
+                    <li key={i}>
+                      • {a.nome}: {a.mensagem}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
             {resultado.erros.length > 0 && (
               <ul className="mt-3 space-y-1 text-xs text-amber-700">
