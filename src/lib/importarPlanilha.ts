@@ -938,3 +938,107 @@ export async function importarPlanilha(empresaId: string, arquivo: File): Promis
   const { clientesImportados, vendedoresImportados } = await salvarClientesEVendedores(empresaId, clientes, vendedores);
   return { clientesImportados, clientesIgnorados, vendedoresImportados, vendedoresIgnorados, erros };
 }
+
+export interface LeituraMultipla extends LeituraPlanilha {
+  /** Arquivos que nem chegaram a ser lidos (erro inesperado ao abrir/ler) —
+   * separado de `erros`, que são avisos sobre linhas dentro de um arquivo
+   * que foi lido normalmente. */
+  arquivosComErro: Array<{ nome: string; mensagem: string }>;
+}
+
+/** Lê vários arquivos de uma vez e junta o resultado num só — pensado pra
+ * quem exporta um relatório por mês do ERP/PDV (ver
+ * extrairClientesRelatorioMovimentacoes) e quer trazer vários meses numa
+ * importação só, em vez de repetir a importação um arquivo por vez.
+ * Clientes com o mesmo "Código*" que aparecem em mais de um arquivo são
+ * somados num registro só: valor total e produtos comprados somados entre
+ * os arquivos, data de última compra fica a mais recente entre eles (o
+ * vendedor "dono" acompanha essa data), e os demais campos usam o 1º valor
+ * não vazio encontrado. Igual à importação de 1 arquivo só, essa soma é
+ * recalculada do zero a cada vez — reimportar o mesmo conjunto de arquivos
+ * de novo dá o mesmo resultado (idempotente), mas se um próximo lote não
+ * incluir um arquivo já importado antes, a contribuição dele deixa de
+ * entrar na soma (ela não fica "guardada" de uma importação pra outra). */
+export async function lerVariasPlanilhas(arquivos: File[]): Promise<LeituraMultipla> {
+  const acumuladoClientes = new Map<string, Omit<Cliente, 'id'>>();
+  const ordemCod: string[] = [];
+  const acumuladoVendedores = new Map<string, Omit<Vendedor, 'id' | 'ativo'>>();
+  const ordemLogin: string[] = [];
+  let clientesIgnorados = 0;
+  let vendedoresIgnorados = 0;
+  const erros: string[] = [];
+  const arquivosComErro: Array<{ nome: string; mensagem: string }> = [];
+
+  for (const arquivo of arquivos) {
+    let leitura: LeituraPlanilha;
+    try {
+      leitura = await lerPlanilha(arquivo);
+    } catch (e) {
+      arquivosComErro.push({ nome: arquivo.name, mensagem: e instanceof Error ? e.message : 'Erro desconhecido.' });
+      continue;
+    }
+    clientesIgnorados += leitura.clientesIgnorados;
+    vendedoresIgnorados += leitura.vendedoresIgnorados;
+    for (const e of leitura.erros) erros.push(`${arquivo.name}: ${e}`);
+
+    for (const c of leitura.clientes) {
+      let existente = acumuladoClientes.get(c.cod);
+      if (!existente) {
+        existente = { cod: c.cod };
+        acumuladoClientes.set(c.cod, existente);
+        ordemCod.push(c.cod);
+      }
+      existente.nome ??= c.nome;
+      existente.razao ??= c.razao;
+      existente.telefone ??= c.telefone;
+      existente.cnpj ??= c.cnpj;
+      existente.cidade ??= c.cidade;
+      existente.uf ??= c.uf;
+      if (c.totalGeral !== undefined) existente.totalGeral = (existente.totalGeral ?? 0) + c.totalGeral;
+      if (c.dtUltCompra && (!existente.dtUltCompra || c.dtUltCompra > existente.dtUltCompra)) {
+        existente.dtUltCompra = c.dtUltCompra;
+        if (c.cod_vendedor) existente.cod_vendedor = c.cod_vendedor;
+        if (c.vend_nome) existente.vend_nome = c.vend_nome;
+      }
+      if (c.produtos) {
+        existente.produtos ??= {};
+        for (const [nomeProduto, qtd] of Object.entries(c.produtos)) {
+          existente.produtos[nomeProduto] = (existente.produtos[nomeProduto] ?? 0) + qtd;
+        }
+      }
+    }
+
+    for (const v of leitura.vendedores) {
+      const existente = acumuladoVendedores.get(v.login);
+      if (!existente) {
+        acumuladoVendedores.set(v.login, { ...v });
+        ordemLogin.push(v.login);
+      } else {
+        if (!existente.nome && v.nome) existente.nome = v.nome;
+        if (!existente.senha && v.senha) existente.senha = v.senha;
+        if (existente.meta === undefined && v.meta !== undefined) existente.meta = v.meta;
+      }
+    }
+  }
+
+  return {
+    clientes: ordemCod.map((cod) => acumuladoClientes.get(cod)!),
+    vendedores: ordemLogin.map((login) => acumuladoVendedores.get(login)!),
+    clientesIgnorados,
+    vendedoresIgnorados,
+    erros,
+    arquivosComErro,
+  };
+}
+
+/** Igual a `importarPlanilha`, mas aceita vários arquivos de uma vez (ver
+ * `lerVariasPlanilhas`). */
+export async function importarVariasPlanilhas(
+  empresaId: string,
+  arquivos: File[]
+): Promise<ResultadoImportacaoPlanilha & { arquivosComErro: Array<{ nome: string; mensagem: string }> }> {
+  const { clientes, vendedores, clientesIgnorados, vendedoresIgnorados, erros, arquivosComErro } =
+    await lerVariasPlanilhas(arquivos);
+  const { clientesImportados, vendedoresImportados } = await salvarClientesEVendedores(empresaId, clientes, vendedores);
+  return { clientesImportados, clientesIgnorados, vendedoresImportados, vendedoresIgnorados, erros, arquivosComErro };
+}
