@@ -974,7 +974,15 @@ function chaveOrigemPorMes(mesISO: string): string {
  * incluindo as novas desta importação) — nunca soma em cima do valor já
  * salvo, sempre recalcula do zero a partir de todas as origens conhecidas,
  * assim reimportar o mesmo arquivo de novo não dobra o valor (só substitui
- * a entrada daquele arquivo). */
+ * a entrada daquele arquivo).
+ *
+ * Antes de somar, agrupa as origens por MÊS (`dtUltCompra`) e, dentro de
+ * cada mês, usa só a de MAIOR totalGeral — protege contra origens
+ * duplicadas do mesmo mês que ficaram registradas sob chaves de arquivo
+ * diferentes (importações feitas antes da correção por chave-de-mês, ver
+ * `chaveOrigemPorMes`, quando cada reexportação do mês corrente virava uma
+ * origem nova em vez de substituir a existente e inflava o total). Origens
+ * sem data conhecida (raro) entram todas, sem dedup possível. */
 function recalcularAgregadosDeOrigens(origens: Record<string, OrigemContribuicao>): OrigemContribuicao {
   let totalGeral: number | undefined;
   let produtos: Record<string, number> | undefined;
@@ -982,7 +990,19 @@ function recalcularAgregadosDeOrigens(origens: Record<string, OrigemContribuicao
   let cod_vendedor: string | undefined;
   let vend_nome: string | undefined;
 
+  const melhorPorMes = new Map<string, OrigemContribuicao>();
+  const semData: OrigemContribuicao[] = [];
   for (const origem of Object.values(origens)) {
+    if (origem.dtUltCompra) {
+      const mes = origem.dtUltCompra.slice(0, 7);
+      const atual = melhorPorMes.get(mes);
+      if (!atual || (origem.totalGeral ?? 0) > (atual.totalGeral ?? 0)) melhorPorMes.set(mes, origem);
+    } else {
+      semData.push(origem);
+    }
+  }
+
+  for (const origem of [...melhorPorMes.values(), ...semData]) {
     if (origem.totalGeral !== undefined) totalGeral = (totalGeral ?? 0) + origem.totalGeral;
     if (origem.produtos) {
       produtos ??= {};
@@ -990,6 +1010,11 @@ function recalcularAgregadosDeOrigens(origens: Record<string, OrigemContribuicao
         produtos[nomeProduto] = (produtos[nomeProduto] ?? 0) + qtd;
       }
     }
+  }
+  // dtUltCompra/cod_vendedor/vend_nome usam a compra mais recente entre
+  // TODAS as origens (não só as deduplicadas acima) — já é "pega o maior",
+  // não soma, então origens duplicadas não inflam nada aqui.
+  for (const origem of Object.values(origens)) {
     if (origem.dtUltCompra && (!dtUltCompra || origem.dtUltCompra > dtUltCompra)) {
       dtUltCompra = origem.dtUltCompra;
       if (origem.cod_vendedor) cod_vendedor = origem.cod_vendedor;

@@ -63,10 +63,47 @@ export function matchVendedor(c: Cliente, login: string, nome?: string): boolean
   return false;
 }
 
+/** Total geral "de verdade" de um cliente, recalculado a partir de
+ * `origensImportacao` em vez de confiar direto no campo `totalGeral`
+ * salvo no documento. Necessário porque, antes da correção de chave por
+ * mês (ver `chaveOrigemPorMes` em importarPlanilha.ts), reimportar o mês
+ * corrente várias vezes ao longo do mês — comum, cada reexportação do ERP
+ * sai com um nome de arquivo diferente — criava uma origem NOVA por
+ * arquivo em vez de substituir a existente, e todas ficavam somadas pra
+ * sempre no total do cliente (inflando "Vendas total"/"total histórico"
+ * várias vezes o valor real). Aqui, cada origem é agrupada pelo MÊS da
+ * compra (`dtUltCompra`) e, dentro de cada mês, só a MAIOR contribuição
+ * conta (reimportações do mesmo mês só crescem ao longo do tempo, então a
+ * maior é sempre a mais completa) — meses diferentes continuam somando
+ * normalmente entre si. Origens sem data conhecida (raro) entram todas
+ * somadas, já que não dá pra saber se são duplicatas do mesmo período.
+ * Cliente sem nenhuma origem importada cai pro `totalGeral` salvo direto
+ * (ex.: cliente cadastrado manualmente, nunca importado). */
+export function totalGeralReal(c: Cliente): number | undefined {
+  const origens = c.origensImportacao;
+  if (!origens || Object.keys(origens).length === 0) return c.totalGeral;
+  const maiorPorMes = new Map<string, number>();
+  let semData = 0;
+  for (const origem of Object.values(origens)) {
+    if (origem.totalGeral === undefined) continue;
+    if (origem.dtUltCompra) {
+      const mes = origem.dtUltCompra.slice(0, 7);
+      const atual = maiorPorMes.get(mes);
+      if (atual === undefined || origem.totalGeral > atual) maiorPorMes.set(mes, origem.totalGeral);
+    } else {
+      semData += origem.totalGeral;
+    }
+  }
+  let soma = semData;
+  for (const v of maiorPorMes.values()) soma += v;
+  return soma;
+}
+
 /** Valor a exibir no card do quadro CRM: valor combinado (quando o card já
- * passou por uma coluna de fechamento) se houver, senão o total geral. */
+ * passou por uma coluna de fechamento) se houver, senão o total geral real
+ * (ver `totalGeralReal`). */
 export function valorCliente(c: Cliente): number {
-  return c.crmOrcamentoValor ?? c.totalGeral ?? c.c1 ?? 0;
+  return c.crmOrcamentoValor ?? totalGeralReal(c) ?? c.c1 ?? 0;
 }
 
 /** Testa se um cliente atende a todos os critérios preenchidos de um filtro
@@ -187,6 +224,29 @@ export function vendasImportadasPorMes(clientes: Cliente[]): Record<string, numb
     }
   }
   return totais;
+}
+
+/** Vendas IMPORTADAS de um vendedor específico num mês de referência
+ * ("AAAA-MM") — soma a contribuição daquele mês (`origensImportacao`,
+ * chave "mes-AAAA-MM", ver `chaveOrigemPorMes`) de todos os clientes
+ * vinculados a esse vendedor (mesmo critério de `rankingVendedores`:
+ * `crmVendedorLogin` OU `matchVendedor`). Usado pro ranking de vendedores
+ * mostrar o valor REAL do mês corrente (antes ficava sempre R$0,00 pra
+ * quem só tem vendas importadas, porque dependia só do quadro Kanban). */
+export function vendasImportadasMesVendedor(
+  clientes: Cliente[],
+  login: string,
+  nome: string | undefined,
+  mesRef: string
+): number {
+  const chave = `mes-${mesRef}`;
+  let soma = 0;
+  for (const c of clientes) {
+    if (!(c.crmVendedorLogin === login || matchVendedor(c, login, nome))) continue;
+    const origem = c.origensImportacao?.[chave];
+    if (origem?.totalGeral !== undefined) soma += origem.totalGeral;
+  }
+  return soma;
 }
 
 /** Último dia de um mês "AAAA-MM", como "AAAA-MM-DD" (em UTC, pra não
@@ -325,11 +385,21 @@ export function rankingVendedores(
   colunasFechamentoIds: string[],
   metaReferencia?: number
 ): RankingVendedor[] {
+  const mesRefAtual = mesRefRelativo(0);
+  // Se já existe QUALQUER dado importado pro mês corrente (empresa toda),
+  // o valor do mês de cada vendedor vem da importação — mais fiel à
+  // realidade que o quadro Kanban, que só reflete cards arrastados
+  // manualmente pra uma coluna de fechamento (a maioria dos clientes
+  // importados via ERP nunca passa pelo Kanban). Sem nenhum dado
+  // importado ainda pro mês corrente, cai pro cálculo antigo (Kanban).
+  const temImportacaoNoMes = Object.keys(vendasImportadasPorMes(clientes)).includes(mesRefAtual);
   return vendedores
     .map((v) => {
       const meus = clientes.filter((c) => c.crmVendedorLogin === v.login || matchVendedor(c, v.login, v.nome));
       const totalHistorico = meus.reduce((soma, c) => soma + valorCliente(c), 0);
-      const vendasMes = vendasMesVendedor(clientes, v.login, colunasFechamentoIds);
+      const vendasMes = temImportacaoNoMes
+        ? vendasImportadasMesVendedor(clientes, v.login, v.nome, mesRefAtual)
+        : vendasMesVendedor(clientes, v.login, colunasFechamentoIds);
       const pctMeta = metaReferencia && metaReferencia > 0 ? Math.min(100, Math.round((vendasMes / metaReferencia) * 100)) : null;
       return { vendedor: v, clientesCount: meus.length, totalHistorico, vendasMes, pctMeta };
     })
@@ -359,7 +429,7 @@ export function rankingVendedoresImportado(clientes: Cliente[]): RankingVendedor
       clientesCount: 0,
       totalHistorico: 0,
     };
-    atual.totalHistorico += c.totalGeral ?? 0;
+    atual.totalHistorico += totalGeralReal(c) ?? 0;
     atual.clientesCount += 1;
     if (c.vend_nome) atual.nome = c.vend_nome;
     mapa.set(c.cod_vendedor, atual);
