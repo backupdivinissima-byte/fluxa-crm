@@ -189,6 +189,68 @@ export function vendasImportadasPorMes(clientes: Cliente[]): Record<string, numb
   return totais;
 }
 
+/** Último dia de um mês "AAAA-MM", como "AAAA-MM-DD" (em UTC, pra não
+ * depender do fuso do navegador). */
+function ultimoDiaDoMes(mes: string): string {
+  const [ano, m] = mes.split('-').map(Number);
+  return new Date(Date.UTC(ano, m, 0)).toISOString().slice(0, 10); // dia 0 do mês seguinte = último dia deste
+}
+
+/** Diferença em dias inteiros entre duas datas "AAAA-MM-DD" (em UTC). */
+function diasEntreDatasISO(dataAnterior: string, dataPosterior: string): number {
+  const a = Date.UTC(...(dataAnterior.split('-').map(Number) as [number, number, number]));
+  const b = Date.UTC(...(dataPosterior.split('-').map(Number) as [number, number, number]));
+  return Math.round((b - a) / 86400000);
+}
+
+/** Nº de clientes "ativos" (≤ diasInatividade sem comprar) em cada mês do
+ * histórico, tomando o ÚLTIMO DIA de cada mês como data de referência —
+ * não o momento atual. Responde perguntas do tipo "quantos clientes
+ * estavam ativos até 31/07, considerando 40 dias sem comprar".
+ *
+ * Reconstrói a compra mais recente de cada cliente ATÉ aquela data usando
+ * `Cliente.origensImportacao` (cada entrada é o mês de uma compra, com a
+ * data mais recente dentro dele — ver `chaveOrigemPorMes` em
+ * importarPlanilha.ts): pra cada mês de corte, pega a maior data conhecida
+ * que não passe do último dia daquele mês. Cliente sem nenhuma origem com
+ * data (raro) fica de fora do cálculo. `meses` é a lista de "AAAA-MM" a
+ * calcular. */
+export function clientesAtivosPorMesHistorico(
+  clientes: Cliente[],
+  diasInatividade: number,
+  meses: string[]
+): Record<string, number> {
+  const datasPorCliente: string[][] = [];
+  for (const c of clientes) {
+    const datas: string[] = [];
+    if (c.origensImportacao) {
+      for (const origem of Object.values(c.origensImportacao)) {
+        if (origem.dtUltCompra) datas.push(origem.dtUltCompra);
+      }
+    }
+    if (datas.length > 0) {
+      datas.sort();
+      datasPorCliente.push(datas);
+    }
+  }
+
+  const resultado: Record<string, number> = {};
+  for (const mes of meses) {
+    const cutoff = ultimoDiaDoMes(mes);
+    let ativos = 0;
+    for (const datas of datasPorCliente) {
+      let ultima: string | undefined;
+      for (const d of datas) {
+        if (d <= cutoff) ultima = d;
+        else break; // já ordenado — pode parar no primeiro que passar do corte
+      }
+      if (ultima && diasEntreDatasISO(ultima, cutoff) <= diasInatividade) ativos++;
+    }
+    resultado[mes] = ativos;
+  }
+  return resultado;
+}
+
 /** Um cliente conta como "com vendedor" se já tiver um responsável
  * vinculado no funil ou de origem cadastral. */
 export function temVendedor(c: Cliente): boolean {
