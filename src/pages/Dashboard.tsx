@@ -15,6 +15,7 @@ import {
   funilAtendimento,
   rankingVendedores,
   resumoAtendimento,
+  vendasImportadasPorMes,
   vendasMesAtualEmpresa,
   vendasTotalEmpresa,
 } from '../lib/crmLogic';
@@ -101,6 +102,10 @@ export default function Dashboard() {
   const funil = useMemo(() => funilAtendimento(clientes, diasInatividade), [clientes, diasInatividade]);
   const vendasTotal = useMemo(() => vendasTotalEmpresa(clientes), [clientes]);
   const vendasMes = useMemo(() => vendasMesAtualEmpresa(clientes, colunasFechamentoIds), [clientes, colunasFechamentoIds]);
+  // Totais reais vindos da importação, por mês ("AAAA-MM") — ver
+  // vendasImportadasPorMes. Sempre que existir um valor importado pra um
+  // mês, ele prevalece sobre lançamento manual (ver mesesDoAno abaixo).
+  const vendasImportadas = useMemo(() => vendasImportadasPorMes(clientes), [clientes]);
 
   const metaReferencia = empresa?.metas && empresa.metas.length > 0 ? empresa.metas[empresa.metas.length - 1].valor : undefined;
   const ranking = useMemo(
@@ -108,21 +113,54 @@ export default function Dashboard() {
     [vendedores, clientes, colunasFechamentoIds, metaReferencia]
   );
 
+  // Anos com dado importado (vindo da planilha/relatório, não lançamento
+  // manual) — precisam aparecer no gráfico mesmo que ninguém nunca tenha
+  // usado o "Editar valores" pra esse ano (ex.: 2024/2025 importados, sem
+  // nenhum lançamento manual feito neles).
+  const anosImportados = useMemo(
+    () => new Set(Object.keys(vendasImportadas).map((chave) => Number(chave.slice(0, 4)))),
+    [vendasImportadas]
+  );
+
   // O ano corrente sempre aparece no gráfico (mesmo sem nenhum valor
   // lançado ainda), pra garantir que o mês atual real sempre esteja visível.
   const anosDisponiveis = useMemo(() => {
-    const anos = new Set([...vendasAnuais.map((a) => a.ano), ...clientesAtivosAnuais.map((a) => a.ano)]);
+    const anos = new Set([
+      ...vendasAnuais.map((a) => a.ano),
+      ...clientesAtivosAnuais.map((a) => a.ano),
+      ...anosImportados,
+    ]);
     anos.add(anoAtual);
     return Array.from(anos).sort((a, b) => a - b);
-  }, [vendasAnuais, clientesAtivosAnuais, anoAtual]);
+  }, [vendasAnuais, clientesAtivosAnuais, anosImportados, anoAtual]);
 
   const selecionados = anosSelecionados ?? new Set(anosDisponiveis);
+
+  function chaveMes(ano: number, mesIdx: number): string {
+    return `${ano}-${String(mesIdx + 1).padStart(2, '0')}`;
+  }
+
+  /** Valor real vindo da importação pra esse ano/mês, se houver. */
+  function valorImportado(ano: number, mesIdx: number): number | undefined {
+    return vendasImportadas[chaveMes(ano, mesIdx)];
+  }
+
+  /** Célula "travada" (não editável manualmente, sempre valor real): mês
+   * com dado importado (qualquer ano) OU o mês corrente (calculado ao vivo
+   * pelo funil, quando ainda não tem importação pra ele). */
+  function mesTravado(ano: number, mesIdx: number): boolean {
+    return valorImportado(ano, mesIdx) !== undefined || (ano === anoAtual && mesIdx === mesAtualIdx);
+  }
 
   function mesesDoAno(ano: number): number[] {
     const registro = vendasAnuais.find((a) => a.ano === ano);
     const base = registro ? [...registro.meses] : new Array(12).fill(0);
     while (base.length < 12) base.push(0);
-    if (ano === anoAtual) base[mesAtualIdx] = vendasMes.total; // mês atual sempre real, nunca manual
+    for (let m = 0; m < 12; m++) {
+      const imp = valorImportado(ano, m);
+      if (imp !== undefined) base[m] = imp; // dado real da importação sempre prevalece
+      else if (ano === anoAtual && m === mesAtualIdx) base[m] = vendasMes.total; // sem import ainda: usa o funil ao vivo
+    }
     return base;
   }
 
@@ -161,7 +199,7 @@ export default function Dashboard() {
     }
     return max || 1;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [anosDisponiveis, selecionados, vendasAnuais, vendasMes.total]);
+  }, [anosDisponiveis, selecionados, vendasAnuais, vendasMes.total, vendasImportadas]);
 
   function alternarAno(ano: number) {
     setAnosSelecionados((atual) => {
@@ -189,7 +227,9 @@ export default function Dashboard() {
   }
 
   function atualizarValor(tipo: 'vendas' | 'ativos', ano: number, mesIdx: number, valor: string) {
-    if (ano === anoAtual && mesIdx === mesAtualIdx) return; // mês atual não é editável manualmente
+    // Vendas: mês travado (importado ou corrente) não é editável manualmente.
+    // Ativos: só o mês corrente é travado (não tem dado importado pra ativos).
+    if (tipo === 'vendas' ? mesTravado(ano, mesIdx) : ano === anoAtual && mesIdx === mesAtualIdx) return;
     const setter = tipo === 'vendas' ? setVendasAnuais : setClientesAtivosAnuais;
     setter((atual) => {
       const existe = atual.some((a) => a.ano === ano);
@@ -210,7 +250,18 @@ export default function Dashboard() {
     if (!empresaId) return;
     setSalvando(true);
     try {
-      // Nunca persiste o mês atual manualmente — ele é sempre recalculado.
+      // Vendas: nunca persiste manualmente um mês travado (importado ou o
+      // mês corrente) — esse valor é sempre recalculado/lido ao vivo, não
+      // precisa (nem deve) ficar guardado como lançamento manual.
+      const zerarMesesTravados = (lista: { ano: number; meses: number[] }[]) =>
+        lista.map((a) => {
+          const meses = [...a.meses];
+          for (let m = 0; m < 12; m++) {
+            if (mesTravado(a.ano, m)) meses[m] = 0;
+          }
+          return { ...a, meses };
+        });
+      // Ativos: só o mês corrente é travado (não tem equivalente importado).
       const zerarMesAtual = (lista: { ano: number; meses: number[] }[]) =>
         lista.map((a) => {
           if (a.ano !== anoAtual) return a;
@@ -219,7 +270,7 @@ export default function Dashboard() {
           return { ...a, meses };
         });
       await Promise.all([
-        salvarVendasAnuais(empresaId, zerarMesAtual(vendasAnuais)),
+        salvarVendasAnuais(empresaId, zerarMesesTravados(vendasAnuais)),
         salvarClientesAtivosAnuais(empresaId, zerarMesAtual(clientesAtivosAnuais)),
       ]);
       setEditando(false);
@@ -406,9 +457,10 @@ export default function Dashboard() {
         {editando && (
           <div className="mt-5 overflow-x-auto border-t border-line pt-4">
             <p className="text-xs text-ink-soft mb-4">
-              Lance aqui o faturamento e o nº de clientes ativos de anos anteriores (sem histórico automático no
-              sistema). O mês atual ({MESES_EXTENSO[mesAtualIdx]}/{anoAtual}) é sempre calculado ao vivo e não pode
-              ser editado.
+              Lance aqui o faturamento e o nº de clientes ativos de meses que você ainda não importou. Meses com
+              dado vindo da importação de planilha/relatório (rótulo "importado") são preenchidos automaticamente
+              e não podem ser editados — o mês corrente ({MESES_EXTENSO[mesAtualIdx]}/{anoAtual}), quando ainda sem
+              importação, também é sempre calculado ao vivo.
             </p>
 
             <p className="text-[11px] font-bold text-ink uppercase tracking-wide mb-2">Vendas (R$)</p>
@@ -428,11 +480,15 @@ export default function Dashboard() {
                   <tr key={mesLabel} className="border-t border-line">
                     <td className="py-1.5 pr-3 text-ink-soft font-bold">{mesLabel}</td>
                     {anosDisponiveis.map((ano) => {
-                      const travado = ano === anoAtual && mesIdx === mesAtualIdx;
+                      const imp = valorImportado(ano, mesIdx);
+                      const travado = mesTravado(ano, mesIdx);
                       return (
                         <td key={ano} className="py-1.5 px-2 text-right">
                           {travado ? (
-                            <span className="text-ink-soft italic">{formatarCompacto(vendasMes.total)} (atual)</span>
+                            <span className="text-ink-soft italic">
+                              {formatarCompacto(imp !== undefined ? imp : vendasMes.total)}{' '}
+                              {imp !== undefined ? '(importado)' : '(atual)'}
+                            </span>
                           ) : (
                             <input
                               type="number"
