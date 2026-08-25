@@ -953,6 +953,21 @@ function chaveOrigem(nomeArquivo: string): string {
   return idSeguro(nomeArquivo);
 }
 
+/** Chave de origem baseada no MÊS da compra (ex.: "2026-08"), não no nome
+ * do arquivo — assim reimportar dados daquele mês (de novo, com um arquivo
+ * de nome diferente do exportado da vez anterior) sempre SUBSTITUI a
+ * contribuição daquele mês em vez de somar em cima. Isso é o que importa de
+ * verdade pro mês corrente, que a empresa costuma reexportar/reimportar
+ * várias vezes ao longo do mês conforme novas vendas entram — cada
+ * reimportação deve refletir o total mais atual daquele mês, não empilhar
+ * sobre a importação anterior. Meses fechados (passados) se beneficiam do
+ * mesmo comportamento: reimportar um mês pra corrigir algo também substitui
+ * só aquele mês, sem afetar os demais.
+ */
+function chaveOrigemPorMes(mesISO: string): string {
+  return chaveOrigem(`mes-${mesISO}`);
+}
+
 /** Recalcula os campos agregados (totalGeral/produtos/dtUltCompra/
  * cod_vendedor/vend_nome) de um cliente a partir do mapa COMPLETO de
  * origens (a contribuição de cada arquivo já importado pra esse cliente,
@@ -985,14 +1000,17 @@ function recalcularAgregadosDeOrigens(origens: Record<string, OrigemContribuicao
 }
 
 /** Grava clientes/vendedores de vários arquivos, rastreando a contribuição
- * de CADA arquivo por cliente (`Cliente.origensImportacao`) — assim
+ * de CADA MÊS por cliente (`Cliente.origensImportacao`, chave = mês da
+ * compra quando disponível — ver `chaveOrigemPorMes`) — assim
  * totalGeral/produtos ficam corretos mesmo quando os arquivos são
  * importados em levas separadas ao longo do tempo (ex.: todo 2024 numa
- * importação, todo 2025 em outra, todo 2026 depois): cada leva SOMA à
- * anterior em vez de substituí-la, e reimportar o MESMO arquivo de novo
- * continua seguro (só substitui a contribuição daquele arquivo específico).
- * Isso é o que `importarPlanilha`/`importarVariasPlanilhas` usam por baixo
- * dos panos — lê 1 `getDoc` por cliente afetado antes de gravar, pra saber
+ * importação, todo 2025 em outra, todo 2026 depois): meses diferentes
+ * SOMAM entre si, e reimportar dados do MESMO mês de novo (mesmo que o
+ * arquivo tenha nome diferente do exportado da vez anterior — comum no mês
+ * corrente, reexportado várias vezes conforme novas vendas entram) sempre
+ * SUBSTITUI a contribuição daquele mês em vez de somar em cima. Isso é o
+ * que `importarPlanilha`/`importarVariasPlanilhas` usam por baixo dos
+ * panos — lê 1 `getDoc` por cliente afetado antes de gravar, pra saber
  * quais origens já existiam. */
 export async function salvarPorArquivo(
   empresaId: string,
@@ -1007,7 +1025,7 @@ export async function salvarPorArquivo(
   const ordemLogin: string[] = [];
 
   for (const { nome: nomeArquivo, leitura } of porArquivo) {
-    const chave = chaveOrigem(nomeArquivo);
+    const chaveArquivo = chaveOrigem(nomeArquivo);
     for (const c of leitura.clientes) {
       let esc = escalaresPorCod.get(c.cod);
       if (!esc) {
@@ -1027,9 +1045,17 @@ export async function salvarPorArquivo(
         origens = {};
         origensPorCod.set(c.cod, origens);
       }
+      // Quando dá pra saber o mês da compra (dtUltCompra), a origem é
+      // rastreada por MÊS (ver chaveOrigemPorMes) — não pelo nome do
+      // arquivo — assim reimportar aquele mês de novo (mesmo com um
+      // arquivo de nome diferente, ex.: reexportar o mês corrente com
+      // vendas novas) sempre SUBSTITUI a contribuição daquele mês, em vez
+      // de somar em cima. Sem data (raro), cai de volta pra origem por
+      // arquivo, que ao menos garante reimportar o MESMO arquivo idêntico.
       // processarWorkbook/extrairClientesRelatorioMovimentacoes já agregam
       // por código DENTRO de 1 arquivo, então cada cod aparece no máximo 1x
       // em `leitura.clientes` — é seguro só atribuir (não somar) aqui.
+      const chave = c.dtUltCompra ? chaveOrigemPorMes(c.dtUltCompra.slice(0, 7)) : chaveArquivo;
       origens[chave] = {
         totalGeral: c.totalGeral,
         produtos: c.produtos,
