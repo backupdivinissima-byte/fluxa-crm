@@ -133,11 +133,14 @@ export interface Cliente {
   cod_vendedor?: string; // vendedor "dono" do cliente (origem cadastral)
   vend_nome?: string;
 
-  // Rastreia a contribuição de CADA arquivo já importado pra esse cliente
-  // (chave = nome do arquivo) — necessário porque totalGeral/produtos são
-  // SOMADOS entre arquivos diferentes (ex.: um relatório por mês), mas
-  // reimportar o MESMO arquivo de novo precisa ser seguro (substituir só a
-  // contribuição dele, não somar de novo). Sem isso, importar um novo mês
+  // Rastreia a contribuição de CADA MÊS já importado pra esse cliente
+  // (chave = mês da compra, ex. "mes-2026-08" — cai de volta pro nome do
+  // arquivo quando não há data) — necessário porque totalGeral/produtos são
+  // SOMADOS entre meses diferentes, mas reimportar dados do MESMO mês de
+  // novo precisa ser seguro (substituir só a contribuição daquele mês, não
+  // somar de novo) — inclusive quando o arquivo reexportado tem um nome
+  // diferente do anterior, o caso comum do mês corrente sendo reimportado
+  // várias vezes ao longo do mês. Sem isso, importar um novo mês
   // separadamente de um mês já importado antes apagaria a contribuição do
   // mês anterior em vez de somar (Firestore `merge:true` substitui os
   // campos, não soma). totalGeral/produtos/dtUltCompra/cod_vendedor/
