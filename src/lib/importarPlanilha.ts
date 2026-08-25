@@ -14,7 +14,7 @@
 // aberta e só a biblioteca do formato realmente enviado) em vez de no bundle
 // principal — são pesadas e a imensa maioria das visitas ao site nunca chega
 // a usar importação.
-import { collection, doc, getDocs, writeBatch } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, setDoc, writeBatch } from 'firebase/firestore';
 import { db } from './firebase';
 import { idSeguro } from './crmLogic';
 import type { Cliente, Vendedor } from '../types';
@@ -878,9 +878,18 @@ export interface ResultadoImportacaoPlanilha {
  * leitura por IA — não importa mais a partir daqui) em lote no Firestore.
  * Vendedor novo sem senha preenchida recebe uma senha aleatória (visível no
  * resultado só se precisar reenviar pro vendedor); vendedor já existente
- * com senha em branco mantém a senha atual. Extraído de `importarPlanilha`
- * pra ser reaproveitado também pela leitura por IA (`importarIA.ts`), que
- * chega nos mesmos formatos de `clientes`/`vendedores` por outro caminho. */
+ * com senha em branco mantém a senha atual.
+ *
+ * ATENÇÃO: essa função SOBRESCREVE totalGeral/produtos/dtUltCompra direto
+ * (sem rastrear origem) — segura só quando `clientes` já é o resultado
+ * COMPLETO de tudo que esse cliente já deveria ter (ex.: 1 arquivo só, ou
+ * vários arquivos processados juntos numa única chamada). Reimportar um
+ * NOVO arquivo depois, separadamente, apagaria a contribuição do que já
+ * tinha sido importado antes — para importações em levas separadas ao
+ * longo do tempo (ex.: todo 2024 numa vez, todo 2025 depois), use
+ * `salvarPorArquivo`, que rastreia a contribuição de cada arquivo e soma
+ * corretamente entre levas. Mantida só pra compatibilidade; não é mais
+ * usada pelos caminhos de importação de planilha abaixo. */
 export async function salvarClientesEVendedores(
   empresaId: string,
   clientes: Array<Omit<Cliente, 'id'>>,
@@ -930,82 +939,104 @@ export async function salvarClientesEVendedores(
   return { clientesImportados, vendedoresImportados };
 }
 
-/** Lê a planilha e grava clientes/vendedores da empresa atual — caminho
- * "rápido" (sem IA), reconhece só os nomes de coluna do modelo e suas
- * variações mais comuns (ver SINONIMOS_CLIENTES). */
-export async function importarPlanilha(empresaId: string, arquivo: File): Promise<ResultadoImportacaoPlanilha> {
-  const { clientes, vendedores, clientesIgnorados, vendedoresIgnorados, erros } = await lerPlanilha(arquivo);
-  const { clientesImportados, vendedoresImportados } = await salvarClientesEVendedores(empresaId, clientes, vendedores);
-  return { clientesImportados, clientesIgnorados, vendedoresImportados, vendedoresIgnorados, erros };
+type OrigemContribuicao = {
+  totalGeral?: number;
+  produtos?: Record<string, number>;
+  dtUltCompra?: string;
+  cod_vendedor?: string;
+  vend_nome?: string;
+};
+
+/** Chave estável de origem — nome do arquivo, normalizado (evita que
+ * espaço/maiúscula diferente crie uma origem duplicada por engano). */
+function chaveOrigem(nomeArquivo: string): string {
+  return idSeguro(nomeArquivo);
 }
 
-export interface LeituraMultipla extends LeituraPlanilha {
-  /** Arquivos que nem chegaram a ser lidos (erro inesperado ao abrir/ler) —
-   * separado de `erros`, que são avisos sobre linhas dentro de um arquivo
-   * que foi lido normalmente. */
-  arquivosComErro: Array<{ nome: string; mensagem: string }>;
+/** Recalcula os campos agregados (totalGeral/produtos/dtUltCompra/
+ * cod_vendedor/vend_nome) de um cliente a partir do mapa COMPLETO de
+ * origens (a contribuição de cada arquivo já importado pra esse cliente,
+ * incluindo as novas desta importação) — nunca soma em cima do valor já
+ * salvo, sempre recalcula do zero a partir de todas as origens conhecidas,
+ * assim reimportar o mesmo arquivo de novo não dobra o valor (só substitui
+ * a entrada daquele arquivo). */
+function recalcularAgregadosDeOrigens(origens: Record<string, OrigemContribuicao>): OrigemContribuicao {
+  let totalGeral: number | undefined;
+  let produtos: Record<string, number> | undefined;
+  let dtUltCompra: string | undefined;
+  let cod_vendedor: string | undefined;
+  let vend_nome: string | undefined;
+
+  for (const origem of Object.values(origens)) {
+    if (origem.totalGeral !== undefined) totalGeral = (totalGeral ?? 0) + origem.totalGeral;
+    if (origem.produtos) {
+      produtos ??= {};
+      for (const [nomeProduto, qtd] of Object.entries(origem.produtos)) {
+        produtos[nomeProduto] = (produtos[nomeProduto] ?? 0) + qtd;
+      }
+    }
+    if (origem.dtUltCompra && (!dtUltCompra || origem.dtUltCompra > dtUltCompra)) {
+      dtUltCompra = origem.dtUltCompra;
+      if (origem.cod_vendedor) cod_vendedor = origem.cod_vendedor;
+      if (origem.vend_nome) vend_nome = origem.vend_nome;
+    }
+  }
+  return { totalGeral, produtos, dtUltCompra, cod_vendedor, vend_nome };
 }
 
-/** Lê vários arquivos de uma vez e junta o resultado num só — pensado pra
- * quem exporta um relatório por mês do ERP/PDV (ver
- * extrairClientesRelatorioMovimentacoes) e quer trazer vários meses numa
- * importação só, em vez de repetir a importação um arquivo por vez.
- * Clientes com o mesmo "Código*" que aparecem em mais de um arquivo são
- * somados num registro só: valor total e produtos comprados somados entre
- * os arquivos, data de última compra fica a mais recente entre eles (o
- * vendedor "dono" acompanha essa data), e os demais campos usam o 1º valor
- * não vazio encontrado. Igual à importação de 1 arquivo só, essa soma é
- * recalculada do zero a cada vez — reimportar o mesmo conjunto de arquivos
- * de novo dá o mesmo resultado (idempotente), mas se um próximo lote não
- * incluir um arquivo já importado antes, a contribuição dele deixa de
- * entrar na soma (ela não fica "guardada" de uma importação pra outra). */
-export async function lerVariasPlanilhas(arquivos: File[]): Promise<LeituraMultipla> {
-  const acumuladoClientes = new Map<string, Omit<Cliente, 'id'>>();
+/** Grava clientes/vendedores de vários arquivos, rastreando a contribuição
+ * de CADA arquivo por cliente (`Cliente.origensImportacao`) — assim
+ * totalGeral/produtos ficam corretos mesmo quando os arquivos são
+ * importados em levas separadas ao longo do tempo (ex.: todo 2024 numa
+ * importação, todo 2025 em outra, todo 2026 depois): cada leva SOMA à
+ * anterior em vez de substituí-la, e reimportar o MESMO arquivo de novo
+ * continua seguro (só substitui a contribuição daquele arquivo específico).
+ * Isso é o que `importarPlanilha`/`importarVariasPlanilhas` usam por baixo
+ * dos panos — lê 1 `getDoc` por cliente afetado antes de gravar, pra saber
+ * quais origens já existiam. */
+export async function salvarPorArquivo(
+  empresaId: string,
+  porArquivo: Array<{ nome: string; leitura: LeituraPlanilha }>
+): Promise<{ clientesImportados: number; vendedoresImportados: number }> {
+  type EscalaresCliente = Pick<Cliente, 'cod' | 'nome' | 'razao' | 'telefone' | 'cnpj' | 'uf'> & { cidade?: string };
+  const escalaresPorCod = new Map<string, EscalaresCliente>();
+  const origensPorCod = new Map<string, Record<string, OrigemContribuicao>>();
   const ordemCod: string[] = [];
+
   const acumuladoVendedores = new Map<string, Omit<Vendedor, 'id' | 'ativo'>>();
   const ordemLogin: string[] = [];
-  let clientesIgnorados = 0;
-  let vendedoresIgnorados = 0;
-  const erros: string[] = [];
-  const arquivosComErro: Array<{ nome: string; mensagem: string }> = [];
 
-  for (const arquivo of arquivos) {
-    let leitura: LeituraPlanilha;
-    try {
-      leitura = await lerPlanilha(arquivo);
-    } catch (e) {
-      arquivosComErro.push({ nome: arquivo.name, mensagem: e instanceof Error ? e.message : 'Erro desconhecido.' });
-      continue;
-    }
-    clientesIgnorados += leitura.clientesIgnorados;
-    vendedoresIgnorados += leitura.vendedoresIgnorados;
-    for (const e of leitura.erros) erros.push(`${arquivo.name}: ${e}`);
-
+  for (const { nome: nomeArquivo, leitura } of porArquivo) {
+    const chave = chaveOrigem(nomeArquivo);
     for (const c of leitura.clientes) {
-      let existente = acumuladoClientes.get(c.cod);
-      if (!existente) {
-        existente = { cod: c.cod };
-        acumuladoClientes.set(c.cod, existente);
+      let esc = escalaresPorCod.get(c.cod);
+      if (!esc) {
+        esc = { cod: c.cod };
+        escalaresPorCod.set(c.cod, esc);
         ordemCod.push(c.cod);
       }
-      existente.nome ??= c.nome;
-      existente.razao ??= c.razao;
-      existente.telefone ??= c.telefone;
-      existente.cnpj ??= c.cnpj;
-      existente.cidade ??= c.cidade;
-      existente.uf ??= c.uf;
-      if (c.totalGeral !== undefined) existente.totalGeral = (existente.totalGeral ?? 0) + c.totalGeral;
-      if (c.dtUltCompra && (!existente.dtUltCompra || c.dtUltCompra > existente.dtUltCompra)) {
-        existente.dtUltCompra = c.dtUltCompra;
-        if (c.cod_vendedor) existente.cod_vendedor = c.cod_vendedor;
-        if (c.vend_nome) existente.vend_nome = c.vend_nome;
+      esc.nome ??= c.nome;
+      esc.razao ??= c.razao;
+      esc.telefone ??= c.telefone;
+      esc.cnpj ??= c.cnpj;
+      esc.cidade ??= c.cidade;
+      esc.uf ??= c.uf;
+
+      let origens = origensPorCod.get(c.cod);
+      if (!origens) {
+        origens = {};
+        origensPorCod.set(c.cod, origens);
       }
-      if (c.produtos) {
-        existente.produtos ??= {};
-        for (const [nomeProduto, qtd] of Object.entries(c.produtos)) {
-          existente.produtos[nomeProduto] = (existente.produtos[nomeProduto] ?? 0) + qtd;
-        }
-      }
+      // processarWorkbook/extrairClientesRelatorioMovimentacoes já agregam
+      // por código DENTRO de 1 arquivo, então cada cod aparece no máximo 1x
+      // em `leitura.clientes` — é seguro só atribuir (não somar) aqui.
+      origens[chave] = {
+        totalGeral: c.totalGeral,
+        produtos: c.produtos,
+        dtUltCompra: c.dtUltCompra,
+        cod_vendedor: c.cod_vendedor,
+        vend_nome: c.vend_nome,
+      };
     }
 
     for (const v of leitura.vendedores) {
@@ -1021,24 +1052,163 @@ export async function lerVariasPlanilhas(arquivos: File[]): Promise<LeituraMulti
     }
   }
 
+  // Pra cada cliente afetado: busca as origens já salvas antes (se o
+  // cliente já existir), funde com as novas desta importação, recalcula os
+  // agregados a partir do conjunto completo, e grava tudo de uma vez. Faz
+  // em lotes pequenos concorrentes (não tudo de uma vez) pra não sobrecarregar.
+  const CONCORRENCIA = 20;
+  let clientesImportados = 0;
+  for (let inicio = 0; inicio < ordemCod.length; inicio += CONCORRENCIA) {
+    const lotecods = ordemCod.slice(inicio, inicio + CONCORRENCIA);
+    await Promise.all(
+      lotecods.map(async (cod) => {
+        const ref = doc(clientesCol(empresaId), idSeguro(cod));
+        const snap = await getDoc(ref);
+        const origensExistentes = (snap.exists() ? (snap.data() as Cliente).origensImportacao : undefined) ?? {};
+        const origensNovas = origensPorCod.get(cod) ?? {};
+        const origensCompletas = { ...origensExistentes, ...origensNovas };
+        const agregados = recalcularAgregadosDeOrigens(origensCompletas);
+        const esc = escalaresPorCod.get(cod)!;
+        const dados = { ...esc, ...agregados, origensImportacao: origensCompletas };
+        await setDoc(ref, semUndef(dados), { merge: true });
+      })
+    );
+    clientesImportados += lotecods.length;
+  }
+
+  // Vendedores: sem o mesmo problema de soma entre importações (perfil
+  // simples, não acumula valor) — mesma lógica de antes.
+  const vendedoresExistentesSnap = await getDocs(vendedoresCol(empresaId));
+  const loginsExistentes = new Set(
+    vendedoresExistentesSnap.docs.map((d) => (d.data() as Vendedor).login).filter(Boolean)
+  );
+  let lote = writeBatch(db);
+  let operacoesNoLote = 0;
+  async function commitSeNecessario() {
+    if (operacoesNoLote >= 400) {
+      await lote.commit();
+      lote = writeBatch(db);
+      operacoesNoLote = 0;
+    }
+  }
+  let vendedoresImportados = 0;
+  for (const login of ordemLogin) {
+    const v = acumuladoVendedores.get(login)!;
+    const jaExiste = loginsExistentes.has(v.login);
+    const dadosV: Record<string, unknown> = { nome: v.nome, login: v.login, ativo: true };
+    if (v.senha) dadosV.senha = v.senha;
+    else if (!jaExiste) dadosV.senha = Math.random().toString(36).slice(2, 8);
+    if (v.meta !== undefined) dadosV.meta = v.meta;
+    if (!jaExiste) dadosV.criadoEm = new Date().toISOString();
+    const ref = doc(vendedoresCol(empresaId), idSeguro(v.login));
+    lote.set(ref, dadosV, { merge: true });
+    operacoesNoLote++;
+    vendedoresImportados++;
+    await commitSeNecessario();
+  }
+  if (operacoesNoLote > 0) await lote.commit();
+
+  return { clientesImportados, vendedoresImportados };
+}
+
+/** Lê cada arquivo independentemente (sem juntar entre si) — usado tanto
+ * pra montar o resumo mostrado na tela quanto pra gravar com
+ * `salvarPorArquivo` (que precisa saber o que veio de CADA arquivo
+ * separadamente, não um total já somado). */
+async function lerPorArquivo(arquivos: File[]): Promise<{
+  porArquivo: Array<{ nome: string; leitura: LeituraPlanilha }>;
+  arquivosComErro: Array<{ nome: string; mensagem: string }>;
+}> {
+  const porArquivo: Array<{ nome: string; leitura: LeituraPlanilha }> = [];
+  const arquivosComErro: Array<{ nome: string; mensagem: string }> = [];
+  for (const arquivo of arquivos) {
+    try {
+      porArquivo.push({ nome: arquivo.name, leitura: await lerPlanilha(arquivo) });
+    } catch (e) {
+      arquivosComErro.push({ nome: arquivo.name, mensagem: e instanceof Error ? e.message : 'Erro desconhecido.' });
+    }
+  }
+  return { porArquivo, arquivosComErro };
+}
+
+/** Junta o resultado de vários arquivos num resumo só, só pra CONTAGEM
+ * (quantos clientes/vendedores distintos, quais erros) — não é o que é
+ * gravado no Firestore (isso é `salvarPorArquivo`, que rastreia por
+ * arquivo). Clientes com o mesmo "Código*" em mais de um arquivo contam
+ * como 1 só aqui. */
+function resumirPorArquivo(porArquivo: Array<{ nome: string; leitura: LeituraPlanilha }>): {
+  clientesDistintos: number;
+  vendedoresDistintos: number;
+  clientesIgnorados: number;
+  vendedoresIgnorados: number;
+  erros: string[];
+} {
+  const cods = new Set<string>();
+  const logins = new Set<string>();
+  let clientesIgnorados = 0;
+  let vendedoresIgnorados = 0;
+  const erros: string[] = [];
+  for (const { nome, leitura } of porArquivo) {
+    leitura.clientes.forEach((c) => cods.add(c.cod));
+    leitura.vendedores.forEach((v) => logins.add(v.login));
+    clientesIgnorados += leitura.clientesIgnorados;
+    vendedoresIgnorados += leitura.vendedoresIgnorados;
+    for (const e of leitura.erros) erros.push(`${nome}: ${e}`);
+  }
+  return { clientesDistintos: cods.size, vendedoresDistintos: logins.size, clientesIgnorados, vendedoresIgnorados, erros };
+}
+
+/** Lê a planilha e grava clientes/vendedores da empresa atual — caminho
+ * "rápido" (sem IA), reconhece só os nomes de coluna do modelo e suas
+ * variações mais comuns (ver SINONIMOS_CLIENTES). Usa `salvarPorArquivo`
+ * pra ser seguro reimportar depois de outros arquivos já terem sido
+ * importados (soma em vez de substituir — ver ali). */
+export async function importarPlanilha(empresaId: string, arquivo: File): Promise<ResultadoImportacaoPlanilha> {
+  const { porArquivo, arquivosComErro } = await lerPorArquivo([arquivo]);
+  if (arquivosComErro.length > 0) {
+    return { clientesImportados: 0, clientesIgnorados: 0, vendedoresImportados: 0, vendedoresIgnorados: 0, erros: [arquivosComErro[0].mensagem] };
+  }
+  const resumo = resumirPorArquivo(porArquivo);
+  const { clientesImportados, vendedoresImportados } = await salvarPorArquivo(empresaId, porArquivo);
   return {
-    clientes: ordemCod.map((cod) => acumuladoClientes.get(cod)!),
-    vendedores: ordemLogin.map((login) => acumuladoVendedores.get(login)!),
-    clientesIgnorados,
-    vendedoresIgnorados,
-    erros,
-    arquivosComErro,
+    clientesImportados,
+    clientesIgnorados: resumo.clientesIgnorados,
+    vendedoresImportados,
+    vendedoresIgnorados: resumo.vendedoresIgnorados,
+    erros: resumo.erros,
   };
 }
 
-/** Igual a `importarPlanilha`, mas aceita vários arquivos de uma vez (ver
- * `lerVariasPlanilhas`). */
+export interface LeituraMultipla extends LeituraPlanilha {
+  /** Arquivos que nem chegaram a ser lidos (erro inesperado ao abrir/ler) —
+   * separado de `erros`, que são avisos sobre linhas dentro de um arquivo
+   * que foi lido normalmente. */
+  arquivosComErro: Array<{ nome: string; mensagem: string }>;
+}
+
+/** Igual a `importarPlanilha`, mas aceita vários arquivos de uma vez.
+ * Clientes com o mesmo "Código*" que aparecem em mais de um arquivo são
+ * somados num registro só: valor total e produtos comprados somados entre
+ * os arquivos, data de última compra fica a mais recente entre eles (o
+ * vendedor "dono" acompanha essa data), e os demais campos usam o 1º valor
+ * não vazio encontrado. Diferente de uma versão anterior desta função, a
+ * soma agora é rastreada por arquivo (`Cliente.origensImportacao` — ver
+ * `salvarPorArquivo`): é seguro tanto reimportar o mesmo conjunto de
+ * arquivos de novo (não dobra) quanto importar um NOVO lote de arquivos
+ * depois, em outro dia (soma ao que já tinha, em vez de substituir). */
 export async function importarVariasPlanilhas(
   empresaId: string,
   arquivos: File[]
 ): Promise<ResultadoImportacaoPlanilha & { arquivosComErro: Array<{ nome: string; mensagem: string }> }> {
-  const { clientes, vendedores, clientesIgnorados, vendedoresIgnorados, erros, arquivosComErro } =
-    await lerVariasPlanilhas(arquivos);
-  const { clientesImportados, vendedoresImportados } = await salvarClientesEVendedores(empresaId, clientes, vendedores);
-  return { clientesImportados, clientesIgnorados, vendedoresImportados, vendedoresIgnorados, erros, arquivosComErro };
+  const { porArquivo, arquivosComErro } = await lerPorArquivo(arquivos);
+  const resumo = resumirPorArquivo(porArquivo);
+  const { clientesImportados, vendedoresImportados } = await salvarPorArquivo(empresaId, porArquivo);
+  return {
+    clientesImportados,
+    clientesIgnorados: resumo.clientesIgnorados,
+    vendedoresImportados,
+    vendedoresIgnorados: resumo.vendedoresIgnorados,
+    erros: resumo.erros,
+    arquivosComErro,
+  };
 }
