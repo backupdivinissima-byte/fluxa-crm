@@ -133,6 +133,27 @@ export interface Cliente {
   cod_vendedor?: string; // vendedor "dono" do cliente (origem cadastral)
   vend_nome?: string;
 
+  // Rastreia a contribuição de CADA arquivo já importado pra esse cliente
+  // (chave = nome do arquivo) — necessário porque totalGeral/produtos são
+  // SOMADOS entre arquivos diferentes (ex.: um relatório por mês), mas
+  // reimportar o MESMO arquivo de novo precisa ser seguro (substituir só a
+  // contribuição dele, não somar de novo). Sem isso, importar um novo mês
+  // separadamente de um mês já importado antes apagaria a contribuição do
+  // mês anterior em vez de somar (Firestore `merge:true` substitui os
+  // campos, não soma). totalGeral/produtos/dtUltCompra/cod_vendedor/
+  // vend_nome acima são sempre recalculados a partir da soma de todas as
+  // entradas aqui — nunca editados diretamente.
+  origensImportacao?: Record<
+    string,
+    {
+      totalGeral?: number;
+      produtos?: Record<string, number>;
+      dtUltCompra?: string;
+      cod_vendedor?: string;
+      vend_nome?: string;
+    }
+  >;
+
   // Posição do cliente no quadro CRM (coluna personalizada da empresa) —
   // só muda por ação manual (arrastar no quadro ou pela aba "+ Lançar
   // orçamento"), nunca automaticamente.
