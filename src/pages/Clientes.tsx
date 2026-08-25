@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { ouvirClientes, ouvirEmpresa, ouvirVendedores } from '../lib/crmData';
 import type { Cliente, Vendedor } from '../types';
-import { DIAS_INATIVIDADE_PADRAO, diasSemAtend, formatarMoeda, matchVendedor, statusInfo } from '../lib/crmLogic';
+import { DIAS_INATIVIDADE_PADRAO, diasSemAtend, formatarMoeda, matchVendedor, statusInfo, totalGeralReal } from '../lib/crmLogic';
 import ClienteDetalheModal from '../components/ClienteDetalheModal';
 import { IconClientes } from '../components/NavIcons';
 
@@ -134,7 +134,7 @@ export default function Clientes() {
                       {status.label}
                     </span>
                   </td>
-                  <td className="px-4 py-2.5 text-right font-bold text-ink">{formatarMoeda(c.totalGeral ?? 0)}</td>
+                  <td className="px-4 py-2.5 text-right font-bold text-ink">{formatarMoeda(totalGeralReal(c) ?? 0)}</td>
                   <td className="px-4 py-2.5 text-ink-soft">{vend?.nome ?? c.vend_nome ?? '—'}</td>
                 </tr>
               );

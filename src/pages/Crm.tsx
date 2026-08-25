@@ -96,7 +96,7 @@ export default function Crm() {
     return mapa;
   }, [clientes, colunas, colunaPrincipalId, ehAdmin, loginAtual, nomeAtual]);
 
-  const totalEmpresa = useMemo(() => clientes.reduce((s, c) => s + (c.totalGeral ?? 0), 0) || 1, [clientes]);
+  const totalEmpresa = useMemo(() => clientes.reduce((s, c) => s + valorCliente(c), 0) || 1, [clientes]);
 
   const filtroAtivo = filtros.find((f) => f.id === filtroAtivoId) ?? null;
 
