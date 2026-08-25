@@ -161,6 +161,29 @@ export function vendasTotalEmpresa(clientes: Cliente[]): number {
   return clientes.reduce((soma, c) => soma + valorCliente(c), 0);
 }
 
+/** Total de vendas IMPORTADAS por mês (chave "AAAA-MM"), somando a
+ * contribuição de todos os clientes — usa `Cliente.origensImportacao`
+ * (ver `salvarPorArquivo`/`chaveOrigemPorMes` em importarPlanilha.ts), que
+ * já rastreia o mês de cada compra. Só entram meses com data conhecida
+ * (contribuições sem data reconhecida, caso raro, ficam de fora daqui mas
+ * continuam contando no total geral do cliente). Usado pro gráfico
+ * "Evolução de vendas por mês" do Dashboard mostrar direto o que foi
+ * importado, sem precisar de lançamento manual mês a mês. */
+export function vendasImportadasPorMes(clientes: Cliente[]): Record<string, number> {
+  const totais: Record<string, number> = {};
+  for (const c of clientes) {
+    const origens = c.origensImportacao;
+    if (!origens) continue;
+    for (const [chave, origem] of Object.entries(origens)) {
+      const m = /^mes-(\d{4}-\d{2})$/.exec(chave);
+      if (!m || origem.totalGeral === undefined) continue;
+      const mesRef = m[1];
+      totais[mesRef] = (totais[mesRef] ?? 0) + origem.totalGeral;
+    }
+  }
+  return totais;
+}
+
 /** Um cliente conta como "com vendedor" se já tiver um responsável
  * vinculado no funil ou de origem cadastral. */
 export function temVendedor(c: Cliente): boolean {
