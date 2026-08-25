@@ -47,13 +47,18 @@ export function statusInfo(
   return { label: 'Ativo', cor: '#27AE60' };
 }
 
-/** Um cliente "pertence" a um vendedor por login exato ou por nome (fuzzy). */
+/** Um cliente "pertence" a um vendedor por login exato ou por nome (fuzzy).
+ * O nome usa "contém" (não só igualdade exata) porque o nome do vendedor
+ * que vem da importação costuma ser um nome curto/apelido do ERP (ex.:
+ * "MIRIAM", "CECILIA"), enquanto o nome cadastrado no Fluxa costuma ser o
+ * nome completo (ex.: "Miriam Rodrigues dos Santos") — comparar só por
+ * igualdade nunca bateria nesse caso comum. */
 export function matchVendedor(c: Cliente, login: string, nome?: string): boolean {
   if (c.cod_vendedor && c.cod_vendedor === login) return true;
   if (nome && c.vend_nome) {
     const a = c.vend_nome.trim().toLowerCase();
     const b = nome.trim().toLowerCase();
-    if (a === b) return true;
+    if (a && b && (a === b || a.includes(b) || b.includes(a))) return true;
   }
   return false;
 }
@@ -241,7 +246,17 @@ export interface RankingVendedor {
  * agora fica em 1º — inclusive um vendedor com R$0 no mês pode cair pra
  * trás de quem vendeu algo, mesmo tendo total histórico maior). O total
  * histórico (soma de todos os clientes vinculados) e a % da maior faixa
- * de meta da empresa continuam disponíveis, só não decidem mais a ordem. */
+ * de meta da empresa continuam disponíveis, só não decidem mais a ordem.
+ *
+ * "Vinculado" usa `matchVendedor` (login exato OU nome — ver lá): o
+ * `cod_vendedor` que vem da importação é o código do ERP, que raramente é
+ * igual ao login do Fluxa, então sem o match por nome o total histórico
+ * ficava perto de zero pra quase todo mundo mesmo com vendas reais
+ * importadas. Um vendedor sem NENHUM cliente importado correspondente
+ * (nem por login, nem por nome parecido) aparece com total 0 — pra ver
+ * TODOS os totais importados por código do ERP, mesmo sem cadastro
+ * correspondente no Fluxa, veja "Total importado por vendedor" na tela de
+ * Vendedores. */
 export function rankingVendedores(
   vendedores: Vendedor[],
   clientes: Cliente[],
@@ -250,11 +265,42 @@ export function rankingVendedores(
 ): RankingVendedor[] {
   return vendedores
     .map((v) => {
-      const meus = clientes.filter((c) => c.crmVendedorLogin === v.login || c.cod_vendedor === v.login);
+      const meus = clientes.filter((c) => c.crmVendedorLogin === v.login || matchVendedor(c, v.login, v.nome));
       const totalHistorico = meus.reduce((soma, c) => soma + valorCliente(c), 0);
       const vendasMes = vendasMesVendedor(clientes, v.login, colunasFechamentoIds);
       const pctMeta = metaReferencia && metaReferencia > 0 ? Math.min(100, Math.round((vendasMes / metaReferencia) * 100)) : null;
       return { vendedor: v, clientesCount: meus.length, totalHistorico, vendasMes, pctMeta };
     })
     .sort((a, b) => b.vendasMes - a.vendasMes);
+}
+
+export interface RankingVendedorImportado {
+  codVendedor: string;
+  nome: string;
+  clientesCount: number;
+  totalHistorico: number;
+}
+
+/** Ranking de vendedores pelo total histórico REAL vindo da importação,
+ * agrupado direto pelo código de vendedor do ERP (`cliente.cod_vendedor`) —
+ * sem depender de bater com o login de nenhum vendedor cadastrado no
+ * Fluxa. Cobre TODOS os vendedores que aparecem nos arquivos importados,
+ * mesmo os que não têm uma conta correspondente no sistema. Usado na tela
+ * de Vendedores ("Total importado por vendedor"). */
+export function rankingVendedoresImportado(clientes: Cliente[]): RankingVendedorImportado[] {
+  const mapa = new Map<string, RankingVendedorImportado>();
+  for (const c of clientes) {
+    if (!c.cod_vendedor) continue;
+    const atual = mapa.get(c.cod_vendedor) ?? {
+      codVendedor: c.cod_vendedor,
+      nome: c.vend_nome ?? c.cod_vendedor,
+      clientesCount: 0,
+      totalHistorico: 0,
+    };
+    atual.totalHistorico += c.totalGeral ?? 0;
+    atual.clientesCount += 1;
+    if (c.vend_nome) atual.nome = c.vend_nome;
+    mapa.set(c.cod_vendedor, atual);
+  }
+  return [...mapa.values()].sort((a, b) => b.totalHistorico - a.totalHistorico);
 }
