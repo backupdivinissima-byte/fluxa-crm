@@ -5,11 +5,13 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDocs,
   onSnapshot,
   orderBy,
   query,
   setDoc,
   updateDoc,
+  writeBatch,
   type Unsubscribe,
 } from 'firebase/firestore';
 import { db } from './firebase';
@@ -68,6 +70,32 @@ export async function criarCliente(empresaId: string, cliente: Omit<Cliente, 'id
 
 export async function removerCliente(empresaId: string, clienteId: string) {
   await deleteDoc(doc(db, 'empresas', empresaId, 'clientes', clienteId));
+}
+
+/** Conta quantos clientes existem na base da empresa — usado na tela de
+ * Importar/Sincronização pra mostrar quantos registros seriam apagados
+ * antes de confirmar "Limpar base". */
+export async function contarClientes(empresaId: string): Promise<number> {
+  const snap = await getDocs(clientesCol(empresaId));
+  return snap.size;
+}
+
+/** Apaga TODOS os clientes da empresa (não mexe em vendedores nem nas
+ * demais configurações) — usado pelo botão "Limpar base" em
+ * Importar/Sincronização, pra começar do zero antes de reimportar. Ação
+ * irreversível, por isso a tela pede confirmação explícita antes de
+ * chamar isso. Apaga em lotes de 400 (limite do Firestore é 500 operações
+ * por `writeBatch`) pra dar conta de bases grandes. */
+export async function limparTodosClientes(empresaId: string): Promise<number> {
+  const snap = await getDocs(clientesCol(empresaId));
+  const refs = snap.docs.map((d) => d.ref);
+  const TAMANHO_LOTE = 400;
+  for (let inicio = 0; inicio < refs.length; inicio += TAMANHO_LOTE) {
+    const lote = writeBatch(db);
+    for (const ref of refs.slice(inicio, inicio + TAMANHO_LOTE)) lote.delete(ref);
+    await lote.commit();
+  }
+  return refs.length;
 }
 
 export async function salvarVendedor(empresaId: string, vendedor: Omit<Vendedor, 'id'> & { id?: string }) {
