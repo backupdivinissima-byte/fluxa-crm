@@ -1,10 +1,11 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   gerarPlanilhaModelo,
   importarVariasPlanilhas,
   type ResultadoImportacaoPlanilha,
 } from '../lib/importarPlanilha';
+import { contarClientes, limparTodosClientes } from '../lib/crmData';
 import { gerarChaveApi, revogarChaveApi } from '../lib/apiKey';
 import {
   CAMPOS_MAPEAVEIS,
@@ -43,6 +44,15 @@ export default function Importar() {
   const [erroChave, setErroChave] = useState('');
   const [copiado, setCopiado] = useState(false);
 
+  // Limpar base — apaga todos os clientes pra começar do zero (ex.: base
+  // suja de importações antigas). Ação irreversível, por isso exige digitar
+  // a palavra de confirmação além do window.confirm.
+  const [totalClientes, setTotalClientes] = useState<number | null>(null);
+  const [confirmacaoLimpar, setConfirmacaoLimpar] = useState('');
+  const [limpandoBase, setLimpandoBase] = useState(false);
+  const [resultadoLimpeza, setResultadoLimpeza] = useState<number | null>(null);
+  const [erroLimpeza, setErroLimpeza] = useState('');
+
   // Conectar seu ERP (Fluxa puxando dados de fora) — inicializa com o que
   // já estiver salvo na empresa, se houver.
   const conexaoSalva = empresa?.erpConexao;
@@ -68,6 +78,13 @@ export default function Importar() {
   const [preenchendoConfig, setPreenchendoConfig] = useState(false);
   const [erroConfig, setErroConfig] = useState('');
   const [configPreenchida, setConfigPreenchida] = useState(false);
+
+  useEffect(() => {
+    if (!empresa) return;
+    contarClientes(empresa.id)
+      .then(setTotalClientes)
+      .catch(() => setTotalClientes(null));
+  }, [empresa, resultadoLimpeza, resultado]);
 
   if (papel !== 'admin' || !empresa) {
     return (
@@ -110,6 +127,26 @@ export default function Importar() {
       setErro(e instanceof Error ? e.message : 'Erro desconhecido ao importar a planilha.');
     } finally {
       setRodando(false);
+    }
+  }
+
+  async function handleLimparBase() {
+    if (confirmacaoLimpar.trim().toUpperCase() !== 'LIMPAR') return;
+    const ok = window.confirm(
+      `Isso vai apagar PERMANENTEMENTE ${totalClientes ?? 'todos os'} cliente(s) da base — histórico de compras, vendedor vinculado, tudo. Vendedores cadastrados e configurações da empresa não são afetados. Essa ação não pode ser desfeita. Confirma?`
+    );
+    if (!ok) return;
+    setLimpandoBase(true);
+    setErroLimpeza('');
+    setResultadoLimpeza(null);
+    try {
+      const apagados = await limparTodosClientes(empresaId);
+      setResultadoLimpeza(apagados);
+      setConfirmacaoLimpar('');
+    } catch (e) {
+      setErroLimpeza(e instanceof Error ? e.message : 'Erro ao limpar a base de clientes.');
+    } finally {
+      setLimpandoBase(false);
     }
   }
 
@@ -704,7 +741,7 @@ export default function Importar() {
         )}
       </div>
 
-      <div className="bg-white border border-line rounded-2xl p-6">
+      <div className="bg-white border border-line rounded-2xl p-6 mb-4">
         <span className="inline-block text-xs font-bold uppercase tracking-wide px-2.5 py-1 rounded-full bg-teal-500/10 text-teal-700 mb-3">
           Já dá pra usar
         </span>
@@ -714,6 +751,50 @@ export default function Importar() {
           mesmos nomes de coluna do modelo Excel acima (ex.: "Código*", "Nome", "Login*"). Depois é só enviar esse
           .csv no campo "Arquivo preenchido" acima — funciona igual à planilha.
         </p>
+      </div>
+
+      <div className="bg-white border border-red-200 rounded-2xl p-6">
+        <span className="inline-block text-xs font-bold uppercase tracking-wide px-2.5 py-1 rounded-full bg-red-100 text-red-700 mb-3">
+          Zona de risco
+        </span>
+        <h2 className="text-sm font-extrabold text-ink mb-1">Limpar base de clientes</h2>
+        <p className="text-sm text-ink-soft mb-4">
+          Apaga <strong>todos os clientes</strong> da base (histórico de compras, totais, vendedor vinculado — tudo)
+          pra você reimportar do zero, sem misturar com dados antigos. Não afeta vendedores cadastrados nem outras
+          configurações da empresa.{' '}
+          <strong className="text-red-700">Essa ação é permanente e não pode ser desfeita.</strong>
+        </p>
+        <p className="text-xs text-ink-soft mb-4">
+          {totalClientes === null ? 'Contando clientes...' : `${totalClientes} cliente(s) na base hoje.`}
+        </p>
+
+        {resultadoLimpeza !== null && (
+          <div className="mb-4 bg-teal-500/10 rounded-xl p-4 text-sm">
+            <p className="font-bold text-ink">Base limpa! {resultadoLimpeza} cliente(s) removido(s).</p>
+            <p className="text-ink-soft">Já pode importar seus arquivos de novo pra começar do zero.</p>
+          </div>
+        )}
+        {erroLimpeza && <p className="text-xs text-red-500 mb-4">{erroLimpeza}</p>}
+
+        <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-2">
+          Digite LIMPAR pra habilitar o botão
+        </label>
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            value={confirmacaoLimpar}
+            onChange={(e) => setConfirmacaoLimpar(e.target.value)}
+            placeholder="LIMPAR"
+            className="rounded-lg border border-line px-3 py-2 text-sm w-40"
+          />
+          <button
+            type="button"
+            onClick={handleLimparBase}
+            disabled={confirmacaoLimpar.trim().toUpperCase() !== 'LIMPAR' || limpandoBase || totalClientes === 0}
+            className="rounded-xl bg-red-600 text-white text-sm font-bold px-4 py-2.5 hover:opacity-90 disabled:opacity-40"
+          >
+            {limpandoBase ? 'Apagando...' : 'Limpar base de clientes'}
+          </button>
+        </div>
       </div>
     </div>
   );
