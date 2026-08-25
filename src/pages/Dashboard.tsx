@@ -11,6 +11,7 @@ import {
 import { CRM_COLUNAS_PADRAO, type Cliente, type ColunaCrm, type Vendedor } from '../types';
 import {
   DIAS_INATIVIDADE_PADRAO,
+  clientesAtivosPorMesHistorico,
   formatarMoeda,
   funilAtendimento,
   rankingVendedores,
@@ -140,6 +141,27 @@ export default function Dashboard() {
     return `${ano}-${String(mesIdx + 1).padStart(2, '0')}`;
   }
 
+  // Todos os "AAAA-MM" cobertos pelo gráfico (todo mês de todo ano
+  // disponível) — usado pra calcular ativos históricos mês a mês.
+  const todosOsMeses = useMemo(() => {
+    const lista: string[] = [];
+    for (const ano of anosDisponiveis) {
+      for (let m = 0; m < 12; m++) lista.push(chaveMes(ano, m));
+    }
+    return lista;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anosDisponiveis]);
+
+  // Nº de clientes ativos ao final de cada mês, calculado retroativamente
+  // a partir das datas de compra importadas (ver clientesAtivosPorMesHistorico)
+  // — usa sempre o prazo de inatividade configurado agora (30/60/90/
+  // personalizado). Sempre que existir um valor calculado pra um mês
+  // passado, ele prevalece sobre lançamento manual (ver ativosDoAno abaixo).
+  const ativosImportados = useMemo(
+    () => clientesAtivosPorMesHistorico(clientes, diasInatividade, todosOsMeses),
+    [clientes, diasInatividade, todosOsMeses]
+  );
+
   /** Valor real vindo da importação pra esse ano/mês, se houver. */
   function valorImportado(ano: number, mesIdx: number): number | undefined {
     return vendasImportadas[chaveMes(ano, mesIdx)];
@@ -164,14 +186,37 @@ export default function Dashboard() {
     return base;
   }
 
-  // Nº de clientes ativos por mês (mesmo padrão de mesesDoAno) — o mês
-  // corrente também é sempre "congelado" com o valor real calculado agora,
-  // nunca editável manualmente.
+  /** Valor calculado (retroativo, "ativos até o fim desse mês") pra esse
+   * ano/mês, se houver dado importado suficiente pra calcular. */
+  function valorAtivosImportado(ano: number, mesIdx: number): number | undefined {
+    return ativosImportados[chaveMes(ano, mesIdx)];
+  }
+
+  /** Célula de ativos "travada": mês corrente (sempre o funil ao vivo,
+   * porque o mês ainda não fechou) OU mês passado com cálculo retroativo
+   * disponível a partir dos dados importados. */
+  function mesTravadoAtivos(ano: number, mesIdx: number): boolean {
+    if (ano === anoAtual && mesIdx === mesAtualIdx) return true;
+    return valorAtivosImportado(ano, mesIdx) !== undefined;
+  }
+
+  // Nº de clientes ativos por mês. O mês corrente é sempre o cálculo ao
+  // vivo do funil (o mês ainda não "fechou", então o corte retroativo no
+  // último dia do mês ainda não faz sentido pra ele). Meses passados usam
+  // o cálculo retroativo a partir da importação quando disponível, caindo
+  // pro lançamento manual só quando não há dado importado suficiente.
   function ativosDoAno(ano: number): number[] {
     const registro = clientesAtivosAnuais.find((a) => a.ano === ano);
     const base = registro ? [...registro.meses] : new Array(12).fill(0);
     while (base.length < 12) base.push(0);
-    if (ano === anoAtual) base[mesAtualIdx] = funil.ativos;
+    for (let m = 0; m < 12; m++) {
+      if (ano === anoAtual && m === mesAtualIdx) {
+        base[m] = funil.ativos;
+        continue;
+      }
+      const imp = valorAtivosImportado(ano, m);
+      if (imp !== undefined) base[m] = imp;
+    }
     return base;
   }
 
@@ -227,9 +272,8 @@ export default function Dashboard() {
   }
 
   function atualizarValor(tipo: 'vendas' | 'ativos', ano: number, mesIdx: number, valor: string) {
-    // Vendas: mês travado (importado ou corrente) não é editável manualmente.
-    // Ativos: só o mês corrente é travado (não tem dado importado pra ativos).
-    if (tipo === 'vendas' ? mesTravado(ano, mesIdx) : ano === anoAtual && mesIdx === mesAtualIdx) return;
+    // Mês travado (importado/calculado ou o mês corrente) não é editável manualmente.
+    if (tipo === 'vendas' ? mesTravado(ano, mesIdx) : mesTravadoAtivos(ano, mesIdx)) return;
     const setter = tipo === 'vendas' ? setVendasAnuais : setClientesAtivosAnuais;
     setter((atual) => {
       const existe = atual.some((a) => a.ano === ano);
@@ -261,17 +305,19 @@ export default function Dashboard() {
           }
           return { ...a, meses };
         });
-      // Ativos: só o mês corrente é travado (não tem equivalente importado).
-      const zerarMesAtual = (lista: { ano: number; meses: number[] }[]) =>
+      // Ativos: nunca persiste manualmente um mês travado (calculado
+      // retroativamente a partir da importação, ou o mês corrente).
+      const zerarAtivosTravados = (lista: { ano: number; meses: number[] }[]) =>
         lista.map((a) => {
-          if (a.ano !== anoAtual) return a;
           const meses = [...a.meses];
-          meses[mesAtualIdx] = 0; // não guarda o valor "congelado", ele é sempre lido ao vivo
+          for (let m = 0; m < 12; m++) {
+            if (mesTravadoAtivos(a.ano, m)) meses[m] = 0;
+          }
           return { ...a, meses };
         });
       await Promise.all([
         salvarVendasAnuais(empresaId, zerarMesesTravados(vendasAnuais)),
-        salvarClientesAtivosAnuais(empresaId, zerarMesAtual(clientesAtivosAnuais)),
+        salvarClientesAtivosAnuais(empresaId, zerarAtivosTravados(clientesAtivosAnuais)),
       ]);
       setEditando(false);
     } catch (err) {
@@ -355,11 +401,14 @@ export default function Dashboard() {
             Vendas {MESES_EXTENSO[mesAtualIdx]}/{anoAtual}
           </p>
           <p className="text-2xl font-extrabold tabular-nums" style={{ color: '#27AE60' }}>
-            {formatarMoeda(vendasMes.total)}
+            {formatarMoeda(mesesDoAno(anoAtual)[mesAtualIdx])}
           </p>
-          <p className="text-[11px] mt-1 tabular-nums" style={{ color: vendasMes.variacaoPct != null && vendasMes.variacaoPct < 0 ? '#C0392B' : '#27AE60' }}>
-            {vendasMes.variacaoPct != null
-              ? `${vendasMes.variacaoPct >= 0 ? '▲' : '▼'} ${Math.abs(Math.round(vendasMes.variacaoPct))}%`
+          <p
+            className="text-[11px] mt-1 tabular-nums"
+            style={{ color: (pctVsMesAnterior(anoAtual, mesAtualIdx) ?? 0) < 0 ? '#C0392B' : '#27AE60' }}
+          >
+            {pctVsMesAnterior(anoAtual, mesAtualIdx) != null
+              ? `${pctVsMesAnterior(anoAtual, mesAtualIdx)! >= 0 ? '▲' : '▼'} ${Math.abs(Math.round(pctVsMesAnterior(anoAtual, mesAtualIdx)!))}%`
               : 'sem mês anterior p/ comparar'}
           </p>
         </div>
@@ -459,8 +508,11 @@ export default function Dashboard() {
             <p className="text-xs text-ink-soft mb-4">
               Lance aqui o faturamento e o nº de clientes ativos de meses que você ainda não importou. Meses com
               dado vindo da importação de planilha/relatório (rótulo "importado") são preenchidos automaticamente
-              e não podem ser editados — o mês corrente ({MESES_EXTENSO[mesAtualIdx]}/{anoAtual}), quando ainda sem
-              importação, também é sempre calculado ao vivo.
+              e não podem ser editados — o mês corrente ({MESES_EXTENSO[mesAtualIdx]}/{anoAtual}) é sempre calculado
+              ao vivo (rótulo "atual"). Os clientes ativos de meses passados (rótulo "calculado") usam a data de
+              última compra de cada cliente pra reconstruir quantos estavam dentro do prazo de inatividade
+              configurado acima até o ÚLTIMO DIA daquele mês — muda automaticamente se você trocar o prazo
+              (30/60/90/personalizado).
             </p>
 
             <p className="text-[11px] font-bold text-ink uppercase tracking-wide mb-2">Vendas (R$)</p>
@@ -522,11 +574,14 @@ export default function Dashboard() {
                   <tr key={mesLabel} className="border-t border-line">
                     <td className="py-1.5 pr-3 text-ink-soft font-bold">{mesLabel}</td>
                     {anosDisponiveis.map((ano) => {
-                      const travado = ano === anoAtual && mesIdx === mesAtualIdx;
+                      const ehMesCorrente = ano === anoAtual && mesIdx === mesAtualIdx;
+                      const travado = mesTravadoAtivos(ano, mesIdx);
                       return (
                         <td key={ano} className="py-1.5 px-2 text-right">
                           {travado ? (
-                            <span className="text-ink-soft italic">{funil.ativos} (atual)</span>
+                            <span className="text-ink-soft italic">
+                              {ativosDoAno(ano)[mesIdx]} {ehMesCorrente ? '(atual)' : '(calculado)'}
+                            </span>
                           ) : (
                             <input
                               type="number"
