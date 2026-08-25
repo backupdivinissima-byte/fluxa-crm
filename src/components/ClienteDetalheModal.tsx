@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Cliente, Vendedor } from '../types';
-import { DIAS_INATIVIDADE_PADRAO, diasSemAtend, formatarMoeda, statusInfo } from '../lib/crmLogic';
+import { DIAS_INATIVIDADE_PADRAO, diasSemAtend, formatarMoeda, statusInfo, totalGeralReal } from '../lib/crmLogic';
 import { atualizarCampoCliente, removerCliente } from '../lib/crmData';
 
 interface Props {
@@ -148,7 +148,7 @@ export default function ClienteDetalheModal({
               ))}
             </div>
             <p className="text-xs text-ink-soft mt-2">
-              Total geral: <span className="font-bold text-ink">{formatarMoeda(cliente.totalGeral ?? 0)}</span>
+              Total geral: <span className="font-bold text-ink">{formatarMoeda(totalGeralReal(cliente) ?? 0)}</span>
             </p>
           </div>
         )}
