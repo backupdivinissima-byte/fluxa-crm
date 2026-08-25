@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { ouvirClientes, ouvirEmpresa, ouvirVendedores, removerVendedor, salvarVendedor } from '../lib/crmData';
 import { CRM_COLUNAS_PADRAO, type Cliente, type ColunaCrm, type Vendedor } from '../types';
-import { formatarMoeda, vendasMesVendedor } from '../lib/crmLogic';
+import { formatarMoeda, matchVendedor, rankingVendedoresImportado, vendasMesVendedor } from '../lib/crmLogic';
 import { IconVendedores } from '../components/NavIcons';
 
 /** CRUD de vendedores — cada um recebe um login/senha simples (sem e-mail
@@ -39,13 +39,17 @@ export default function Vendedores() {
 
   const colunasFechamentoIds = useMemo(() => colunas.filter((c) => c.fechamento).map((c) => c.id), [colunas]);
 
+  // Nº de clientes de cada vendedor cadastrado, usando `matchVendedor`
+  // (login exato OU nome parecido — ver crmLogic.ts) em vez de comparar só
+  // `cod_vendedor === login`: o código do vendedor que vem da importação é
+  // do ERP, raramente igual ao login cadastrado aqui no Fluxa.
   const contagemClientes = useMemo(() => {
     const mapa = new Map<string, number>();
-    for (const c of clientes) {
-      if (c.cod_vendedor) mapa.set(c.cod_vendedor, (mapa.get(c.cod_vendedor) ?? 0) + 1);
+    for (const v of vendedores) {
+      mapa.set(v.login, clientes.filter((c) => matchVendedor(c, v.login, v.nome)).length);
     }
     return mapa;
-  }, [clientes]);
+  }, [clientes, vendedores]);
 
   // Total histórico importado por vendedor (planilha/relatório do
   // ERP) — agrega o "totalGeral" de cada cliente pelo "cod_vendedor" que
@@ -57,18 +61,7 @@ export default function Vendedores() {
   // próprios clientes (não depende do "Login" cadastrado aqui no Fluxa
   // bater com o código do ERP, que são espaços de identificador
   // diferentes).
-  const totalImportadoPorVendedor = useMemo(() => {
-    const mapa = new Map<string, { nome: string; total: number; clientes: number }>();
-    for (const c of clientes) {
-      if (!c.cod_vendedor) continue;
-      const atual = mapa.get(c.cod_vendedor) ?? { nome: c.vend_nome ?? c.cod_vendedor, total: 0, clientes: 0 };
-      atual.total += c.totalGeral ?? 0;
-      atual.clientes += 1;
-      if (!atual.nome || atual.nome === c.cod_vendedor) atual.nome = c.vend_nome ?? atual.nome;
-      mapa.set(c.cod_vendedor, atual);
-    }
-    return [...mapa.entries()].sort((a, b) => b[1].total - a[1].total);
-  }, [clientes]);
+  const totalImportadoPorVendedor = useMemo(() => rankingVendedoresImportado(clientes), [clientes]);
 
   function abrirNovo() {
     setEditando(null);
@@ -229,22 +222,22 @@ export default function Vendedores() {
               </tr>
             </thead>
             <tbody>
-              {totalImportadoPorVendedor.map(([cod, dados]) => (
-                <tr key={cod} className="border-t border-line">
+              {totalImportadoPorVendedor.map((r) => (
+                <tr key={r.codVendedor} className="border-t border-line">
                   <td className="px-4 py-2.5 font-bold text-ink">
-                    {cod} - {dados.nome}
+                    {r.codVendedor} - {r.nome}
                   </td>
-                  <td className="px-4 py-2.5 text-right text-ink-soft">{dados.clientes}</td>
-                  <td className="px-4 py-2.5 text-right font-bold text-ink">{formatarMoeda(dados.total)}</td>
+                  <td className="px-4 py-2.5 text-right text-ink-soft">{r.clientesCount}</td>
+                  <td className="px-4 py-2.5 text-right font-bold text-ink">{formatarMoeda(r.totalHistorico)}</td>
                 </tr>
               ))}
               <tr className="border-t border-line bg-surface">
                 <td className="px-4 py-2.5 font-bold text-ink">Total geral</td>
                 <td className="px-4 py-2.5 text-right text-ink-soft">
-                  {totalImportadoPorVendedor.reduce((s, [, d]) => s + d.clientes, 0)}
+                  {totalImportadoPorVendedor.reduce((s, r) => s + r.clientesCount, 0)}
                 </td>
                 <td className="px-4 py-2.5 text-right font-bold text-ink">
-                  {formatarMoeda(totalImportadoPorVendedor.reduce((s, [, d]) => s + d.total, 0))}
+                  {formatarMoeda(totalImportadoPorVendedor.reduce((s, r) => s + r.totalHistorico, 0))}
                 </td>
               </tr>
             </tbody>
