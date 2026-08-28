@@ -1,0 +1,137 @@
+FLUXA CRM — MÓDULO MARKETING (Meta / Live / Análise Marketing)
+================================================================
+
+O que isto é
+------------
+Um pacote de arquivos pra você subir no GitHub (mesmo jeito que você já faz
+upload hoje, em "Add file → Upload files"), adicionando a aba "Marketing" ao
+Fluxa CRM com 3 sub-abas: Meta, Live e Análise Marketing.
+
+Este pacote NÃO foi publicado — nada mudou no site em produção ainda. Só
+depois que você subir estes arquivos no GitHub é que o Fluxa CRM publica
+automaticamente a nova versão (o repositório já está configurado pra isso).
+
+
+COMO SUBIR
+----------
+Cada arquivo abaixo tem o MESMO caminho que deve ter dentro do repositório
+"fluxa-crm" no GitHub. Se o arquivo já existe lá (marcado como "ALTERADO"),
+suba substituindo o conteúdo atual. Se não existe (marcado como "NOVO"),
+crie esse arquivo nesse caminho.
+
+ALTERADOS (8) — substituir o conteúdo dos arquivos já existentes:
+  src/App.tsx
+  src/components/Layout.tsx
+  src/components/NavIcons.tsx
+  src/types/index.ts
+  functions/index.js
+  src/pages/Home.tsx
+  src/pages/Cadastrar.tsx
+  src/contexts/AuthContext.tsx
+
+NOVOS (7) — criar estes arquivos nestes caminhos:
+  src/lib/marketingData.ts
+  src/lib/marketingLogic.ts
+  src/lib/importarMarketing.ts
+  src/pages/Marketing.tsx
+  src/pages/marketing/MetaAds.tsx
+  src/pages/marketing/Live.tsx
+  src/pages/marketing/AnaliseMarketing.tsx
+
+Dica: na tela de upload do GitHub, você pode arrastar a pasta "fluxa-crm"
+deste pacote inteira — o GitHub reconhece as subpastas automaticamente,
+desde que você esteja na raiz do repositório.
+
+Depois de subir e o Fluxa CRM publicar sozinho (alguns minutos), um novo
+item "Marketing" aparece no menu do topo, só pra login de administrador.
+
+
+FLUXA MARKETING NA PÁGINA PÚBLICA (vitrine + cadastro)
+--------------------------------------------------------
+O card "Fluxa Marketing" na página institucional (menu Produtos e seção
+"Os módulos do Fluxa Gestão e Vendas") deixou de dizer "Em breve" — agora
+aparece como "Disponível agora", com o mesmo tratamento visual do Fluxa CRM
+(ícone colorido) e botão "Teste grátis" levando pro cadastro.
+
+Importante: por baixo é a MESMA conta/empresa do Fluxa CRM. Não criei um
+cadastro isolado porque o próprio módulo Marketing (aba Live, principalmente)
+precisa enxergar os clientes do CRM da empresa pra fazer o cruzamento
+"cliente veio da live ou é catálogo" — uma conta 100% separada ficaria com
+o painel vazio, sem nenhum cliente pra cruzar. Então quem clica em "Teste
+grátis" no card do Fluxa Marketing passa pelo MESMO formulário de cadastro
+do Fluxa CRM (só muda o título da tela e fica registrado que a empresa
+entrou pelo Marketing) — e a conta criada já enxerga tanto o CRM quanto o
+Marketing depois de logada. Quem já é cliente Fluxa CRM não precisa
+recadastrar nada: o item "Marketing" já aparece pra ela no menu do painel.
+
+
+O QUE JÁ FUNCIONA HOJE (sem nenhuma configuração extra)
+--------------------------------------------------------
+Aba Meta:
+  - Tabela das campanhas do mês: nome, resultado, alcance, custo por
+    resultado, orçamento, valor gasto, impressões e status.
+  - Botão pra importar a planilha exportada do Gerenciador de Anúncios
+    (Exportar → Exportar dados da tabela, em .csv ou .xlsx).
+
+Aba Live:
+  - Calendário do mês pra cadastrar as lives (data, hora de início, hora de
+    término, título opcional).
+  - Botão "Encerrar live" com campos pra digitar visualizações e pico de
+    pessoas online.
+  - Importação da planilha de reserva da live (data, código do cliente,
+    nome, valor da reserva) — cruza automaticamente com o CRM: cliente com
+    reserva = veio da live (mostra quanto reservou e quanto comprou a mais
+    de catálogo); cliente sem reserva = cliente catálogo (fora live).
+
+Aba Análise Marketing:
+  - ROI e CAC do mês, calculados a partir do que foi importado na aba Meta
+    (investimento) e do que já está no CRM (vendas fechadas, clientes
+    novos, receita atribuída à live).
+  - Evolução dos últimos 6 meses.
+
+
+O QUE AINDA DEPENDE DE VOCÊ (Fase 2 — sincronização automática)
+------------------------------------------------------------------
+As telas já têm os botões prontos ("Conectar Meta Ads", "Buscar do
+Instagram"), e o código do servidor (functions/index.js) já tem as duas
+rotas escritas — mas elas só funcionam depois de 3 coisas que só você
+consegue fazer:
+
+1. Publicar as novas funções do servidor — isso NÃO acontece automático
+   junto com o upload acima. É preciso rodar, com o Firebase CLI instalado:
+       firebase deploy --only functions
+   (dentro da pasta do projeto, depois de configurado o login do Firebase).
+
+2. Meta Ads (sincronização automática da aba Meta): criar um App em
+   developers.facebook.com, gerar um token de sistema (System User) com
+   permissão "ads_read" pra sua conta de anúncios, e informar o ID da conta
+   (ex.: act_1234567890) + esse token na aba Meta → "Conectar direto com o
+   Meta Ads".
+
+3. Instagram (busca automática ao encerrar live): confirmar que a conta
+   comercial do Instagram está vinculada a uma Página do Facebook dentro do
+   mesmo Business Manager, gerar um token de acesso de longa duração com
+   permissão "instagram_manage_insights", e informar o ID da conta do
+   Instagram + esse token na aba Live.
+   AVISO: a API pública do Instagram pra métricas de uma live JÁ ENCERRADA
+   é limitada e pouco documentada — o código faz uma tentativa seguindo a
+   documentação oficial, mas só vamos saber se ela realmente devolve
+   visualizações/pico de pessoas online depois de testar com um token de
+   verdade. Enquanto isso (ou se a API não devolver esse dado), o
+   preenchimento manual na tela continua funcionando normalmente — nunca
+   fica bloqueado por isso.
+
+Sem essas 3 coisas, os botões "Conectar"/"Buscar automaticamente" mostram
+uma mensagem explicando que ainda não está configurado — não travam nem
+dão erro feio pra quem usa o sistema.
+
+
+UM PONTO DE ATENÇÃO — REGRAS DE SEGURANÇA DO FIRESTORE
+-----------------------------------------------------------
+Este repositório não tem um arquivo de regras do Firestore versionado (elas
+são configuradas direto no Console do Firebase). As novas coleções
+(campanhasMeta, lives, reservasLive) seguem o mesmo padrão de
+empresas/{id}/clientes e vendedores — mas vale conferir no Console do
+Firebase se as regras atuais já cobrem qualquer subcoleção nova dentro de
+"empresas/{id}" (regra tipo coringa) ou se é preciso adicionar essas 3
+coleções explicitamente, antes de usar em produção.
