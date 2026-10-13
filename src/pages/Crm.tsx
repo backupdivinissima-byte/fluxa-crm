@@ -252,10 +252,16 @@ export default function Crm() {
   async function alterarTipoAuto(col: ColunaCrm, auto: ColunaCrm['auto']) {
     if (!empresaId) return;
     // Coluna automática não pode ser de fechamento (cliente não é arrastado pra ela).
+    // Se o nome atual é uma faixa fixa de dias (ex.: "31 a 40 dias"), troca
+    // por um nome que não fica desatualizado; a faixa calculada aparece
+    // sozinha logo abaixo do título.
+    const nomeEhFaixaFixa = /\d+\s*(a|-|–)\s*\d+/i.test(col.nome);
     const novaLista = colunas.map((c) => {
       if (c.id !== col.id) return c;
       const { auto: _antigo, ...resto } = c;
-      return auto ? { ...resto, auto, fechamento: false } : resto;
+      if (!auto) return resto;
+      const nome = nomeEhFaixaFixa ? (auto === 'inativos' ? 'Clientes inativos' : 'Clientes em risco') : c.nome;
+      return { ...resto, nome, auto, fechamento: false };
     });
     try {
       await salvarColunasCrm(empresaId, novaLista);
