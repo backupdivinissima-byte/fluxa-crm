@@ -82,14 +82,19 @@ export default function ClienteDetalheModal({
   async function salvar() {
     setSalvando(true);
     try {
-      const { cidade, uf } = separarCidadeUf(cidadeUf);
-      await atualizarCampoCliente(empresaId, cliente.id, {
-        cnpj,
-        telefone,
-        cidade,
-        uf,
-        cod_vendedor: codVendedor || undefined,
-      });
+      const patch: Partial<Cliente> = { cnpj, telefone };
+      // Cidade/UF e vendedor só são gravados se a pessoa mexeu neles: o
+      // vendedor vindo da importação nem sempre bate com um login cadastrado
+      // (o seletor então aparece vazio) e salvar não pode apagá-lo.
+      if (cidadeUf !== juntarCidadeUf(cliente.cidade, cliente.uf)) {
+        const { cidade, uf } = separarCidadeUf(cidadeUf);
+        patch.cidade = cidade;
+        patch.uf = uf;
+      }
+      if (codVendedor !== (cliente.cod_vendedor ?? '')) {
+        patch.cod_vendedor = codVendedor || undefined;
+      }
+      await atualizarCampoCliente(empresaId, cliente.id, patch);
       onClose();
     } finally {
       setSalvando(false);
