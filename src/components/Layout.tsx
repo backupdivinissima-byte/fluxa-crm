@@ -14,12 +14,12 @@ import {
 } from './NavIcons';
 
 const itens = [
-  { to: '/dashboard', label: 'Dashboard', icon: <IconDashboard />, fim: true },
-  { to: '/crm', label: 'CRM', icon: <IconCrm /> },
-  { to: '/clientes', label: 'Clientes', icon: <IconClientes /> },
-  { to: '/vendedores', label: 'Vendedores', icon: <IconVendedores /> },
+  { to: '/dashboard', label: 'Dashboard', labelVendedor: 'Meu painel', icon: <IconDashboard />, fim: true },
+  { to: '/crm', label: 'CRM', labelVendedor: 'Meu CRM', icon: <IconCrm /> },
+  { to: '/clientes', label: 'Clientes', labelVendedor: 'Meus clientes', icon: <IconClientes /> },
+  { to: '/vendedores', label: 'Vendedores', icon: <IconVendedores />, apenasAdmin: true },
   { to: '/metas', label: 'Metas & Comissões', icon: <IconMetas /> },
-  { to: '/links', label: 'Links dos vendedores', icon: <IconLinks /> },
+  { to: '/links', label: 'Links dos vendedores', icon: <IconLinks />, apenasAdmin: true },
   // Disponível pra qualquer empresa, só não faz sentido pro login de
   // vendedor (só o administrador importa/sincroniza dados).
   { to: '/importar', label: 'Importar / Sincronização', icon: <IconImportar />, apenasAdmin: true },
@@ -62,7 +62,7 @@ export default function Layout() {
                     }`
                   }
                 >
-                  {item.icon} {item.label}
+                  {item.icon} {papel !== 'admin' && 'labelVendedor' in item ? item.labelVendedor : item.label}
                 </NavLink>
               ))}
           </nav>

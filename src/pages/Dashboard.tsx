@@ -55,10 +55,8 @@ function iniciais(nome: string): string {
 }
 
 export default function Dashboard() {
-  const { perfil, sessaoVendedor, papel, empresa } = useAuth();
-  const nome = papel === 'admin' ? perfil?.nome : sessaoVendedor?.vendedor.nome;
+  const { empresa } = useAuth();
   const empresaId = empresa?.id;
-  const ehAdmin = papel === 'admin';
 
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
@@ -339,22 +337,6 @@ export default function Dashboard() {
       console.error('Erro ao salvar prazo de inatividade:', err);
       alert('Não foi possível salvar o prazo de inatividade. Tente novamente em instantes.');
     }
-  }
-
-  if (!ehAdmin) {
-    return (
-      <div className="p-8 w-full">
-        <h1 className="text-2xl font-extrabold text-ink tracking-tight mb-8">Olá, {nome?.split(' ')[0]}</h1>
-        <div className="bg-gradient-to-br from-teal-500 to-blue-600 rounded-2xl p-6 text-white max-w-2xl">
-          <div className="text-sm font-bold uppercase tracking-wide opacity-80 mb-1">Bem-vindo(a) ao Fluxa CRM</div>
-          <h2 className="text-lg font-extrabold mb-2">Funil de vendas, clientes e equipe num só lugar</h2>
-          <p className="text-sm opacity-90">
-            Use o menu acima pra organizar seu funil de vendas no CRM, cadastrar clientes e acompanhar suas metas e
-            comissões.
-          </p>
-        </div>
-      </div>
-    );
   }
 
   return (

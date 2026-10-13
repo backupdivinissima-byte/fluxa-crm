@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
+import PainelVendedor from './pages/PainelVendedor';
 import Login from './pages/Login';
 import Cadastrar from './pages/Cadastrar';
 import Crm from './pages/Crm';
@@ -52,7 +53,7 @@ function AppRoutes() {
           </RotaProtegida>
         }
       >
-        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/dashboard" element={<PainelOuDashboard />} />
         <Route path="/crm" element={<Crm />} />
         <Route path="/clientes" element={<Clientes />} />
         <Route path="/vendedores" element={<Vendedores />} />
@@ -69,6 +70,12 @@ function AppRoutes() {
       </Route>
     </Routes>
   );
+}
+
+/** Admin vê o dashboard da empresa; vendedor cai direto no painel individual. */
+function PainelOuDashboard() {
+  const { papel } = useAuth();
+  return papel === 'admin' ? <Dashboard /> : <PainelVendedor />;
 }
 
 export default function App() {

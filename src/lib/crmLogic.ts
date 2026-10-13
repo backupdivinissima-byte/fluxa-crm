@@ -1,5 +1,5 @@
 // Funções puras de regra de negócio do CRM.
-import type { Cliente, ColunaCrm, FiltroCrm, Vendedor } from '../types';
+import type { Cliente, ColunaCrm, FiltroCrm, MetaTier, Vendedor } from '../types';
 
 /** Transforma um código/login em um ID de documento Firestore seguro e
  * determinístico (mesmo valor de entrada sempre vira o mesmo ID) — usado
@@ -576,4 +576,191 @@ export function rankingVendedoresImportado(clientes: Cliente[]): RankingVendedor
     mapa.set(c.cod_vendedor, atual);
   }
   return [...mapa.values()].sort((a, b) => b.totalHistorico - a.totalHistorico);
+}
+
+// ===== Painel do vendedor ("Meu painel") =====
+
+const doisDigitos = (n: number) => String(n).padStart(2, '0');
+
+/** Feriados nacionais do ano ("AAAA-MM-DD"): os fixos mais a Sexta-feira
+ * Santa (2 dias antes da Páscoa, calculada pelo algoritmo gregoriano). */
+export function feriadosNacionais(ano: number): Set<string> {
+  const a = ano % 19;
+  const b = Math.floor(ano / 100);
+  const c = ano % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const mesPascoa = Math.floor((h + l - 7 * m + 114) / 31);
+  const diaPascoa = ((h + l - 7 * m + 114) % 31) + 1;
+  const sextaSanta = new Date(Date.UTC(ano, mesPascoa - 1, diaPascoa - 2)).toISOString().slice(0, 10);
+  const fixos = ['01-01', '04-21', '05-01', '09-07', '10-12', '11-02', '11-15', '11-20', '12-25'];
+  return new Set([sextaSanta, ...fixos.map((f2) => `${ano}-${f2}`)]);
+}
+
+/** Dias úteis (segunda a sexta, sem feriado nacional) do mês de `hoje`:
+ * total, quantos já passaram (contando o dia de hoje) e quantos faltam. */
+export function diasUteisDoMes(hoje: Date = new Date()): { total: number; decorridos: number; restantes: number } {
+  const ano = hoje.getFullYear();
+  const mes = hoje.getMonth();
+  const feriados = feriadosNacionais(ano);
+  const ultimoDia = new Date(ano, mes + 1, 0).getDate();
+  let total = 0;
+  let decorridos = 0;
+  for (let dia = 1; dia <= ultimoDia; dia++) {
+    const semana = new Date(ano, mes, dia).getDay();
+    if (semana === 0 || semana === 6) continue;
+    if (feriados.has(`${ano}-${doisDigitos(mes + 1)}-${doisDigitos(dia)}`)) continue;
+    total++;
+    if (dia <= hoje.getDate()) decorridos++;
+  }
+  return { total, decorridos, restantes: total - decorridos };
+}
+
+/** Vendas IMPORTADAS do vendedor mês a mês (chave "AAAA-MM"), somando a
+ * contribuição de cada mês dos clientes dele (mesmo critério de
+ * `vendasImportadasMesVendedor`). Alimenta o gráfico "Evolução de vendas
+ * por mês" do painel do vendedor. */
+export function vendasMensaisDoVendedor(
+  clientes: Cliente[],
+  login: string,
+  nome: string | undefined
+): Record<string, number> {
+  const totais: Record<string, number> = {};
+  for (const c of clientes) {
+    if (!c.origensImportacao) continue;
+    if (!(c.crmVendedorLogin === login || matchVendedor(c, login, nome))) continue;
+    for (const [chave, origem] of Object.entries(c.origensImportacao)) {
+      const m = /^mes-(\d{4}-\d{2})$/.exec(chave);
+      if (!m || origem.totalGeral === undefined) continue;
+      totais[m[1]] = (totais[m[1]] ?? 0) + origem.totalGeral;
+    }
+  }
+  return totais;
+}
+
+/** Vendas de um vendedor num mês ("AAAA-MM"), pela mesma regra do ranking
+ * do Dashboard: se já há dado importado pra esse mês na empresa, vale a
+ * importação; senão, o que foi concluído no funil (colunas de fechamento). */
+export function vendasDoMesVendedor(
+  clientes: Cliente[],
+  login: string,
+  nome: string | undefined,
+  colunasFechamentoIds: string[],
+  mesRef: string
+): number {
+  const temImportacaoNoMes = Object.keys(vendasImportadasPorMes(clientes)).includes(mesRef);
+  return temImportacaoNoMes
+    ? vendasImportadasMesVendedor(clientes, login, nome, mesRef)
+    : vendasMesVendedor(clientes, login, colunasFechamentoIds);
+}
+
+/** Maior faixa de meta atingida com as vendas do mês (não cumulativa), a
+ * comissão estimada (% sobre as vendas + bônus) e a próxima faixa ainda não
+ * atingida. `indice` -1 = nenhuma atingida. */
+export function nivelDeMeta(
+  metas: MetaTier[],
+  vendas: number
+): { indice: number; tier: MetaTier | null; comissao: number; proxima: MetaTier | null } {
+  let indice = -1;
+  for (let i = metas.length - 1; i >= 0; i--) {
+    if (metas[i].valor > 0 && vendas >= metas[i].valor) {
+      indice = i;
+      break;
+    }
+  }
+  const tier = indice >= 0 ? metas[indice] : null;
+  const comissao = tier ? vendas * (tier.comissao / 100) + tier.bonus : 0;
+  const proxima = metas.find((m, i) => i > indice && m.valor > 0) ?? null;
+  return { indice, tier, comissao, proxima };
+}
+
+export interface ClienteParaContatar {
+  cliente: Cliente;
+  dias: number;
+  valor: number;
+}
+
+export interface ResumoCarteira {
+  total: number;
+  ativos: number;
+  risco: number;
+  inativos: number;
+  emAtendimento: number;
+  orcamentos: { coluna: ColunaCrm; qtd: number; valor: number }[];
+  orcamentoTotal: number;
+  emRisco: ClienteParaContatar[]; // mais perto de inativar primeiro
+  inativosDeValor: ClienteParaContatar[]; // maior valor histórico primeiro
+}
+
+/** Resumo da carteira de UM vendedor — só entram os clientes que ele
+ * enxerga no CRM (`cartaoVisivelPara`): os dele pelo vínculo vigente do
+ * funil ou pela origem cadastral (login/nome). Separa ativos/risco/inativos
+ * pelo prazo do Dashboard, conta quem está em atendimento, soma os
+ * orçamentos em aberto por coluna de orçamento e já monta as listas de
+ * "clientes para contatar". */
+export function resumoCarteiraVendedor(
+  clientes: Cliente[],
+  login: string,
+  nome: string | undefined,
+  colunas: ColunaCrm[],
+  diasInatividade: number,
+  limiteLista = 6
+): ResumoCarteira {
+  const resumo: ResumoCarteira = {
+    total: 0,
+    ativos: 0,
+    risco: 0,
+    inativos: 0,
+    emAtendimento: 0,
+    orcamentos: [],
+    orcamentoTotal: 0,
+    emRisco: [],
+    inativosDeValor: [],
+  };
+  const porColuna = new Map<string, { coluna: ColunaCrm; qtd: number; valor: number }>();
+  for (const col of colunas) {
+    if (acaoDaColuna(col) === 'orcamento') porColuna.set(col.id, { coluna: col, qtd: 0, valor: 0 });
+  }
+
+  for (const c of clientes) {
+    const { id, vinculoVigente } = colunaEfetivaDoCliente(c, colunas, diasInatividade);
+    if (!cartaoVisivelPara(c, 'vendedor', login, nome, vinculoVigente)) continue;
+    resumo.total++;
+    const dias = diasSemAtend(c);
+    const faixa = faixaPorDias(dias, diasInatividade);
+    if (faixa === 'ativo') resumo.ativos++;
+    else if (faixa === 'risco') {
+      resumo.risco++;
+      resumo.emRisco.push({ cliente: c, dias, valor: valorCliente(c) });
+    } else {
+      resumo.inativos++;
+      resumo.inativosDeValor.push({ cliente: c, dias, valor: valorCliente(c) });
+    }
+
+    const coluna = id ? colunas.find((x) => x.id === id) : undefined;
+    const acao = coluna ? acaoDaColuna(coluna) : undefined;
+    if (acao === 'atendimento') resumo.emAtendimento++;
+    if (acao === 'orcamento' && coluna) {
+      const item = porColuna.get(coluna.id);
+      if (item) {
+        item.qtd++;
+        item.valor += c.crmOrcamentoValor ?? 0;
+      }
+    }
+  }
+
+  resumo.orcamentos = [...porColuna.values()];
+  resumo.orcamentoTotal = resumo.orcamentos.reduce((s, o) => s + o.valor, 0);
+  resumo.emRisco.sort((a, b) => b.dias - a.dias);
+  resumo.emRisco = resumo.emRisco.slice(0, limiteLista);
+  resumo.inativosDeValor.sort((a, b) => b.valor - a.valor);
+  resumo.inativosDeValor = resumo.inativosDeValor.slice(0, limiteLista);
+  return resumo;
 }
