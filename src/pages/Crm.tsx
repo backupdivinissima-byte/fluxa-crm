@@ -647,6 +647,7 @@ export default function Crm() {
           vendedores={vendedores}
           ehAdmin={ehAdmin}
           diasInatividade={diasInatividade}
+          vinculoVigente={colunaEfetivaDoCliente(detalheCliente, colunas, diasInatividade).vinculoVigente}
           onClose={() => setDetalheCliente(null)}
         />
       )}

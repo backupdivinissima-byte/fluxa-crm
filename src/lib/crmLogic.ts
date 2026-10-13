@@ -199,6 +199,44 @@ export function totalGeralReal(c: Cliente): number | undefined {
   return soma;
 }
 
+/** Data ISO (ou "AAAA-MM-DD...") em dd/mm/aaaa, sem passar por fuso (uma
+ * data sem hora viraria o dia anterior no horário do Brasil). */
+export function formatarDataBR(iso?: string): string {
+  if (!iso) return '—';
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('pt-BR');
+}
+
+/** As (até) 3 compras mais recentes do cliente, da mais nova pra mais
+ * velha. A fonte é `origensImportacao` (uma entrada por mês importado; se o
+ * mesmo mês aparece mais de uma vez, vale a maior, mesma regra de
+ * `totalGeralReal`). Clientes antigos sem essa estrutura caem nos campos
+ * c1/c2/c3, se existirem. */
+export function ultimasCompras(c: Cliente): { valor: number; data?: string }[] {
+  const origens = c.origensImportacao;
+  if (origens && Object.keys(origens).length > 0) {
+    const porMes = new Map<string, { valor: number; data?: string }>();
+    const semData: { valor: number; data?: string }[] = [];
+    for (const o of Object.values(origens)) {
+      if (!o.totalGeral || o.totalGeral <= 0) continue;
+      if (o.dtUltCompra) {
+        const mes = o.dtUltCompra.slice(0, 7);
+        const atual = porMes.get(mes);
+        if (!atual || o.totalGeral > atual.valor) porMes.set(mes, { valor: o.totalGeral, data: o.dtUltCompra });
+      } else {
+        semData.push({ valor: o.totalGeral });
+      }
+    }
+    const lista = [...porMes.values()].sort((a, b) => (b.data ?? '').localeCompare(a.data ?? '')).concat(semData);
+    if (lista.length > 0) return lista.slice(0, 3);
+  }
+  return [c.c1, c.c2, c.c3]
+    .filter((v): v is number => typeof v === 'number' && v > 0)
+    .map((valor) => ({ valor }));
+}
+
 /** Valor a exibir no card do quadro CRM: valor combinado (quando o card já
  * passou por uma coluna de fechamento) se houver, senão o total geral real
  * (ver `totalGeralReal`). */
