@@ -13,7 +13,6 @@ import {
   vendasDoMesVendedor,
   vendasMensaisDoVendedor,
 } from '../lib/crmLogic';
-import ClienteDetalheModal from '../components/ClienteDetalheModal';
 
 const MESES_EXTENSO = [
   'Janeiro',
@@ -207,7 +206,6 @@ export default function PainelVendedor() {
   const [colunas, setColunas] = useState<ColunaCrm[]>(empresa?.crmColunas ?? CRM_COLUNAS_PADRAO);
   const [metas, setMetas] = useState<MetaTier[]>(empresa?.metas ?? METAS_PADRAO);
   const [diasInatividade, setDiasInatividade] = useState<number>(empresa?.diasInatividade ?? DIAS_INATIVIDADE_PADRAO);
-  const [aberto, setAberto] = useState<Cliente | null>(null);
 
   useEffect(() => {
     if (!empresaId) return;
@@ -474,97 +472,11 @@ export default function PainelVendedor() {
         </div>
       </Cartao>
 
-      {/* Clientes para contatar */}
-      <Cartao
-        titulo="Clientes para contatar"
-        direita={
-          <Link to="/clientes" className="text-xs font-bold text-teal-600 hover:underline">
-            Ver todos os meus clientes
-          </Link>
-        }
-      >
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <ListaContato
-            titulo={`Em risco (${carteira.risco})`}
-            vazio="Nenhum cliente em risco agora."
-            cor={COR_RISCO}
-            itens={carteira.emRisco}
-            textoDias={(d) => `${d}d sem compra`}
-            onAbrir={setAberto}
-          />
-          <ListaContato
-            titulo={`Inativos de maior valor (${carteira.inativos})`}
-            vazio="Nenhum cliente inativo."
-            cor={COR_INATIVO}
-            itens={carteira.inativosDeValor}
-            textoDias={(d) => (d >= 9999 ? 'sem compra' : `${d}d sem compra`)}
-            onAbrir={setAberto}
-          />
-        </div>
-      </Cartao>
-
       {/* Evolução de vendas por mês */}
       <Cartao titulo="Evolução das minhas vendas por mês">
         <GraficoMensal vendas={vendasPorMes} />
       </Cartao>
 
-      {aberto && (
-        <ClienteDetalheModal
-          empresaId={empresaId}
-          cliente={aberto}
-          vendedores={vendedores}
-          ehAdmin={false}
-          diasInatividade={diasInatividade}
-          onClose={() => setAberto(null)}
-        />
-      )}
-    </div>
-  );
-}
-
-function ListaContato({
-  titulo,
-  vazio,
-  cor,
-  itens,
-  textoDias,
-  onAbrir,
-}: {
-  titulo: string;
-  vazio: string;
-  cor: string;
-  itens: { cliente: Cliente; dias: number; valor: number }[];
-  textoDias: (dias: number) => string;
-  onAbrir: (c: Cliente) => void;
-}) {
-  return (
-    <div>
-      <p className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: cor }}>
-        {titulo}
-      </p>
-      {itens.length === 0 ? (
-        <p className="text-xs text-ink-soft py-3">{vazio}</p>
-      ) : (
-        <ul className="divide-y divide-line">
-          {itens.map(({ cliente, dias, valor }) => (
-            <li key={cliente.id}>
-              <button
-                type="button"
-                onClick={() => onAbrir(cliente)}
-                className="w-full flex items-center justify-between gap-3 py-2.5 text-left hover:bg-surface rounded-lg px-2 -mx-2"
-              >
-                <span className="min-w-0">
-                  <span className="block text-sm font-semibold text-ink truncate">{cliente.razao ?? cliente.nome}</span>
-                  <span className="block text-[11px] font-bold" style={{ color: cor }}>
-                    {textoDias(dias)}
-                  </span>
-                </span>
-                <span className="text-xs font-bold text-ink-soft shrink-0 tabular-nums">{formatarMoeda(valor)}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
     </div>
   );
 }
