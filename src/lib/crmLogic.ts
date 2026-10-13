@@ -666,7 +666,8 @@ export function vendasDoMesVendedor(
  * atingida. `indice` -1 = nenhuma atingida. */
 export function nivelDeMeta(
   metas: MetaTier[],
-  vendas: number
+  vendas: number,
+  comissaoBase = 0
 ): { indice: number; tier: MetaTier | null; comissao: number; proxima: MetaTier | null } {
   let indice = -1;
   for (let i = metas.length - 1; i >= 0; i--) {
@@ -676,7 +677,8 @@ export function nivelDeMeta(
     }
   }
   const tier = indice >= 0 ? metas[indice] : null;
-  const comissao = tier ? vendas * (tier.comissao / 100) + tier.bonus : 0;
+  // Abaixo da 1ª meta vale a comissão base (sem bônus).
+  const comissao = tier ? vendas * (tier.comissao / 100) + tier.bonus : vendas * (comissaoBase / 100);
   const proxima = metas.find((m, i) => i > indice && m.valor > 0) ?? null;
   return { indice, tier, comissao, proxima };
 }

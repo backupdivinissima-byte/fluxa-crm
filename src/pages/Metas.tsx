@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { ouvirClientes, ouvirEmpresa, ouvirVendedores, salvarMetasEmpresa } from '../lib/crmData';
-import { CRM_COLUNAS_PADRAO, METAS_PADRAO, type Cliente, type ColunaCrm, type MetaTier, type Vendedor } from '../types';
+import { COMISSAO_BASE_PADRAO, CRM_COLUNAS_PADRAO, METAS_PADRAO, type Cliente, type ColunaCrm, type MetaTier, type Vendedor } from '../types';
 import { formatarMoeda, nivelDeMeta, vendasDoMesVendedor } from '../lib/crmLogic';
 import { IconMetas } from '../components/NavIcons';
 
@@ -16,6 +16,7 @@ export default function Metas() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [metas, setMetas] = useState<MetaTier[]>(empresa?.metas ?? METAS_PADRAO);
   const [colunas, setColunas] = useState<ColunaCrm[]>(empresa?.crmColunas ?? CRM_COLUNAS_PADRAO);
+  const [comissaoBase, setComissaoBase] = useState<number>(empresa?.comissaoBase ?? COMISSAO_BASE_PADRAO);
   const [salvando, setSalvando] = useState(false);
   // true enquanto há edição ainda não salva: o que chega do banco não pisa nela.
   const editando = useRef(false);
@@ -31,7 +32,10 @@ export default function Metas() {
       setColunas(emp?.crmColunas && emp.crmColunas.length > 0 ? emp.crmColunas : CRM_COLUNAS_PADRAO);
       // Metas sempre vêm do banco (o `empresa` do login fica desatualizado
       // depois de salvar — por isso as metas "sumiam" ao trocar de aba).
-      if (!editando.current) setMetas(emp?.metas && emp.metas.length > 0 ? emp.metas : METAS_PADRAO);
+      if (!editando.current) {
+        setMetas(emp?.metas && emp.metas.length > 0 ? emp.metas : METAS_PADRAO);
+        setComissaoBase(emp?.comissaoBase ?? COMISSAO_BASE_PADRAO);
+      }
     });
     return () => {
       unsubV();
@@ -50,15 +54,15 @@ export default function Metas() {
   const metasOrdenadas = useMemo(() => metas.filter((m) => m.valor > 0), [metas]);
 
   function calcularNivel(vendasMes: number) {
-    const n = nivelDeMeta(metasOrdenadas, vendasMes);
-    return n.tier ? { tier: n.tier, comissao: n.comissao } : null;
+    const n = nivelDeMeta(metasOrdenadas, vendasMes, comissaoBase);
+    return { tier: n.tier, comissao: n.comissao };
   }
 
   async function salvarMetas() {
     if (!empresaId) return;
     setSalvando(true);
     try {
-      await salvarMetasEmpresa(empresaId, metas);
+      await salvarMetasEmpresa(empresaId, metas, comissaoBase);
       editando.current = false;
       setSalvoOk(true);
       setTimeout(() => setSalvoOk(false), 3000);
@@ -117,7 +121,7 @@ export default function Metas() {
         <div className="bg-white border border-line rounded-2xl p-6 mb-4">
           <p className="text-xs text-ink-soft uppercase font-bold tracking-wide mb-1">Vendas no mês</p>
           <p className="text-2xl font-extrabold text-ink mb-4">{formatarMoeda(vendasMes)}</p>
-          {nivel ? (
+          {nivel.tier ? (
             <div className="bg-teal-500/10 rounded-xl p-4">
               <p className="text-sm font-bold text-teal-600">Nível atingido: {nivel.tier.label}</p>
               <p className="text-xs text-ink-soft">
@@ -126,7 +130,12 @@ export default function Metas() {
               <p className="text-lg font-extrabold text-ink mt-1">Ganho estimado: {formatarMoeda(nivel.comissao)}</p>
             </div>
           ) : (
-            <p className="text-sm text-ink-soft">Ainda não atingiu a primeira faixa de meta este mês.</p>
+            <div>
+              <p className="text-sm text-ink-soft">
+                Ainda não atingiu a primeira faixa de meta este mês: comissão de {comissaoBase}% sobre as vendas.
+              </p>
+              <p className="text-lg font-extrabold text-ink mt-1">Ganho estimado: {formatarMoeda(nivel.comissao)}</p>
+            </div>
           )}
         </div>
         <div className="space-y-2">
@@ -218,6 +227,22 @@ export default function Metas() {
             ))}
           </tbody>
         </table>
+        <div className="flex items-center gap-2 mt-4 text-sm text-ink">
+          <label htmlFor="comissao-base" className="font-bold">
+            Abaixo da Meta 1, comissão de
+          </label>
+          <input
+            id="comissao-base"
+            type="number"
+            value={comissaoBase}
+            onChange={(e) => {
+              editando.current = true;
+              setComissaoBase(Number(e.target.value));
+            }}
+            className="w-20 rounded-lg border border-line px-2 py-1.5 text-sm text-right"
+          />
+          <span>% sobre as vendas</span>
+        </div>
         <div className="flex items-center gap-3 mt-4">
           <button
             onClick={salvarMetas}
@@ -260,7 +285,7 @@ export default function Metas() {
                   <td className="px-4 py-2.5 font-bold text-ink">{vendedor.nome}</td>
                   <td className="px-4 py-2.5 text-right text-ink-soft">{formatarMoeda(vendasMes)}</td>
                   <td className="px-4 py-2.5 text-ink-soft">
-                    {nivel ? (
+                    {nivel.tier ? (
                       nivel.tier.label || 'Meta atingida'
                     ) : proxima ? (
                       <span title={`Falta ${formatarMoeda(proxima.valor - vendasMes)} para a ${proxima.label || 'primeira meta'}`}>
@@ -271,7 +296,7 @@ export default function Metas() {
                     )}
                   </td>
                   <td className="px-4 py-2.5 text-right font-bold text-ink">
-                    {nivel ? formatarMoeda(nivel.comissao) : '—'}
+                    {formatarMoeda(nivel.comissao)}
                   </td>
                 </tr>
               );

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ouvirClientes, ouvirEmpresa, ouvirVendedores } from '../lib/crmData';
-import { CRM_COLUNAS_PADRAO, METAS_PADRAO, type Cliente, type ColunaCrm, type MetaTier, type Vendedor } from '../types';
+import { COMISSAO_BASE_PADRAO, CRM_COLUNAS_PADRAO, METAS_PADRAO, type Cliente, type ColunaCrm, type MetaTier, type Vendedor } from '../types';
 import {
   DIAS_INATIVIDADE_PADRAO,
   diasUteisDoMes,
@@ -205,6 +205,7 @@ export default function PainelVendedor() {
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [colunas, setColunas] = useState<ColunaCrm[]>(empresa?.crmColunas ?? CRM_COLUNAS_PADRAO);
   const [metas, setMetas] = useState<MetaTier[]>(empresa?.metas ?? METAS_PADRAO);
+  const [comissaoBase, setComissaoBase] = useState<number>(empresa?.comissaoBase ?? COMISSAO_BASE_PADRAO);
   const [diasInatividade, setDiasInatividade] = useState<number>(empresa?.diasInatividade ?? DIAS_INATIVIDADE_PADRAO);
 
   useEffect(() => {
@@ -214,6 +215,7 @@ export default function PainelVendedor() {
     const unsubE = ouvirEmpresa(empresaId, (emp) => {
       setColunas(emp?.crmColunas && emp.crmColunas.length > 0 ? emp.crmColunas : CRM_COLUNAS_PADRAO);
       setMetas(emp?.metas && emp.metas.length > 0 ? emp.metas : METAS_PADRAO);
+      setComissaoBase(emp?.comissaoBase ?? COMISSAO_BASE_PADRAO);
       setDiasInatividade(emp?.diasInatividade ?? DIAS_INATIVIDADE_PADRAO);
     });
     return () => {
@@ -244,7 +246,7 @@ export default function PainelVendedor() {
     [clientes, loginAtual, nomeAtual]
   );
 
-  const nivel = nivelDeMeta(metas, vendasMes);
+  const nivel = nivelDeMeta(metas, vendasMes, comissaoBase);
   // Meta de referência do mês: a pessoal, se existir; senão a próxima faixa.
   const metaRef = metaPessoal > 0 ? { valor: metaPessoal, rotulo: 'meta pessoal' } : nivel.proxima ? { valor: nivel.proxima.valor, rotulo: nivel.proxima.label } : null;
   const pctMeta = metaRef ? Math.min(100, Math.round((vendasMes / metaRef.valor) * 100)) : null;
@@ -333,7 +335,7 @@ export default function PainelVendedor() {
             direita={
               <span className="text-xs text-ink-soft">
                 Comissão estimada hoje:{' '}
-                <b className="text-ink">{nivel.tier ? formatarMoeda(nivel.comissao) : 'R$ 0,00'}</b>
+                <b className="text-ink">{formatarMoeda(nivel.comissao)}</b>
               </span>
             }
           >

@@ -23,6 +23,7 @@ export interface Empresa {
   apiKeyHash?: string;
   apiKeyGeradaEm?: string; // ISO date
   metas?: MetaTier[]; // faixas globais de meta/comissão da empresa
+  comissaoBase?: number; // % de comissão de quem vende abaixo da 1ª meta (padrão 2)
   crmFiltros?: FiltroCrm[]; // filtros personalizados do quadro CRM (até 10)
   crmColunas?: ColunaCrm[]; // colunas personalizadas do quadro CRM (até 8)
   // Histórico de vendas por ano/mês pro gráfico do Dashboard ("Evolução de
@@ -94,6 +95,9 @@ export interface MetaTier {
 // Padrão pra empresas novas: só a 1ª faixa (fixa). A empresa adiciona as
 // próximas (até 5 no total) pelo botão "+ Meta" em Metas & Comissões,
 // conforme o que fizer sentido pro negócio dela.
+/** Comissão (%) de quem fica abaixo da Meta 1. */
+export const COMISSAO_BASE_PADRAO = 2;
+
 export const METAS_PADRAO: MetaTier[] = [{ label: 'Meta 1', valor: 5000, comissao: 3, bonus: 200 }];
 
 export interface UsuarioPerfil {

@@ -112,8 +112,8 @@ export async function removerVendedor(empresaId: string, vendedorId: string) {
   await deleteDoc(doc(db, 'empresas', empresaId, 'vendedores', vendedorId));
 }
 
-export async function salvarMetasEmpresa(empresaId: string, metas: MetaTier[]) {
-  await updateDoc(doc(db, 'empresas', empresaId), { metas });
+export async function salvarMetasEmpresa(empresaId: string, metas: MetaTier[], comissaoBase: number) {
+  await updateDoc(doc(db, 'empresas', empresaId), { metas, comissaoBase });
 }
 
 // Filtros personalizados do quadro CRM — gravados direto no doc da empresa
