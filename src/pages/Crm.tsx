@@ -9,7 +9,16 @@ import {
   salvarColunasCrm,
 } from '../lib/crmData';
 import { CRM_COLUNAS_PADRAO, MAX_COLUNAS_CRM, type Cliente, type ColunaCrm, type FiltroCrm, type Vendedor } from '../types';
-import { DIAS_INATIVIDADE_PADRAO, cartaoVisivelPara, clientePassaFiltro, formatarMoeda, valorCliente } from '../lib/crmLogic';
+import {
+  DIAS_INATIVIDADE_PADRAO,
+  cartaoVisivelPara,
+  clientePassaFiltro,
+  diasSemAtend,
+  faixaPorDias,
+  formatarMoeda,
+  rotuloFaixa,
+  valorCliente,
+} from '../lib/crmLogic';
 import ClienteDetalheModal from '../components/ClienteDetalheModal';
 import { IconCrm } from '../components/NavIcons';
 
@@ -84,17 +93,33 @@ export default function Crm() {
   const loginAtual = ehAdmin ? undefined : sessaoVendedor?.vendedor.login;
   const nomeAtual = ehAdmin ? perfil?.nome : sessaoVendedor?.vendedor.nome;
 
-  const colunaPrincipalId = colunas[0]?.id;
+  // Colunas automáticas (inativos/risco) se enchem sozinhas pelos dias sem
+  // compra e pelo prazo definido no Dashboard. Cliente que ainda não foi
+  // movido pra uma coluna manual e está "ativo" cai na 1ª coluna manual.
+  const colInativosId = colunas.find((c) => c.auto === 'inativos')?.id;
+  const colRiscoId = colunas.find((c) => c.auto === 'risco')?.id;
+  const colunaPadraoId = colunas.find((c) => !c.auto)?.id;
 
   const cardsPorColuna = useMemo(() => {
     const mapa = new Map<string, Cliente[]>(colunas.map((c) => [c.id, []]));
     for (const c of clientes) {
       if (!cartaoVisivelPara(c, ehAdmin ? 'admin' : 'vendedor', loginAtual, nomeAtual)) continue;
-      const alvo = c.crmColunaId && mapa.has(c.crmColunaId) ? c.crmColunaId : colunaPrincipalId;
+      // Movimento manual vale só pra colunas manuais; coluna automática
+      // sempre manda pelos dias.
+      const manual = c.crmColunaId ? colunas.find((x) => x.id === c.crmColunaId) : undefined;
+      let alvo: string | undefined;
+      if (manual && !manual.auto) {
+        alvo = manual.id;
+      } else {
+        const faixa = faixaPorDias(diasSemAtend(c), diasInatividade);
+        if (faixa === 'inativo' && colInativosId) alvo = colInativosId;
+        else if (faixa === 'risco' && colRiscoId) alvo = colRiscoId;
+        else alvo = colunaPadraoId;
+      }
       if (alvo) mapa.get(alvo)?.push(c);
     }
     return mapa;
-  }, [clientes, colunas, colunaPrincipalId, ehAdmin, loginAtual, nomeAtual]);
+  }, [clientes, colunas, colInativosId, colRiscoId, colunaPadraoId, diasInatividade, ehAdmin, loginAtual, nomeAtual]);
 
   const totalEmpresa = useMemo(() => clientes.reduce((s, c) => s + valorCliente(c), 0) || 1, [clientes]);
 
@@ -224,6 +249,22 @@ export default function Crm() {
     }
   }
 
+  async function alterarTipoAuto(col: ColunaCrm, auto: ColunaCrm['auto']) {
+    if (!empresaId) return;
+    // Coluna automática não pode ser de fechamento (cliente não é arrastado pra ela).
+    const novaLista = colunas.map((c) => {
+      if (c.id !== col.id) return c;
+      const { auto: _antigo, ...resto } = c;
+      return auto ? { ...resto, auto, fechamento: false } : resto;
+    });
+    try {
+      await salvarColunasCrm(empresaId, novaLista);
+    } catch (err) {
+      console.error('Erro ao atualizar coluna:', err);
+      alert('Não foi possível atualizar a coluna. Tente novamente em instantes.');
+    }
+  }
+
   async function alternarFechamento(col: ColunaCrm) {
     if (!empresaId) return;
     const novaLista = colunas.map((c) => (c.id === col.id ? { ...c, fechamento: !c.fechamento } : c));
@@ -262,6 +303,14 @@ export default function Crm() {
     }
     const destino = colunas.find((c) => c.id === destinoId);
     if (!destino) return;
+    if (destino.auto) {
+      alert(
+        destino.auto === 'inativos'
+          ? 'Essa coluna é automática: os clientes entram sozinhos quando passam do prazo de inatividade definido no Dashboard.'
+          : 'Essa coluna é automática: os clientes entram sozinhos nos dias que antecedem o prazo de inatividade definido no Dashboard.'
+      );
+      return;
+    }
     if (destino.fechamento) {
       setPendMove({ cliente, destino: destino.id });
       setVendedorEscolhido(cliente.crmVendedorLogin ?? loginAtual ?? '');
@@ -435,15 +484,36 @@ export default function Crm() {
                     </>
                   )}
                 </div>
-                <label className="flex items-center gap-1 mt-1 text-[9px] text-ink-soft cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={!!col.fechamento}
-                    onChange={() => alternarFechamento(col)}
-                    className="w-3 h-3"
-                  />
-                  Fechamento (conta comissão)
-                </label>
+                {col.auto && (
+                  <div className="text-[10px] font-bold text-teal-600 mt-0.5">
+                    {rotuloFaixa(col.auto, diasInatividade)}
+                  </div>
+                )}
+                <select
+                  value={col.auto ?? ''}
+                  onChange={(e) => alterarTipoAuto(col, (e.target.value || undefined) as ColunaCrm['auto'])}
+                  title="Como os clientes entram nesta coluna"
+                  className="mt-1 w-full text-[9px] text-ink-soft border border-line rounded px-1 py-0.5 bg-white outline-none"
+                >
+                  <option value="">Manual (arrastar)</option>
+                  <option value="inativos" disabled={!!colInativosId && colInativosId !== col.id}>
+                    Automática: inativos
+                  </option>
+                  <option value="risco" disabled={!!colRiscoId && colRiscoId !== col.id}>
+                    Automática: em risco
+                  </option>
+                </select>
+                {!col.auto && (
+                  <label className="flex items-center gap-1 mt-1 text-[9px] text-ink-soft cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={!!col.fechamento}
+                      onChange={() => alternarFechamento(col)}
+                      className="w-3 h-3"
+                    />
+                    Fechamento (conta comissão)
+                  </label>
+                )}
                 <div className="flex items-center justify-between mt-1">
                   <span className="text-[10px] text-ink-soft">{cardsBrutos.length} cliente(s)</span>
                   <span className="text-[10px] font-bold text-ink">{pct}%</span>

@@ -178,6 +178,11 @@ export interface ColunaCrm {
   id: string;
   nome: string;
   fechamento?: boolean;
+  // Coluna automática: os clientes entram sozinhos conforme os dias sem
+  // compra e o prazo de inatividade do Dashboard (30/60/90/personalizado).
+  // "inativos" = acima do prazo; "risco" = os 9 dias antes do prazo. Sem
+  // valor = coluna manual (o cliente só muda arrastando).
+  auto?: 'inativos' | 'risco';
 }
 
 export const MAX_COLUNAS_CRM = 8;

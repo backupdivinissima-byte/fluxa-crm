@@ -44,13 +44,16 @@ export default function LancarOrcamento() {
   }, [empresaId]);
 
   // Mantém a coluna de destino selecionada válida conforme o quadro CRM
-  // muda (ex.: coluna escolhida foi excluída) — cai sempre na 1ª coluna.
+  // muda (ex.: coluna escolhida foi excluída) — cai sempre na 1ª coluna
+  // manual. Colunas automáticas (inativos/risco) ficam de fora: o cliente
+  // entra nelas sozinho, pelos dias sem compra.
+  const colunasManuais = colunas.filter((c) => !c.auto);
   useEffect(() => {
-    if (colunas.length === 0) return;
-    if (!colunaId || !colunas.some((c) => c.id === colunaId)) {
-      setColunaId(colunas[0].id);
+    if (colunasManuais.length === 0) return;
+    if (!colunaId || !colunasManuais.some((c) => c.id === colunaId)) {
+      setColunaId(colunasManuais[0].id);
     }
-  }, [colunas, colunaId]);
+  }, [colunasManuais, colunaId]);
 
   const loginAtual = ehAdmin ? undefined : sessaoVendedor?.vendedor.login;
   const nomeAtual = ehAdmin ? perfil?.nome : sessaoVendedor?.vendedor.nome;
@@ -84,7 +87,7 @@ export default function LancarOrcamento() {
     setEnviando(true);
     try {
       await atualizarCampoCliente(empresaId!, clienteId, {
-        crmColunaId: colunaId || colunas[0]?.id,
+        crmColunaId: colunaId || colunasManuais[0]?.id,
         crmVendedorLogin: loginParaUsar,
         crmOrcamentoValor: valorNum,
         crmColunaChangedAt: data ? new Date(`${data}T12:00:00`).toISOString() : new Date().toISOString(),
@@ -159,7 +162,7 @@ export default function LancarOrcamento() {
             onChange={(e) => setColunaId(e.target.value)}
             className="w-full rounded-xl border border-line px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500"
           >
-            {colunas.map((c) => (
+            {colunasManuais.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.nome}
               </option>

@@ -33,17 +33,45 @@ export function diasSemAtend(c: Cliente): number {
 // por statusInfo/Clientes/detalhe do cliente — um único parâmetro pra tudo.
 export const DIAS_INATIVIDADE_PADRAO = 30;
 
+/** Quantos dias antes do prazo de inatividade o cliente já entra em Risco. */
+export const DIAS_ANTECEDENCIA_RISCO = 9;
+
+/** Primeiro dia da faixa de Risco para um prazo de inatividade. A faixa vai
+ * de (prazo − 9) até o próprio prazo: prazo 30 → 21 a 30, prazo 60 → 51 a
+ * 60, prazo 90 → 81 a 90 (vale também para o prazo personalizado). */
+export function inicioRiscoDe(diasInatividade: number): number {
+  return Math.max(0, diasInatividade - DIAS_ANTECEDENCIA_RISCO);
+}
+
+export type FaixaAtendimento = 'inativo' | 'risco' | 'ativo';
+
+/** Em qual faixa um cliente cai pelos dias sem compra/atendimento:
+ * "inativo" passou do prazo (acima de N dias), "risco" está nos 9 dias
+ * antes do prazo, "ativo" é o resto. */
+export function faixaPorDias(dias: number, diasInatividade: number): FaixaAtendimento {
+  if (dias > diasInatividade) return 'inativo';
+  if (dias >= inicioRiscoDe(diasInatividade)) return 'risco';
+  return 'ativo';
+}
+
+/** Texto das faixas para mostrar nos títulos do funil, ex.: "Acima de 30
+ * dias" (inativos) e "21 a 30 dias" (risco). */
+export function rotuloFaixa(tipo: 'inativos' | 'risco', diasInatividade: number): string {
+  if (tipo === 'inativos') return `Acima de ${diasInatividade} dias`;
+  return `${inicioRiscoDe(diasInatividade)} a ${diasInatividade} dias`;
+}
+
 /** Status do cliente conforme o prazo de inatividade configurado pela
- * empresa: "Risco" são os últimos 10 dias antes de virar Inativo (ex.: se
- * o prazo é 60 dias, de 50 a 60 dias o cliente já aparece em Risco),
- * "Inativo" é passar do prazo, "Ativo" é o resto. */
+ * empresa: "Risco" são os 9 dias antes de virar Inativo (ex.: prazo de 60
+ * dias → de 51 a 60 dias o cliente já aparece em Risco), "Inativo" é passar
+ * do prazo, "Ativo" é o resto. */
 export function statusInfo(
   dias: number,
   diasInatividade: number = DIAS_INATIVIDADE_PADRAO
 ): { label: string; cor: string } {
-  const inicioRisco = Math.max(0, diasInatividade - 10);
-  if (dias > diasInatividade) return { label: 'Inativo', cor: '#C0392B' };
-  if (dias >= inicioRisco) return { label: 'Risco', cor: '#E67E22' };
+  const faixa = faixaPorDias(dias, diasInatividade);
+  if (faixa === 'inativo') return { label: 'Inativo', cor: '#C0392B' };
+  if (faixa === 'risco') return { label: 'Risco', cor: '#E67E22' };
   return { label: 'Ativo', cor: '#27AE60' };
 }
 

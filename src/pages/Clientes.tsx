@@ -2,7 +2,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { ouvirClientes, ouvirEmpresa, ouvirVendedores } from '../lib/crmData';
 import type { Cliente, Vendedor } from '../types';
-import { DIAS_INATIVIDADE_PADRAO, diasSemAtend, formatarMoeda, matchVendedor, statusInfo, totalGeralReal } from '../lib/crmLogic';
+import {
+  DIAS_INATIVIDADE_PADRAO,
+  diasSemAtend,
+  formatarMoeda,
+  inicioRiscoDe,
+  matchVendedor,
+  statusInfo,
+  totalGeralReal,
+} from '../lib/crmLogic';
 import ClienteDetalheModal from '../components/ClienteDetalheModal';
 import { IconClientes } from '../components/NavIcons';
 
@@ -21,7 +29,7 @@ export default function Clientes() {
   // personalizado) — mesmo parâmetro usado ali, pra "Risco"/"Inativo" aqui
   // baterem com o funil de atendimento.
   const [diasInatividade, setDiasInatividade] = useState<number>(empresa?.diasInatividade ?? DIAS_INATIVIDADE_PADRAO);
-  const inicioRisco = Math.max(0, diasInatividade - 10);
+  const inicioRisco = inicioRiscoDe(diasInatividade);
 
   useEffect(() => {
     if (!empresaId) return;
