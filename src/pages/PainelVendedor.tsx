@@ -327,9 +327,9 @@ export default function PainelVendedor() {
         />
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+      <div className="space-y-5">
         {/* Metas e comissão */}
-        <div className="xl:col-span-2">
+        <div>
           <Cartao
             titulo="Metas e comissão"
             direita={
@@ -340,13 +340,13 @@ export default function PainelVendedor() {
             }
           >
             {metasValidas.length > 0 ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <div className="flex gap-3 overflow-x-auto pb-1">
                 {metasValidas.map((m, i) => {
                   const atingida = vendasMes >= m.valor;
                   const pct = Math.min(100, Math.round((vendasMes / m.valor) * 100));
                   const cor = corProgresso(pct, atingida);
                   return (
-                    <div key={i} className="rounded-xl border p-3" style={{ borderColor: cor, borderTopWidth: 3 }}>
+                    <div key={i} className="rounded-xl border p-3 flex-1 min-w-[190px]" style={{ borderColor: cor, borderTopWidth: 3 }}>
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-xs font-extrabold text-ink truncate">{m.label || `Meta ${i + 1}`}</span>
                         <span className="text-[11px] font-bold" style={{ color: cor }}>
