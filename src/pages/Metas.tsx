@@ -254,11 +254,22 @@ export default function Metas() {
           <tbody>
             {vendedoresComVendas.map(({ vendedor, vendasMes }) => {
               const nivel = calcularNivel(vendasMes);
+              const proxima = metasOrdenadas[0];
               return (
                 <tr key={vendedor.id} className="border-t border-line">
                   <td className="px-4 py-2.5 font-bold text-ink">{vendedor.nome}</td>
                   <td className="px-4 py-2.5 text-right text-ink-soft">{formatarMoeda(vendasMes)}</td>
-                  <td className="px-4 py-2.5 text-ink-soft">{nivel?.tier.label ?? '—'}</td>
+                  <td className="px-4 py-2.5 text-ink-soft">
+                    {nivel ? (
+                      nivel.tier.label || 'Meta atingida'
+                    ) : proxima ? (
+                      <span title={`Falta ${formatarMoeda(proxima.valor - vendasMes)} para a ${proxima.label || 'primeira meta'}`}>
+                        Abaixo de {proxima.label || 'Meta 1'} ({formatarMoeda(proxima.valor)})
+                      </span>
+                    ) : (
+                      'Sem meta cadastrada'
+                    )}
+                  </td>
                   <td className="px-4 py-2.5 text-right font-bold text-ink">
                     {nivel ? formatarMoeda(nivel.comissao) : '—'}
                   </td>
