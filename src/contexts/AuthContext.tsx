@@ -12,7 +12,7 @@ import { auth, db } from '../lib/firebase';
 import type { Empresa, UsuarioPerfil, Vendedor } from '../types';
 
 // Sessão de vendedor (login/senha simples, sem Firebase Auth) — guardada só
-// em memória + localStorage.
+// em memória + sessionStorage (por aba).
 interface SessaoVendedor {
   vendedor: Vendedor;
   empresaId: string;
@@ -65,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Restaura sessão de vendedor salva localmente (se houver e não houver
     // admin logado via Firebase Auth).
-    const salvo = localStorage.getItem(CHAVE_SESSAO_VENDEDOR);
+    const salvo = sessionStorage.getItem(CHAVE_SESSAO_VENDEDOR);
     let sessaoSalva: SessaoVendedor | null = null;
     if (salvo) {
       try {
@@ -76,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // ao reabrir o sistema com a sessão de vendedor salva).
         setEmpresa((atual) => atual ?? ({ id: sessaoSalva!.empresaId } as Empresa));
       } catch {
-        localStorage.removeItem(CHAVE_SESSAO_VENDEDOR);
+        sessionStorage.removeItem(CHAVE_SESSAO_VENDEDOR);
       }
     }
 
@@ -112,7 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function login(email: string, senha: string) {
-    localStorage.removeItem(CHAVE_SESSAO_VENDEDOR);
+    sessionStorage.removeItem(CHAVE_SESSAO_VENDEDOR);
     setSessaoVendedor(null);
     await signInWithEmailAndPassword(auth, email, senha);
   }
@@ -184,7 +184,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function autenticarVendedor(empresaId: string, vDoc: { id: string; data: () => unknown }) {
     const vendedor = { id: vDoc.id, ...(vDoc.data() as object) } as Vendedor;
     const sessao: SessaoVendedor = { vendedor, empresaId };
-    localStorage.setItem(CHAVE_SESSAO_VENDEDOR, JSON.stringify(sessao));
+    sessionStorage.setItem(CHAVE_SESSAO_VENDEDOR, JSON.stringify(sessao));
     setSessaoVendedor(sessao);
     const empresaSnap = await getDoc(doc(db, 'empresas', empresaId));
     if (empresaSnap.exists()) {
@@ -220,7 +220,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function sair() {
-    localStorage.removeItem(CHAVE_SESSAO_VENDEDOR);
+    sessionStorage.removeItem(CHAVE_SESSAO_VENDEDOR);
     setSessaoVendedor(null);
     if (usuario) await firebaseSignOut(auth);
   }

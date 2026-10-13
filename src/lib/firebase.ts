@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { initializeAuth, browserSessionPersistence } from 'firebase/auth';
 import { initializeFirestore } from 'firebase/firestore';
 
 // Projeto Firebase próprio do Fluxa CRM (fluxa-crm) — os dados foram
@@ -17,7 +17,11 @@ const firebaseConfig = {
 export const isFirebaseConfigured = true;
 
 const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
+// Sessão por aba (sessionStorage): cada aba/janela tem o próprio login, então
+// dá pra deixar o administrador e vários vendedores abertos ao mesmo tempo no
+// mesmo computador, cada um independente (todos lendo os mesmos dados em
+// tempo real do Firestore).
+export const auth = initializeAuth(app, { persistence: browserSessionPersistence });
 // ignoreUndefinedProperties: várias telas (ex.: conexão com ERP) montam
 // objetos com campos opcionais que ficam `undefined` quando não usados
 // (ex.: nome do cabeçalho só se autenticação = header). Sem essa opção, o
