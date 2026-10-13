@@ -15,9 +15,11 @@ import {
   cartaoVisivelPara,
   clientePassaFiltro,
   colunaEfetivaDoCliente,
+  diasSemAtend,
   formatarMoeda,
   parseValorBR,
   rotuloFaixa,
+  statusInfo,
   valorCliente,
 } from '../lib/crmLogic';
 import ClienteDetalheModal from '../components/ClienteDetalheModal';
@@ -592,6 +594,7 @@ export default function Crm() {
               </div>
               <div className="flex-1 overflow-y-auto p-1.5 space-y-1.5">
                 {cards.map((c) => {
+                  const dias = diasSemAtend(c);
                   // Vínculo vencido (sem venda no prazo): não mostra mais o vendedor.
                   const vend = colunaEfetivaDoCliente(c, colunas, diasInatividade).vinculoVigente
                     ? vendedores.find((v) => v.login === c.crmVendedorLogin)
@@ -605,7 +608,16 @@ export default function Crm() {
                       className="bg-white rounded-lg border border-line p-2 text-[11px] cursor-pointer hover:shadow-sm active:cursor-grabbing"
                     >
                       <div className="font-bold text-ink truncate">{c.razao ?? c.nome}</div>
-                      <div className="text-ink-soft">{formatarMoeda(valorCliente(c))}</div>
+                      <div className="flex items-center justify-between gap-2 text-ink-soft">
+                        <span>{formatarMoeda(valorCliente(c))}</span>
+                        <span
+                          className="shrink-0 font-bold"
+                          style={{ color: statusInfo(dias, diasInatividade).cor }}
+                          title="Dias sem compra"
+                        >
+                          {dias >= 9999 ? 'Sem compra' : `${dias} ${dias === 1 ? 'dia' : 'dias'}`}
+                        </span>
+                      </div>
                       {vend && <div className="text-teal-600 truncate">👤 {vend.nome}</div>}
                     </div>
                   );
