@@ -89,6 +89,24 @@ export function diasEmAtendimento(c: Cliente): number {
   return Math.min(compra, desdeMovimento);
 }
 
+/** Ação de uma coluna manual ao soltar um cliente nela: "atendimento"
+ * (confirmar vendedor) ou "orcamento" (pedir valor). Vale o que foi
+ * escolhido no seletor da coluna; se nada foi escolhido, deduz pelo nome
+ * ("Em Atendimento", "Orçamento Live"...). Coluna automática ou de
+ * fechamento nunca tem ação. */
+export function acaoDaColuna(col: ColunaCrm): 'atendimento' | 'orcamento' | undefined {
+  if (col.auto || col.fechamento) return undefined;
+  if (col.acao === 'nenhuma') return undefined;
+  if (col.acao) return col.acao;
+  const nome = col.nome
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase();
+  if (nome.includes('orcamento')) return 'orcamento';
+  if (nome.includes('atendimento')) return 'atendimento';
+  return undefined;
+}
+
 /** Em qual coluna do funil o cliente aparece e se o vínculo com o vendedor
  * ainda vale.
  * - Coluna manual comum (orçamento, concluído...): fica onde foi colocado.
@@ -105,7 +123,7 @@ export function colunaEfetivaDoCliente(
   const manual = c.crmColunaId ? colunas.find((x) => x.id === c.crmColunaId) : undefined;
   let dias = diasSemAtend(c);
   if (manual && !manual.auto) {
-    if (manual.acao !== 'atendimento') return { id: manual.id, vinculoVigente: true };
+    if (acaoDaColuna(manual) !== 'atendimento') return { id: manual.id, vinculoVigente: true };
     dias = diasEmAtendimento(c);
     if (faixaPorDias(dias, diasInatividade) === 'ativo') return { id: manual.id, vinculoVigente: true };
   }

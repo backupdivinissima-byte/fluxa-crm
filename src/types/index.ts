@@ -188,7 +188,10 @@ export interface ColunaCrm {
   // passa a ser dele); se ficar sem venda no prazo de inatividade, volta
   // sozinho pra risco/inativos. "orcamento" = pede o valor do orçamento,
   // somado no topo da coluna como valor em aberto.
-  acao?: 'atendimento' | 'orcamento';
+  // Sem valor, a ação é deduzida do nome da coluna ("Em Atendimento",
+  // "Orçamento ...") — ver acaoDaColuna. "nenhuma" = a pessoa escolheu
+  // "Manual" de propósito, então o nome não conta.
+  acao?: 'atendimento' | 'orcamento' | 'nenhuma';
 }
 
 export const MAX_COLUNAS_CRM = 8;

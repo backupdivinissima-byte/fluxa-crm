@@ -11,6 +11,7 @@ import {
 import { CRM_COLUNAS_PADRAO, MAX_COLUNAS_CRM, type Cliente, type ColunaCrm, type FiltroCrm, type Vendedor } from '../types';
 import {
   DIAS_INATIVIDADE_PADRAO,
+  acaoDaColuna,
   cartaoVisivelPara,
   clientePassaFiltro,
   colunaEfetivaDoCliente,
@@ -255,7 +256,7 @@ export default function Crm() {
     const novaLista = colunas.map((c) => {
       if (c.id !== col.id) return c;
       const { auto: _auto, acao: _acao, ...resto } = c;
-      if (!funcao) return resto;
+      if (!funcao) return { ...resto, acao: 'nenhuma' as const };
       if (funcao === 'atendimento' || funcao === 'orcamento') return { ...resto, acao: funcao };
       // Coluna automática não pode ser de fechamento (cliente não é arrastado pra ela).
       const nome = nomeEhFaixaFixa ? (funcao === 'inativos' ? 'Clientes inativos' : 'Clientes em risco') : c.nome;
@@ -326,7 +327,8 @@ export default function Crm() {
       return;
     }
     // Coluna de orçamento: pede o valor (somado como "em aberto" no topo).
-    if (destino.acao === 'orcamento') {
+    const acaoDestino = acaoDaColuna(destino);
+    if (acaoDestino === 'orcamento') {
       setPendMove({ cliente, destino: destino.id, tipo: 'orcamento' });
       setVendedorEscolhido(vinculado ? (cliente.crmVendedorLogin ?? '') : (loginAtual ?? ''));
       setValorOrcamento(
@@ -337,7 +339,7 @@ export default function Crm() {
     // Coluna de atendimento: confirma o vendedor quando o cliente vem de
     // inativos/risco/ativos (sem vínculo vigente). Quem já é do vendedor e
     // só está mudando de coluna não precisa confirmar de novo.
-    if (destino.acao === 'atendimento' && !vinculado) {
+    if (acaoDestino === 'atendimento' && !vinculado) {
       setPendMove({ cliente, destino: destino.id, tipo: 'atendimento' });
       setVendedorEscolhido(loginAtual ?? '');
       return;
@@ -551,7 +553,7 @@ export default function Crm() {
                   </div>
                 )}
                 <select
-                  value={col.auto ?? col.acao ?? ''}
+                  value={col.auto ?? acaoDaColuna(col) ?? ''}
                   onChange={(e) =>
                     alterarFuncaoColuna(col, e.target.value as '' | 'inativos' | 'risco' | 'atendimento' | 'orcamento')
                   }
@@ -584,7 +586,7 @@ export default function Crm() {
                   <span className="text-[10px] font-bold text-ink">{pct}%</span>
                 </div>
                 <div className="text-[11px] font-bold text-ink">
-                  {col.acao === 'orcamento' ? 'Em aberto: ' : ''}
+                  {acaoDaColuna(col) === 'orcamento' ? 'Em aberto: ' : ''}
                   {formatarMoeda(soma)}
                 </div>
               </div>
