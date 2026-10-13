@@ -113,7 +113,10 @@ export default function Crm() {
     const mapa = new Map<string, Cliente[]>(colunas.map((c) => [c.id, []]));
     for (const c of clientes) {
       const { id: alvo, vinculoVigente } = colunaEfetivaDoCliente(c, colunas, diasInatividade);
-      if (!cartaoVisivelPara(c, ehAdmin ? 'admin' : 'vendedor', loginAtual, nomeAtual, vinculoVigente)) continue;
+      // A coluna de inativos é comum: todo vendedor enxerga todos os inativos
+      // (quem o atender passa a ser o dono). As demais colunas são pessoais.
+      const colunaInativos = colunas.find((col) => col.id === alvo)?.auto === 'inativos';
+      if (!colunaInativos && !cartaoVisivelPara(c, ehAdmin ? 'admin' : 'vendedor', loginAtual, nomeAtual, vinculoVigente)) continue;
       if (alvo) mapa.get(alvo)?.push(c);
     }
     return mapa;
