@@ -2,8 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { ouvirClientes, ouvirEmpresa, ouvirVendedores, removerVendedor, salvarVendedor } from '../lib/crmData';
 import { CRM_COLUNAS_PADRAO, type Cliente, type ColunaCrm, type Vendedor } from '../types';
-import { formatarMoeda, matchVendedor, rankingVendedoresImportado, vendasMesVendedor } from '../lib/crmLogic';
+import { formatarMoeda, matchVendedor, rankingVendedoresImportado, vendasDoMesVendedor } from '../lib/crmLogic';
 import { IconVendedores } from '../components/NavIcons';
+
+function mesAtual(): string {
+  const h = new Date();
+  return `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, '0')}`;
+}
 
 /** CRUD de vendedores — cada um recebe um login/senha simples (sem e-mail
  * próprio), definido pelo admin. */
@@ -137,7 +142,7 @@ export default function Vendedores() {
             <div className="text-sm text-ink-soft mb-3">Login: {meu.login}</div>
             <div className="text-xs text-ink-soft">Clientes na minha carteira: {contagemClientes.get(meu.login) ?? 0}</div>
             <div className="text-xs text-ink-soft">
-              Vendas no mês: {formatarMoeda(vendasMesVendedor(clientes, meu.login, colunasFechamentoIds))}
+              Vendas no mês: {formatarMoeda(vendasDoMesVendedor(clientes, meu.login, meu.nome, colunasFechamentoIds, mesAtual()))}
             </div>
           </div>
         )}
@@ -179,7 +184,7 @@ export default function Vendedores() {
                 <td className="px-4 py-2.5 text-ink-soft">{v.login}</td>
                 <td className="px-4 py-2.5 text-right text-ink-soft">{contagemClientes.get(v.login) ?? 0}</td>
                 <td className="px-4 py-2.5 text-right font-bold text-ink">
-                  {formatarMoeda(vendasMesVendedor(clientes, v.login, colunasFechamentoIds))}
+                  {formatarMoeda(vendasDoMesVendedor(clientes, v.login, v.nome, colunasFechamentoIds, mesAtual()))}
                 </td>
                 <td className="px-4 py-2.5 text-right">
                   <button onClick={() => abrirEdicao(v)} className="text-teal-600 font-bold text-xs mr-3 hover:underline">
