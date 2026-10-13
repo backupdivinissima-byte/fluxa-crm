@@ -364,9 +364,6 @@ export default function PainelVendedor() {
                           Falta: <b>{formatarMoeda(m.valor - vendasMes)}</b>
                         </p>
                       )}
-                      <p className="text-[11px] mt-1 text-green-700">
-                        Ganho: <b>{formatarMoeda(m.valor * (m.comissao / 100) + m.bonus)}</b>
-                      </p>
                     </div>
                   );
                 })}
