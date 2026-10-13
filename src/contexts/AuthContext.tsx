@@ -66,9 +66,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Restaura sessão de vendedor salva localmente (se houver e não houver
     // admin logado via Firebase Auth).
     const salvo = localStorage.getItem(CHAVE_SESSAO_VENDEDOR);
+    let sessaoSalva: SessaoVendedor | null = null;
     if (salvo) {
       try {
-        setSessaoVendedor(JSON.parse(salvo));
+        sessaoSalva = JSON.parse(salvo) as SessaoVendedor;
+        setSessaoVendedor(sessaoSalva);
+        // As telas dependem de "empresa": já deixa o id disponível enquanto
+        // os dados completos carregam (sem isso as telas ficavam em branco
+        // ao reabrir o sistema com a sessão de vendedor salva).
+        setEmpresa((atual) => atual ?? ({ id: sessaoSalva!.empresaId } as Empresa));
       } catch {
         localStorage.removeItem(CHAVE_SESSAO_VENDEDOR);
       }
@@ -85,10 +91,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (empresaSnap.exists()) {
             setEmpresa({ id: empresaSnap.id, ...empresaSnap.data() } as Empresa);
           }
+        } else if (sessaoSalva) {
+          // Sessão de vendedor restaurada (login anônimo no Firebase).
+          try {
+            const empresaSnap = await getDoc(doc(db, 'empresas', sessaoSalva.empresaId));
+            if (empresaSnap.exists()) {
+              setEmpresa({ id: empresaSnap.id, ...empresaSnap.data() } as Empresa);
+            }
+          } catch (err) {
+            console.error('Erro ao carregar a empresa do vendedor:', err);
+          }
         }
       } else {
         setPerfil(null);
-        setEmpresa(null);
+        if (!sessaoSalva) setEmpresa(null);
       }
       setCarregando(false);
     });
