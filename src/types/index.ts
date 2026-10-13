@@ -183,6 +183,12 @@ export interface ColunaCrm {
   // "inativos" = acima do prazo; "risco" = os 9 dias antes do prazo. Sem
   // valor = coluna manual (o cliente só muda arrastando).
   auto?: 'inativos' | 'risco';
+  // Ação ao soltar um cliente na coluna (coluna manual):
+  // "atendimento" = pede pra confirmar o vendedor responsável (o cliente
+  // passa a ser dele); se ficar sem venda no prazo de inatividade, volta
+  // sozinho pra risco/inativos. "orcamento" = pede o valor do orçamento,
+  // somado no topo da coluna como valor em aberto.
+  acao?: 'atendimento' | 'orcamento';
 }
 
 export const MAX_COLUNAS_CRM = 8;

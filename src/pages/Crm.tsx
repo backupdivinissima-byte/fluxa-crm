@@ -13,9 +13,9 @@ import {
   DIAS_INATIVIDADE_PADRAO,
   cartaoVisivelPara,
   clientePassaFiltro,
-  diasSemAtend,
-  faixaPorDias,
+  colunaEfetivaDoCliente,
   formatarMoeda,
+  parseValorBR,
   rotuloFaixa,
   valorCliente,
 } from '../lib/crmLogic';
@@ -53,7 +53,13 @@ export default function Crm() {
   const [detalheCliente, setDetalheCliente] = useState<Cliente | null>(null);
   const [arrastandoSobre, setArrastandoSobre] = useState<string | null>(null);
 
-  const [pendMove, setPendMove] = useState<{ cliente: Cliente; destino: string } | null>(null);
+  // Movimento esperando confirmação: "fechamento" (vendedor + valor
+  // combinado), "atendimento" (confirmar vendedor) ou "orcamento" (valor).
+  const [pendMove, setPendMove] = useState<{
+    cliente: Cliente;
+    destino: string;
+    tipo: 'fechamento' | 'atendimento' | 'orcamento';
+  } | null>(null);
   const [vendedorEscolhido, setVendedorEscolhido] = useState('');
   const [valorOrcamento, setValorOrcamento] = useState('');
 
@@ -94,32 +100,21 @@ export default function Crm() {
   const nomeAtual = ehAdmin ? perfil?.nome : sessaoVendedor?.vendedor.nome;
 
   // Colunas automáticas (inativos/risco) se enchem sozinhas pelos dias sem
-  // compra e pelo prazo definido no Dashboard. Cliente que ainda não foi
-  // movido pra uma coluna manual e está "ativo" cai na 1ª coluna manual.
+  // compra e pelo prazo definido no Dashboard; coluna de atendimento devolve
+  // o cliente pra risco/inativos se ele ficar sem venda no prazo (ver
+  // colunaEfetivaDoCliente).
   const colInativosId = colunas.find((c) => c.auto === 'inativos')?.id;
   const colRiscoId = colunas.find((c) => c.auto === 'risco')?.id;
-  const colunaPadraoId = colunas.find((c) => !c.auto)?.id;
 
   const cardsPorColuna = useMemo(() => {
     const mapa = new Map<string, Cliente[]>(colunas.map((c) => [c.id, []]));
     for (const c of clientes) {
-      if (!cartaoVisivelPara(c, ehAdmin ? 'admin' : 'vendedor', loginAtual, nomeAtual)) continue;
-      // Movimento manual vale só pra colunas manuais; coluna automática
-      // sempre manda pelos dias.
-      const manual = c.crmColunaId ? colunas.find((x) => x.id === c.crmColunaId) : undefined;
-      let alvo: string | undefined;
-      if (manual && !manual.auto) {
-        alvo = manual.id;
-      } else {
-        const faixa = faixaPorDias(diasSemAtend(c), diasInatividade);
-        if (faixa === 'inativo' && colInativosId) alvo = colInativosId;
-        else if (faixa === 'risco' && colRiscoId) alvo = colRiscoId;
-        else alvo = colunaPadraoId;
-      }
+      const { id: alvo, vinculoVigente } = colunaEfetivaDoCliente(c, colunas, diasInatividade);
+      if (!cartaoVisivelPara(c, ehAdmin ? 'admin' : 'vendedor', loginAtual, nomeAtual, vinculoVigente)) continue;
       if (alvo) mapa.get(alvo)?.push(c);
     }
     return mapa;
-  }, [clientes, colunas, colInativosId, colRiscoId, colunaPadraoId, diasInatividade, ehAdmin, loginAtual, nomeAtual]);
+  }, [clientes, colunas, diasInatividade, ehAdmin, loginAtual, nomeAtual]);
 
   const totalEmpresa = useMemo(() => clientes.reduce((s, c) => s + valorCliente(c), 0) || 1, [clientes]);
 
@@ -249,19 +244,22 @@ export default function Crm() {
     }
   }
 
-  async function alterarTipoAuto(col: ColunaCrm, auto: ColunaCrm['auto']) {
+  /** Função da coluna: manual, automática (inativos/risco) ou com ação ao
+   * soltar o cliente (atendimento = confirma vendedor; orçamento = pede valor). */
+  async function alterarFuncaoColuna(col: ColunaCrm, funcao: '' | 'inativos' | 'risco' | 'atendimento' | 'orcamento') {
     if (!empresaId) return;
-    // Coluna automática não pode ser de fechamento (cliente não é arrastado pra ela).
     // Se o nome atual é uma faixa fixa de dias (ex.: "31 a 40 dias"), troca
     // por um nome que não fica desatualizado; a faixa calculada aparece
     // sozinha logo abaixo do título.
     const nomeEhFaixaFixa = /\d+\s*(a|-|–)\s*\d+/i.test(col.nome);
     const novaLista = colunas.map((c) => {
       if (c.id !== col.id) return c;
-      const { auto: _antigo, ...resto } = c;
-      if (!auto) return resto;
-      const nome = nomeEhFaixaFixa ? (auto === 'inativos' ? 'Clientes inativos' : 'Clientes em risco') : c.nome;
-      return { ...resto, nome, auto, fechamento: false };
+      const { auto: _auto, acao: _acao, ...resto } = c;
+      if (!funcao) return resto;
+      if (funcao === 'atendimento' || funcao === 'orcamento') return { ...resto, acao: funcao };
+      // Coluna automática não pode ser de fechamento (cliente não é arrastado pra ela).
+      const nome = nomeEhFaixaFixa ? (funcao === 'inativos' ? 'Clientes inativos' : 'Clientes em risco') : c.nome;
+      return { ...resto, nome, auto: funcao, fechamento: false };
     });
     try {
       await salvarColunasCrm(empresaId, novaLista);
@@ -303,7 +301,11 @@ export default function Crm() {
   function onDrop(destinoId: string, cliente: Cliente) {
     setArrastandoSobre(null);
     if (!empresaId) return;
-    if (!ehAdmin && cliente.crmVendedorLogin && cliente.crmVendedorLogin !== loginAtual) {
+    // O vínculo só vale enquanto o cliente está em atendimento no prazo;
+    // vencido, o cliente está livre pra outro vendedor assumir.
+    const origem = colunaEfetivaDoCliente(cliente, colunas, diasInatividade);
+    const vinculado = origem.vinculoVigente && !!cliente.crmVendedorLogin;
+    if (!ehAdmin && vinculado && cliente.crmVendedorLogin !== loginAtual) {
       alert('Esse cliente já está sendo atendido por outro vendedor.');
       return;
     }
@@ -318,9 +320,26 @@ export default function Crm() {
       return;
     }
     if (destino.fechamento) {
-      setPendMove({ cliente, destino: destino.id });
+      setPendMove({ cliente, destino: destino.id, tipo: 'fechamento' });
       setVendedorEscolhido(cliente.crmVendedorLogin ?? loginAtual ?? '');
       setValorOrcamento(cliente.crmOrcamentoValor != null ? String(cliente.crmOrcamentoValor) : '');
+      return;
+    }
+    // Coluna de orçamento: pede o valor (somado como "em aberto" no topo).
+    if (destino.acao === 'orcamento') {
+      setPendMove({ cliente, destino: destino.id, tipo: 'orcamento' });
+      setVendedorEscolhido(vinculado ? (cliente.crmVendedorLogin ?? '') : (loginAtual ?? ''));
+      setValorOrcamento(
+        cliente.crmOrcamentoValor != null ? String(cliente.crmOrcamentoValor).replace('.', ',') : ''
+      );
+      return;
+    }
+    // Coluna de atendimento: confirma o vendedor quando o cliente vem de
+    // inativos/risco/ativos (sem vínculo vigente). Quem já é do vendedor e
+    // só está mudando de coluna não precisa confirmar de novo.
+    if (destino.acao === 'atendimento' && !vinculado) {
+      setPendMove({ cliente, destino: destino.id, tipo: 'atendimento' });
+      setVendedorEscolhido(loginAtual ?? '');
       return;
     }
     atualizarCampoCliente(empresaId, cliente.id, {
@@ -334,29 +353,65 @@ export default function Crm() {
 
   async function confirmarPendencia() {
     if (!pendMove || !empresaId) return;
-    const { cliente, destino } = pendMove;
+    const { cliente, destino, tipo } = pendMove;
     const loginParaUsar = ehAdmin ? vendedorEscolhido : loginAtual;
-    if (!loginParaUsar) {
-      alert('Escolha um vendedor responsável.');
-      return;
-    }
-    if (!valorOrcamento || Number(valorOrcamento) <= 0) {
-      alert('Informe o valor combinado.');
-      return;
-    }
-    try {
-      await atualizarCampoCliente(empresaId, cliente.id, {
+    const agora = new Date().toISOString();
+    let campos: Partial<Cliente>;
+    if (tipo === 'atendimento') {
+      if (!loginParaUsar) {
+        alert('Escolha um vendedor responsável.');
+        return;
+      }
+      campos = { crmColunaId: destino, crmColunaChangedAt: agora, crmVendedorLogin: loginParaUsar };
+    } else if (tipo === 'orcamento') {
+      const valor = parseValorBR(valorOrcamento);
+      if (!(valor > 0)) {
+        alert('Informe o valor do orçamento.');
+        return;
+      }
+      campos = { crmColunaId: destino, crmColunaChangedAt: agora, crmOrcamentoValor: valor };
+      // Cliente sem vendedor vigente precisa de um responsável pelo orçamento.
+      const origem = colunaEfetivaDoCliente(cliente, colunas, diasInatividade);
+      if (!(origem.vinculoVigente && cliente.crmVendedorLogin)) {
+        if (!loginParaUsar) {
+          alert('Escolha um vendedor responsável.');
+          return;
+        }
+        campos.crmVendedorLogin = loginParaUsar;
+      }
+    } else {
+      if (!loginParaUsar) {
+        alert('Escolha um vendedor responsável.');
+        return;
+      }
+      if (!valorOrcamento || Number(valorOrcamento) <= 0) {
+        alert('Informe o valor combinado.');
+        return;
+      }
+      campos = {
         crmColunaId: destino,
-        crmColunaChangedAt: new Date().toISOString(),
+        crmColunaChangedAt: agora,
         crmVendedorLogin: loginParaUsar,
         crmOrcamentoValor: Number(valorOrcamento),
-      });
+      };
+    }
+    try {
+      await atualizarCampoCliente(empresaId, cliente.id, campos);
       setPendMove(null);
     } catch (err) {
       console.error('Erro ao mover cliente:', err);
       alert('Não foi possível mover o cliente. Tente novamente em instantes.');
     }
   }
+
+  // No modal de orçamento, só pede o vendedor se o cliente não tiver um
+  // vínculo vigente (o orçamento precisa de um responsável).
+  const pendPrecisaVendedor = pendMove
+    ? !(
+        colunaEfetivaDoCliente(pendMove.cliente, colunas, diasInatividade).vinculoVigente &&
+        !!pendMove.cliente.crmVendedorLogin
+      )
+    : false;
 
   if (!empresaId) return null;
 
@@ -496,8 +551,10 @@ export default function Crm() {
                   </div>
                 )}
                 <select
-                  value={col.auto ?? ''}
-                  onChange={(e) => alterarTipoAuto(col, (e.target.value || undefined) as ColunaCrm['auto'])}
+                  value={col.auto ?? col.acao ?? ''}
+                  onChange={(e) =>
+                    alterarFuncaoColuna(col, e.target.value as '' | 'inativos' | 'risco' | 'atendimento' | 'orcamento')
+                  }
                   title="Como os clientes entram nesta coluna"
                   className="mt-1 w-full text-[9px] text-ink-soft border border-line rounded px-1 py-0.5 bg-white outline-none"
                 >
@@ -508,6 +565,8 @@ export default function Crm() {
                   <option value="risco" disabled={!!colRiscoId && colRiscoId !== col.id}>
                     Automática: em risco
                   </option>
+                  <option value="atendimento">Em atendimento (confirma vendedor)</option>
+                  <option value="orcamento">Orçamento (pede valor)</option>
                 </select>
                 {!col.auto && (
                   <label className="flex items-center gap-1 mt-1 text-[9px] text-ink-soft cursor-pointer select-none">
@@ -524,11 +583,17 @@ export default function Crm() {
                   <span className="text-[10px] text-ink-soft">{cardsBrutos.length} cliente(s)</span>
                   <span className="text-[10px] font-bold text-ink">{pct}%</span>
                 </div>
-                <div className="text-[11px] font-bold text-ink">{formatarMoeda(soma)}</div>
+                <div className="text-[11px] font-bold text-ink">
+                  {col.acao === 'orcamento' ? 'Em aberto: ' : ''}
+                  {formatarMoeda(soma)}
+                </div>
               </div>
               <div className="flex-1 overflow-y-auto p-1.5 space-y-1.5">
                 {cards.map((c) => {
-                  const vend = vendedores.find((v) => v.login === c.crmVendedorLogin);
+                  // Vínculo vencido (sem venda no prazo): não mostra mais o vendedor.
+                  const vend = colunaEfetivaDoCliente(c, colunas, diasInatividade).vinculoVigente
+                    ? vendedores.find((v) => v.login === c.crmVendedorLogin)
+                    : undefined;
                   return (
                     <div
                       key={c.id}
@@ -572,7 +637,133 @@ export default function Crm() {
         />
       )}
 
-      {pendMove && (
+      {pendMove && pendMove.tipo === 'atendimento' && (
+        <div className="fixed inset-0 z-50 bg-ink/40 flex items-center justify-center p-4" onClick={() => setPendMove(null)}>
+          <div className="bg-white rounded-3xl max-w-md w-full p-7 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4 mb-5">
+              <h2 className="text-lg font-extrabold text-ink">Vincular cliente ao vendedor</h2>
+              <button
+                type="button"
+                onClick={() => setPendMove(null)}
+                aria-label="Fechar"
+                className="w-9 h-9 shrink-0 rounded-xl border border-line text-ink-soft hover:bg-surface text-lg leading-none"
+              >
+                ×
+              </button>
+            </div>
+            <div className="text-sm font-bold text-ink-soft uppercase mb-5">
+              {pendMove.cliente.razao ?? pendMove.cliente.nome}
+            </div>
+            <label className="block text-sm font-semibold text-ink mb-2">Vendedor responsável</label>
+            <select
+              value={ehAdmin ? vendedorEscolhido : (loginAtual ?? '')}
+              onChange={(e) => setVendedorEscolhido(e.target.value)}
+              disabled={!ehAdmin}
+              className="w-full rounded-xl border border-line bg-surface px-4 py-3 text-sm text-ink outline-none focus:ring-2 focus:ring-teal-500/30 disabled:opacity-100"
+            >
+              {ehAdmin && <option value="">Selecione...</option>}
+              {(ehAdmin ? vendedores : vendedores.filter((v) => v.login === loginAtual)).map((v) => (
+                <option key={v.id} value={v.login}>
+                  {v.nome}
+                </option>
+              ))}
+              {!ehAdmin && !vendedores.some((v) => v.login === loginAtual) && (
+                <option value={loginAtual ?? ''}>{nomeAtual ?? loginAtual}</option>
+              )}
+            </select>
+            <p className="text-xs text-ink-soft mt-3 mb-6">
+              A partir da vinculação, este cliente passa a aparecer apenas para o vendedor selecionado.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setPendMove(null)}
+                className="rounded-xl border border-line text-ink text-sm font-bold px-5 py-2.5 hover:bg-surface"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmarPendencia}
+                className="rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-5 py-2.5 hover:opacity-90"
+              >
+                Vincular e mover
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendMove && pendMove.tipo === 'orcamento' && (
+        <div className="fixed inset-0 z-50 bg-ink/40 flex items-center justify-center p-4" onClick={() => setPendMove(null)}>
+          <div className="bg-white rounded-3xl max-w-md w-full p-7 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4 mb-5">
+              <h2 className="text-lg font-extrabold text-ink">Valor do orçamento</h2>
+              <button
+                type="button"
+                onClick={() => setPendMove(null)}
+                aria-label="Fechar"
+                className="w-9 h-9 shrink-0 rounded-xl border border-line text-ink-soft hover:bg-surface text-lg leading-none"
+              >
+                ×
+              </button>
+            </div>
+            <div className="text-sm font-bold text-ink-soft mb-3">{pendMove.cliente.razao ?? pendMove.cliente.nome}</div>
+            <span className="inline-block rounded-full bg-purple-100 text-purple-700 text-xs font-bold px-3 py-1 mb-5">
+              {colunas.find((c) => c.id === pendMove.destino)?.nome}
+            </span>
+
+            {ehAdmin && pendPrecisaVendedor && (
+              <div className="mb-5">
+                <label className="block text-sm font-semibold text-ink mb-2">Vendedor responsável</label>
+                <select
+                  value={vendedorEscolhido}
+                  onChange={(e) => setVendedorEscolhido(e.target.value)}
+                  className="w-full rounded-xl border border-line bg-surface px-4 py-3 text-sm text-ink outline-none focus:ring-2 focus:ring-teal-500/30"
+                >
+                  <option value="">Selecione...</option>
+                  {vendedores.map((v) => (
+                    <option key={v.id} value={v.login}>
+                      {v.nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <label className="block text-sm font-semibold text-ink mb-2">Valor (R$)</label>
+            <input
+              autoFocus
+              inputMode="decimal"
+              placeholder="0,00"
+              value={valorOrcamento}
+              onChange={(e) => setValorOrcamento(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') confirmarPendencia();
+              }}
+              className="w-full rounded-xl border border-line bg-surface px-4 py-3 text-sm text-ink outline-none focus:ring-2 focus:ring-teal-500/30"
+            />
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                type="button"
+                onClick={() => setPendMove(null)}
+                className="rounded-xl border border-line text-ink text-sm font-bold px-5 py-2.5 hover:bg-surface"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmarPendencia}
+                className="rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-5 py-2.5 hover:opacity-90"
+              >
+                Salvar e mover
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendMove && pendMove.tipo === 'fechamento' && (
         <div className="fixed inset-0 z-50 bg-ink/40 flex items-center justify-center p-4" onClick={() => setPendMove(null)}>
           <div className="bg-white rounded-2xl max-w-sm w-full p-6" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-base font-extrabold text-ink mb-1">Mover "{pendMove.cliente.razao ?? pendMove.cliente.nome}"</h2>

@@ -1,5 +1,5 @@
 // Funções puras de regra de negócio do CRM.
-import type { Cliente, FiltroCrm, Vendedor } from '../types';
+import type { Cliente, ColunaCrm, FiltroCrm, Vendedor } from '../types';
 
 /** Transforma um código/login em um ID de documento Firestore seguro e
  * determinístico (mesmo valor de entrada sempre vira o mesmo ID) — usado
@@ -73,6 +73,60 @@ export function statusInfo(
   if (faixa === 'inativo') return { label: 'Inativo', cor: '#C0392B' };
   if (faixa === 'risco') return { label: 'Risco', cor: '#E67E22' };
   return { label: 'Ativo', cor: '#27AE60' };
+}
+
+/** Dias de "atendimento" de um cliente que foi movido pra uma coluna de
+ * atendimento: conta a partir da compra mais recente OU do dia em que ele
+ * foi movido pra lá, o que for mais recente. Assim um cliente inativo que
+ * acabou de entrar em atendimento ganha o prazo inteiro pra comprar, e uma
+ * compra nova também reinicia a contagem. */
+export function diasEmAtendimento(c: Cliente): number {
+  const compra = diasSemAtend(c);
+  if (!c.crmColunaChangedAt) return compra;
+  const t = new Date(c.crmColunaChangedAt).getTime();
+  if (Number.isNaN(t)) return compra;
+  const desdeMovimento = Math.max(0, Math.floor((Date.now() - t) / (1000 * 60 * 60 * 24)));
+  return Math.min(compra, desdeMovimento);
+}
+
+/** Em qual coluna do funil o cliente aparece e se o vínculo com o vendedor
+ * ainda vale.
+ * - Coluna manual comum (orçamento, concluído...): fica onde foi colocado.
+ * - Coluna de atendimento: fica enquanto estiver "ativo" pelo prazo de
+ *   inatividade; sem venda no prazo, volta pra risco e depois inativos
+ *   (e o vínculo com o vendedor deixa de valer).
+ * - Sem coluna manual: entra sozinho em inativos/risco pelos dias sem
+ *   compra; o que está ativo cai na 1ª coluna manual. */
+export function colunaEfetivaDoCliente(
+  c: Cliente,
+  colunas: ColunaCrm[],
+  diasInatividade: number
+): { id?: string; vinculoVigente: boolean } {
+  const manual = c.crmColunaId ? colunas.find((x) => x.id === c.crmColunaId) : undefined;
+  let dias = diasSemAtend(c);
+  if (manual && !manual.auto) {
+    if (manual.acao !== 'atendimento') return { id: manual.id, vinculoVigente: true };
+    dias = diasEmAtendimento(c);
+    if (faixaPorDias(dias, diasInatividade) === 'ativo') return { id: manual.id, vinculoVigente: true };
+  }
+  const faixa = faixaPorDias(dias, diasInatividade);
+  const colInativos = colunas.find((x) => x.auto === 'inativos')?.id;
+  const colRisco = colunas.find((x) => x.auto === 'risco')?.id;
+  const colPadrao = colunas.find((x) => !x.auto)?.id;
+  let id: string | undefined;
+  if (faixa === 'inativo' && colInativos) id = colInativos;
+  else if (faixa === 'risco' && colRisco) id = colRisco;
+  else id = colPadrao;
+  return { id, vinculoVigente: false };
+}
+
+/** Converte o que a pessoa digitou ("1.234,56", "1234,5" ou "1234.56") em
+ * número. Devolve NaN se não for um número. */
+export function parseValorBR(texto: string): number {
+  const t = texto.trim().replace(/\s/g, '');
+  if (!t) return NaN;
+  const normal = t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t;
+  return Number(normal);
 }
 
 /** Um cliente "pertence" a um vendedor por login exato ou por nome (fuzzy).
@@ -167,10 +221,13 @@ export function cartaoVisivelPara(
   c: Cliente,
   papel: 'admin' | 'vendedor',
   loginAtual?: string,
-  nomeAtual?: string
+  nomeAtual?: string,
+  vinculoVigente = true
 ): boolean {
   if (papel === 'admin') return true;
-  if (c.crmVendedorLogin) return c.crmVendedorLogin === loginAtual;
+  // Vínculo vencido (ficou sem venda no prazo): o cliente deixa de ser
+  // exclusivo do vendedor que o atendia.
+  if (c.crmVendedorLogin && vinculoVigente) return c.crmVendedorLogin === loginAtual;
   return matchVendedor(c, loginAtual ?? '', nomeAtual);
 }
 
