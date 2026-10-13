@@ -114,6 +114,7 @@ export default function Clientes() {
               <th className="text-left px-4 py-2.5 font-bold">Cliente</th>
               <th className="text-left px-4 py-2.5 font-bold">Telefone</th>
               <th className="text-left px-4 py-2.5 font-bold">Status</th>
+              <th className="text-left px-4 py-2.5 font-bold">Dias sem compra</th>
               <th className="text-right px-4 py-2.5 font-bold">Total geral</th>
               <th className="text-left px-4 py-2.5 font-bold">Vendedor</th>
             </tr>
@@ -142,6 +143,9 @@ export default function Clientes() {
                       {status.label}
                     </span>
                   </td>
+                  <td className="px-4 py-2.5 font-bold whitespace-nowrap" style={{ color: status.cor }}>
+                    {dias >= 9999 ? 'Sem compra' : `${dias} ${dias === 1 ? 'dia' : 'dias'}`}
+                  </td>
                   <td className="px-4 py-2.5 text-right font-bold text-ink">{formatarMoeda(totalGeralReal(c) ?? 0)}</td>
                   <td className="px-4 py-2.5 text-ink-soft">{vend?.nome ?? c.vend_nome ?? '—'}</td>
                 </tr>
@@ -149,7 +153,7 @@ export default function Clientes() {
             })}
             {listaFiltrada.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-10 text-center text-ink-soft text-sm">
+                <td colSpan={6} className="px-4 py-10 text-center text-ink-soft text-sm">
                   Nenhum cliente encontrado.
                 </td>
               </tr>
