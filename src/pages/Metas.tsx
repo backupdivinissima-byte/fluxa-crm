@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { ouvirClientes, ouvirEmpresa, ouvirVendedores, salvarMetasEmpresa } from '../lib/crmData';
 import { CRM_COLUNAS_PADRAO, METAS_PADRAO, type Cliente, type ColunaCrm, type MetaTier, type Vendedor } from '../types';
-import { formatarMoeda, vendasMesVendedor } from '../lib/crmLogic';
+import { formatarMoeda, nivelDeMeta, vendasDoMesVendedor } from '../lib/crmLogic';
 import { IconMetas } from '../components/NavIcons';
 
 /** Faixas de meta/comissão da empresa + acompanhamento por vendedor.
@@ -17,6 +17,9 @@ export default function Metas() {
   const [metas, setMetas] = useState<MetaTier[]>(empresa?.metas ?? METAS_PADRAO);
   const [colunas, setColunas] = useState<ColunaCrm[]>(empresa?.crmColunas ?? CRM_COLUNAS_PADRAO);
   const [salvando, setSalvando] = useState(false);
+  // true enquanto há edição ainda não salva: o que chega do banco não pisa nela.
+  const editando = useRef(false);
+  const [salvoOk, setSalvoOk] = useState(false);
 
   const ehAdmin = papel === 'admin';
 
@@ -26,6 +29,9 @@ export default function Metas() {
     const unsubC = ouvirClientes(empresaId, setClientes);
     const unsubE = ouvirEmpresa(empresaId, (emp) => {
       setColunas(emp?.crmColunas && emp.crmColunas.length > 0 ? emp.crmColunas : CRM_COLUNAS_PADRAO);
+      // Metas sempre vêm do banco (o `empresa` do login fica desatualizado
+      // depois de salvar — por isso as metas "sumiam" ao trocar de aba).
+      if (!editando.current) setMetas(emp?.metas && emp.metas.length > 0 ? emp.metas : METAS_PADRAO);
     });
     return () => {
       unsubV();
@@ -34,22 +40,18 @@ export default function Metas() {
     };
   }, [empresaId]);
 
-  useEffect(() => {
-    if (empresa?.metas && empresa.metas.length > 0) setMetas(empresa.metas);
-  }, [empresa?.metas]);
-
   // IDs das colunas marcadas como "fechamento" — só essas contam como venda
   // concluída pra fins de comissão (independente de como a empresa nomeou
   // ou organizou o resto do quadro).
   const colunasFechamentoIds = useMemo(() => colunas.filter((c) => c.fechamento).map((c) => c.id), [colunas]);
 
+  const hoje = new Date();
+  const mesRef = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
+  const metasOrdenadas = useMemo(() => metas.filter((m) => m.valor > 0), [metas]);
+
   function calcularNivel(vendasMes: number) {
-    for (let i = metas.length - 1; i >= 0; i--) {
-      if (vendasMes >= metas[i].valor) {
-        return { tier: metas[i], comissao: vendasMes * (metas[i].comissao / 100) + metas[i].bonus };
-      }
-    }
-    return null;
+    const n = nivelDeMeta(metasOrdenadas, vendasMes);
+    return n.tier ? { tier: n.tier, comissao: n.comissao } : null;
   }
 
   async function salvarMetas() {
@@ -57,6 +59,9 @@ export default function Metas() {
     setSalvando(true);
     try {
       await salvarMetasEmpresa(empresaId, metas);
+      editando.current = false;
+      setSalvoOk(true);
+      setTimeout(() => setSalvoOk(false), 3000);
     } catch (err) {
       console.error('Erro ao salvar metas:', err);
       alert('Não foi possível salvar as metas. Tente novamente em instantes.');
@@ -66,6 +71,7 @@ export default function Metas() {
   }
 
   function atualizarFaixa(i: number, campo: keyof MetaTier, valor: string) {
+    editando.current = true;
     setMetas((atual) =>
       atual.map((m, idx) => (idx === i ? { ...m, [campo]: campo === 'label' ? valor : Number(valor) } : m))
     );
@@ -74,6 +80,7 @@ export default function Metas() {
   const LIMITE_FAIXAS = 5;
 
   function adicionarFaixa() {
+    editando.current = true;
     setMetas((atual) => {
       if (atual.length >= LIMITE_FAIXAS) return atual;
       return [...atual, { label: `Meta ${atual.length + 1}`, valor: 0, comissao: 0, bonus: 0 }];
@@ -81,14 +88,18 @@ export default function Metas() {
   }
 
   function removerFaixa(i: number) {
+    editando.current = true;
     if (i === 0) return; // a primeira faixa é fixa, não pode ser removida
     setMetas((atual) => atual.filter((_, idx) => idx !== i));
   }
 
   const vendedoresComVendas = useMemo(
     () =>
-      vendedores.map((v) => ({ vendedor: v, vendasMes: vendasMesVendedor(clientes, v.login, colunasFechamentoIds) })),
-    [vendedores, clientes, colunasFechamentoIds]
+      vendedores.map((v) => ({
+        vendedor: v,
+        vendasMes: vendasDoMesVendedor(clientes, v.login, v.nome, colunasFechamentoIds, mesRef),
+      })),
+    [vendedores, clientes, colunasFechamentoIds, mesRef]
   );
 
   if (!empresaId) return null;
@@ -96,7 +107,7 @@ export default function Metas() {
   // Visão do próprio vendedor: progresso pessoal.
   if (!ehAdmin) {
     const meu = sessaoVendedor?.vendedor;
-    const vendasMes = meu ? vendasMesVendedor(clientes, meu.login, colunasFechamentoIds) : 0;
+    const vendasMes = meu ? vendasDoMesVendedor(clientes, meu.login, meu.nome, colunasFechamentoIds, mesRef) : 0;
     const nivel = calcularNivel(vendasMes);
     return (
       <div className="p-6 w-full max-w-lg">
@@ -119,10 +130,10 @@ export default function Metas() {
           )}
         </div>
         <div className="space-y-2">
-          {metas.map((m) => {
+          {metasOrdenadas.map((m) => {
             const pct = Math.min(100, Math.round((vendasMes / m.valor) * 100));
             return (
-              <div key={m.label} className="bg-white border border-line rounded-xl p-3">
+              <div key={m.label + m.valor} className="bg-white border border-line rounded-xl p-3">
                 <div className="flex justify-between text-xs mb-1">
                   <span className="font-bold text-ink">{m.label}</span>
                   <span className="text-ink-soft">{formatarMoeda(m.valor)}</span>
@@ -223,6 +234,7 @@ export default function Metas() {
           >
             + Meta
           </button>
+          {salvoOk && <span className="text-xs font-bold text-green-600">✓ Metas salvas</span>}
           {metas.length >= LIMITE_FAIXAS && (
             <span className="text-xs text-ink-soft">Máximo de {LIMITE_FAIXAS} faixas.</span>
           )}
