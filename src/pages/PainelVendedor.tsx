@@ -264,7 +264,7 @@ export default function PainelVendedor() {
   if (!empresaId) return null;
 
   return (
-    <div className="p-6 md:p-8 w-full max-w-[1400px] mx-auto space-y-5">
+    <div className="p-6 md:p-8 w-full space-y-5">
       {/* Cabeçalho */}
       <div className="flex flex-wrap items-center gap-4">
         <div className="w-12 h-12 rounded-full bg-teal-500/15 text-teal-600 font-extrabold flex items-center justify-center shrink-0">
