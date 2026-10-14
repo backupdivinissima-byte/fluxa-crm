@@ -4,7 +4,9 @@
 // Variáveis (Cloudflare → Settings → Variables and Secrets):
 //   VERIFY_TOKEN          texto que você inventa; igual ao do painel da Meta
 //   APP_SECRET            "Chave secreta do app do Instagram" (secret)
-//   EMPRESA_ID            id da empresa no Fluxa (ex.: o uid do administrador)
+//   EMPRESAS_JSON         mapa {"<id da conta do Instagram>": "<id da empresa no Fluxa>"}
+//                         (um servidor atende várias empresas: Divinissima, Carla Fidelis...)
+//   EMPRESA_ID            (opcional) empresa padrão, se EMPRESAS_JSON não tiver a conta
 //   FIREBASE_PROJECT_ID   fluxa-crm
 //   SERVICE_ACCOUNT_JSON  JSON da conta de serviço do Firebase (secret)
 
@@ -62,8 +64,18 @@ async function tokenGoogle(env) {
   return cacheToken.valor;
 }
 
-function base(env) {
-  return `https://firestore.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/databases/(default)/documents/empresas/${env.EMPRESA_ID}/instagramLives`;
+function empresaDaConta(env, contaIg) {
+  try {
+    const mapa = JSON.parse(env.EMPRESAS_JSON || '{}');
+    if (mapa[contaIg]) return mapa[contaIg];
+  } catch {
+    /* JSON inválido: usa o padrão */
+  }
+  return env.EMPRESA_ID || '';
+}
+
+function base(env, empresaId) {
+  return `https://firestore.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/databases/(default)/documents/empresas/${empresaId}/instagramLives`;
 }
 
 // Cria o documento só se ele ainda não existir (um por @, sem repetir).
@@ -79,10 +91,10 @@ async function criarSeNovo(env, url, campos) {
   return true;
 }
 
-async function atualizarLive(env, liveId, quando) {
+async function atualizarLive(env, empresaId, liveId, quando) {
   const token = await tokenGoogle(env);
   const qs = ['iniciadaEm', 'atualizadoEm'].map((m) => `updateMask.fieldPaths=${m}`).join('&');
-  const r = await fetch(`${base(env)}/${liveId}?${qs}`, {
+  const r = await fetch(`${base(env, empresaId)}/${liveId}?${qs}`, {
     method: 'PATCH',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ fields: { iniciadaEm: { stringValue: quando }, atualizadoEm: { stringValue: new Date().toISOString() } } }),
@@ -92,16 +104,17 @@ async function atualizarLive(env, liveId, quando) {
 
 // Guarda só o @ (primeira vez que aparece na live) — poupa a cota do banco.
 async function guardarComentario(env, c) {
-  const url = base(env);
+  if (!c.empresaId) return; // conta do Instagram sem empresa cadastrada: ignora
+  const url = base(env, c.empresaId);
   const novo = await criarSeNovo(env, `${url}/${c.liveId}/arrobas/${encodeURIComponent(c.arroba)}`, {
     arroba: { stringValue: c.arroba },
     texto: { stringValue: c.texto },
     quando: { stringValue: c.quando },
   });
-  if (novo) await atualizarLive(env, c.liveId, c.quando);
+  if (novo) await atualizarLive(env, c.empresaId, c.liveId, c.quando);
 }
 
-function extrair(corpo) {
+function extrair(corpo, env) {
   const lista = [];
   for (const entrada of corpo.entry ?? []) {
     for (const mudanca of entrada.changes ?? []) {
@@ -110,6 +123,7 @@ function extrair(corpo) {
       const arroba = String(v.from?.username ?? v.username ?? '').trim().toLowerCase();
       if (!arroba) continue;
       lista.push({
+        empresaId: empresaDaConta(env, String(entrada.id ?? '')),
         id: String(v.id ?? `${v.media?.id ?? 'live'}-${arroba}-${entrada.time ?? Date.now()}`),
         liveId: String(v.media?.id ?? entrada.id ?? 'live'),
         arroba,
@@ -141,7 +155,7 @@ export default {
     }
 
     try {
-      for (const c of extrair(JSON.parse(texto))) await guardarComentario(env, c);
+      for (const c of extrair(JSON.parse(texto), env)) await guardarComentario(env, c);
     } catch (e) {
       console.error(e);
       return new Response('Erro ao gravar', { status: 500 });
