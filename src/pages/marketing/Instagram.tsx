@@ -116,6 +116,13 @@ export default function InstagramLives() {
           for (const m of antiga?.mensagens ?? []) porId.set(m.id, m);
           for (const m of live.mensagens) porId.set(m.id, m);
           const mensagens = [...porId.values()].sort((a, b) => a.quando.localeCompare(b.quando)).slice(-3000);
+          const mudou =
+            !antiga ||
+            mensagens.length !== (antiga.mensagens?.length ?? 0) ||
+            Object.keys(arrobas).length !== Object.keys(antiga.arrobas ?? {}).length;
+          setEscolhidaId((atual) => atual ?? live.id);
+          setStatus(`Live no ar — ${Object.keys(arrobas).length} @ captados (atualizado às ${new Date().toLocaleTimeString('pt-BR')}). Resposta: ${igApi.ultimaConsulta}.`);
+          if (!mudou) continue; // sem novidade: não grava (poupa a cota do banco)
           await salvarInstagramLive(empresaId!, {
             mensagens,
             id: live.id,
