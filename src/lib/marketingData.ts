@@ -73,7 +73,8 @@ export async function removerCampanhaMeta(empresaId: string, campanhaId: string)
 export async function importarCampanhasMeta(
   empresaId: string,
   campanhas: Omit<CampanhaMeta, 'id' | 'origem'>[],
-  mesReferencia: string
+  mesReferencia: string,
+  origem: CampanhaMeta['origem'] = 'manual'
 ): Promise<number> {
   const antigasSnap = await getDocs(campanhasMetaCol(empresaId));
   const paraApagar = antigasSnap.docs.filter((d) => (d.data().atualizadoEm as string | undefined)?.slice(0, 7) === mesReferencia);
@@ -83,7 +84,7 @@ export async function importarCampanhasMeta(
     await lote.commit();
   }
   for (const c of campanhas) {
-    await addDoc(campanhasMetaCol(empresaId), semUndefined({ ...c, origem: 'manual' as const }));
+    await addDoc(campanhasMetaCol(empresaId), semUndefined({ ...c, origem }));
   }
   return campanhas.length;
 }
