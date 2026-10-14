@@ -10,6 +10,8 @@ import type { ArrobaLive } from '../types';
 function enderecoApi(token: string): string {
   return /^IG/i.test(token.trim()) ? 'https://graph.instagram.com/v21.0' : 'https://graph.facebook.com/v21.0';
 }
+/** Resumo da última consulta (para diagnóstico na tela). */
+export let ultimaConsulta = '';
 const chave = (empresaId: string) => `fluxacrm_instagram_token_${empresaId}`;
 
 export function lerTokenInstagram(empresaId: string): string {
@@ -61,6 +63,7 @@ export async function buscarLivesAgora(contaInstagramId: string, token: string):
     );
   }
   const resultado: LiveAgora[] = [];
+  ultimaConsulta = `${enderecoApi(token).includes('instagram.com') ? 'graph.instagram.com' : 'graph.facebook.com'}: ${(json.data ?? []).length} live(s), ${(json.data ?? []).map((l) => `${l.id}=${l.comments?.data?.length ?? 0} coment.`).join('; ') || 'nenhuma'}`;
   for (const live of json.data ?? []) {
     const comentarios = [...(live.comments?.data ?? [])];
     let proxima = live.comments?.paging?.next;

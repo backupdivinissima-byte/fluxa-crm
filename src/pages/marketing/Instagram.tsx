@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { ouvirInstagramLives, salvarInstagramConexao, salvarInstagramLive } from '../../lib/marketingData';
+import * as igApi from '../../lib/instagramApi';
 import { buscarLivesAgora, guardarTokenInstagram, lerTokenInstagram } from '../../lib/instagramApi';
 import type { ArrobaLive, InstagramLive } from '../../types';
 
@@ -83,7 +84,7 @@ export default function InstagramLives() {
         const agora = await buscarLivesAgora(contaId, tokenEmUso());
         if (cancelado) return;
         if (agora.length === 0) {
-          setStatus(`Nenhuma live no ar agora (verificado às ${new Date().toLocaleTimeString('pt-BR')}).`);
+          setStatus(`Nenhuma live no ar agora (verificado às ${new Date().toLocaleTimeString('pt-BR')}). Resposta: ${igApi.ultimaConsulta}.`);
           return;
         }
         for (const live of agora) {
@@ -108,7 +109,7 @@ export default function InstagramLives() {
             arrobas,
           });
           setEscolhidaId((atual) => atual ?? live.id);
-          setStatus(`Live no ar — ${Object.keys(arrobas).length} @ captados (atualizado às ${new Date().toLocaleTimeString('pt-BR')}).`);
+          setStatus(`Live no ar — ${Object.keys(arrobas).length} @ captados (atualizado às ${new Date().toLocaleTimeString('pt-BR')}). Resposta: ${igApi.ultimaConsulta}.`);
         }
         setErro('');
       } catch (e) {
