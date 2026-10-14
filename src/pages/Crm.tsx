@@ -8,7 +8,7 @@ import {
   salvarFiltrosCrm,
   salvarColunasCrm,
 } from '../lib/crmData';
-import { CRM_COLUNAS_PADRAO, MAX_COLUNAS_CRM, type Cliente, type ColunaCrm, type FiltroCrm, type Vendedor } from '../types';
+import { CRM_FUNIL_RECOMENDADO, CRM_COLUNAS_PADRAO, MAX_COLUNAS_CRM, type Cliente, type ColunaCrm, type FiltroCrm, type Vendedor } from '../types';
 import {
   DIAS_INATIVIDADE_PADRAO,
   acaoDaColuna,
@@ -216,6 +216,25 @@ export default function Crm() {
   }
 
   // ---- Colunas personalizadas ----
+
+  async function aplicarFunilRecomendado() {
+    if (!empresaId || !ehAdmin) return;
+    if (
+      !confirm(
+        'Aplicar o funil recomendado (Clientes Inativos, Em risco, Em Atendimento, Orçamentos e Concluídos)? As colunas atuais serão substituídas; clientes que estavam em colunas removidas voltam a ser organizados automaticamente.'
+      )
+    )
+      return;
+    setSalvandoColuna(true);
+    try {
+      await salvarColunasCrm(empresaId, CRM_FUNIL_RECOMENDADO);
+    } catch (err) {
+      console.error('Erro ao aplicar funil:', err);
+      alert('Não foi possível aplicar o funil. Tente novamente em instantes.');
+    } finally {
+      setSalvandoColuna(false);
+    }
+  }
 
   async function adicionarColuna() {
     if (!empresaId || colunas.length >= MAX_COLUNAS_CRM) return;
@@ -631,16 +650,28 @@ export default function Crm() {
           );
         })}
 
-        {colunas.length < MAX_COLUNAS_CRM && (
-          <button
-            type="button"
-            onClick={adicionarColuna}
-            disabled={salvandoColuna}
-            className="rounded-xl border-2 border-dashed border-line text-ink-soft text-xs font-bold flex items-center justify-center min-h-[220px] hover:bg-surface hover:text-ink hover:border-teal-500/50 transition-colors disabled:opacity-60"
-          >
-            {salvandoColuna ? 'Criando...' : '+ Mais colunas'}
-          </button>
-        )}
+        <div className="flex flex-col gap-2">
+          {colunas.length < MAX_COLUNAS_CRM && (
+            <button
+              type="button"
+              onClick={adicionarColuna}
+              disabled={salvandoColuna}
+              className="flex-1 rounded-xl border-2 border-dashed border-line text-ink-soft text-xs font-bold flex items-center justify-center min-h-[120px] hover:bg-surface hover:text-ink hover:border-teal-500/50 transition-colors disabled:opacity-60"
+            >
+              {salvandoColuna ? 'Salvando...' : '+ Mais colunas'}
+            </button>
+          )}
+          {ehAdmin && (
+            <button
+              type="button"
+              onClick={aplicarFunilRecomendado}
+              disabled={salvandoColuna}
+              className="rounded-xl border border-line text-ink-soft text-[11px] font-bold px-3 py-2 hover:bg-surface hover:text-ink disabled:opacity-60"
+            >
+              Aplicar funil recomendado
+            </button>
+          )}
+        </div>
       </div>
 
       {detalheCliente && (

@@ -201,9 +201,22 @@ export interface ColunaCrm {
 
 export const MAX_COLUNAS_CRM = 8;
 
-// Empresa nova começa com 1 coluna só, chamada "Novo" — o resto quem monta
-// é a própria empresa (renomeando e adicionando colunas, até o limite).
-export const CRM_COLUNAS_PADRAO: ColunaCrm[] = [{ id: 'coluna-inicial', nome: 'Novo' }];
+/** Funil de vendas recomendado: inativos e em risco automáticos (pelo prazo de
+ * inatividade do Dashboard), atendimento com vínculo ao vendedor, orçamentos
+ * com valor em aberto e concluídos (que contam como venda). */
+export const CRM_FUNIL_RECOMENDADO: ColunaCrm[] = [
+  { id: 'funil-inativos', nome: 'Clientes Inativos', auto: 'inativos' },
+  { id: 'funil-risco', nome: 'Em risco', auto: 'risco' },
+  { id: 'funil-atendimento', nome: 'Em Atendimento', acao: 'atendimento' },
+  { id: 'funil-orcamento-live', nome: 'Orçamento Live', acao: 'orcamento' },
+  { id: 'funil-orcamento-catalogo', nome: 'Orçamento Catálogo', acao: 'orcamento' },
+  { id: 'funil-concluido-live', nome: 'Concluído Live', fechamento: true },
+  { id: 'funil-concluido-catalogo', nome: 'Concluído Catálogo', fechamento: true },
+];
+
+// Empresa sem funil salvo começa já com o funil recomendado (dá pra renomear,
+// adicionar e remover colunas depois).
+export const CRM_COLUNAS_PADRAO: ColunaCrm[] = CRM_FUNIL_RECOMENDADO;
 
 // ===== Marketing (Meta Ads, Live, Análise Marketing) =====
 
