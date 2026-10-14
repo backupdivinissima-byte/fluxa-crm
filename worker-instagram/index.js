@@ -66,33 +66,39 @@ function base(env) {
   return `https://firestore.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/databases/(default)/documents/empresas/${env.EMPRESA_ID}/instagramLives`;
 }
 
-async function gravar(env, url, campos, mascara) {
+// Cria o documento só se ele ainda não existir (um por @, sem repetir).
+async function criarSeNovo(env, url, campos) {
   const token = await tokenGoogle(env);
-  const qs = mascara.map((m) => `updateMask.fieldPaths=${encodeURIComponent(m)}`).join('&');
-  const r = await fetch(`${url}?${qs}`, {
+  const r = await fetch(`${url}?currentDocument.exists=false`, {
     method: 'PATCH',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ fields: campos }),
   });
+  if (r.status === 409 || r.status === 400) return false; // já existia
+  if (!r.ok) throw new Error(`Firestore ${r.status}: ${await r.text()}`);
+  return true;
+}
+
+async function atualizarLive(env, liveId, quando) {
+  const token = await tokenGoogle(env);
+  const qs = ['iniciadaEm', 'atualizadoEm'].map((m) => `updateMask.fieldPaths=${m}`).join('&');
+  const r = await fetch(`${base(env)}/${liveId}?${qs}`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: { iniciadaEm: { stringValue: quando }, atualizadoEm: { stringValue: new Date().toISOString() } } }),
+  });
   if (!r.ok) throw new Error(`Firestore ${r.status}: ${await r.text()}`);
 }
 
+// Guarda só o @ (primeira vez que aparece na live) — poupa a cota do banco.
 async function guardarComentario(env, c) {
-  const agora = new Date().toISOString();
   const url = base(env);
-  // Garante que a live aparece na lista (sem apagar o que já existe).
-  await gravar(env, `${url}/${c.liveId}`, { iniciadaEm: { stringValue: c.quando }, atualizadoEm: { stringValue: agora } }, ['atualizadoEm']);
-  // Cada comentário é um documento próprio (o id do comentário evita duplicar).
-  await gravar(
-    env,
-    `${url}/${c.liveId}/comentarios/${encodeURIComponent(c.id)}`,
-    {
-      arroba: { stringValue: c.arroba },
-      texto: { stringValue: c.texto },
-      quando: { stringValue: c.quando },
-    },
-    ['arroba', 'texto', 'quando']
-  );
+  const novo = await criarSeNovo(env, `${url}/${c.liveId}/arrobas/${encodeURIComponent(c.arroba)}`, {
+    arroba: { stringValue: c.arroba },
+    texto: { stringValue: c.texto },
+    quando: { stringValue: c.quando },
+  });
+  if (novo) await atualizarLive(env, c.liveId, c.quando);
 }
 
 function extrair(corpo) {

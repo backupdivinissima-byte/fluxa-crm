@@ -5,7 +5,7 @@ Servidor gratuito que recebe cada comentário da live (enviado pela Meta) e grav
 ## 1. Firebase
 1. Configurações do projeto → Contas de serviço → **Gerar nova chave privada** (baixa um .json; não compartilhe).
 2. Firestore → Regras: dentro de `match /instagramLives/{id}` acrescente
-   `match /comentarios/{c} { allow read: if request.auth != null; }`
+   `match /arrobas/{c} { allow read: if request.auth != null; }`
 3. Authentication → Usuários: copie o **UID** do e-mail administrador da empresa (é o EMPRESA_ID).
 
 ## 2. Cloudflare

@@ -217,11 +217,11 @@ export function ouvirComentariosInstagram(
   liveId: string,
   cb: (mensagens: MensagemLive[]) => void
 ): Unsubscribe {
-  return onSnapshot(collection(db, 'empresas', empresaId, 'instagramLives', liveId, 'comentarios'), (snap) => {
+  return onSnapshot(collection(db, 'empresas', empresaId, 'instagramLives', liveId, 'arrobas'), (snap) => {
     cb(
       snap.docs.map((d) => {
         const x = d.data() as { arroba?: string; texto?: string; quando?: string };
-        return { id: d.id, arroba: x.arroba ?? '', texto: x.texto ?? '', quando: x.quando ?? '' };
+        return { id: d.id, arroba: x.arroba ?? d.id, texto: x.texto ?? '', quando: x.quando ?? '' };
       })
     );
   });
