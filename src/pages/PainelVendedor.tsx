@@ -98,7 +98,7 @@ function GraficoMensal({ vendas }: { vendas: Record<string, number> }) {
     [vendas]
   );
   const [escolhidos, setEscolhidos] = useState<number[] | null>(null);
-  const selecionados = (escolhidos ?? anos.slice(-3)).filter((a) => anos.includes(a));
+  const selecionados = (escolhidos ?? anos).filter((a) => anos.includes(a));
 
   if (anos.length === 0) {
     return <p className="text-sm text-ink-soft py-6 text-center">Ainda não há vendas importadas para mostrar aqui.</p>;
@@ -106,7 +106,6 @@ function GraficoMensal({ vendas }: { vendas: Record<string, number> }) {
 
   const valorDe = (ano: number, mesIdx: number) => vendas[`${ano}-${String(mesIdx + 1).padStart(2, '0')}`] ?? 0;
   const maximo = Math.max(1, ...selecionados.flatMap((a) => MESES_CURTO.map((_, m) => valorDe(a, m))));
-  const anoDestaque = selecionados.length > 0 ? Math.max(...selecionados) : null;
 
   // Melhor mês entre os anos selecionados.
   let melhor: { ano: number; mes: number; valor: number } | null = null;
@@ -119,7 +118,7 @@ function GraficoMensal({ vendas }: { vendas: Record<string, number> }) {
 
   function alternar(ano: number) {
     setEscolhidos((atual) => {
-      const base = atual ?? anos.slice(-3);
+      const base = atual ?? anos;
       return base.includes(ano) ? base.filter((a) => a !== ano) : [...base, ano].sort((a, b) => a - b);
     });
   }
@@ -155,7 +154,7 @@ function GraficoMensal({ vendas }: { vendas: Record<string, number> }) {
 
       <div className="overflow-x-auto">
         <div className="min-w-[640px]">
-          <div className="flex items-end gap-2 h-56 border-b border-line px-1">
+          <div className="flex items-end gap-2 h-72 border-b border-line px-1">
             {MESES_CURTO.map((mes, m) => (
               <div key={mes} className="flex-1 h-full flex items-end justify-center gap-0.5">
                 {selecionados.map((ano) => {
@@ -164,15 +163,20 @@ function GraficoMensal({ vendas }: { vendas: Record<string, number> }) {
                   return (
                     <div
                       key={ano}
-                      className="flex-1 max-w-6 h-full flex flex-col justify-end items-center"
+                      className="flex-1 max-w-7 h-full flex flex-col justify-end items-center"
                       title={`${mes}/${ano}: ${formatarMoeda(v)}`}
                     >
-                      {v > 0 && ano === anoDestaque && (
-                        <span className="text-[9px] font-bold text-ink-soft mb-0.5 whitespace-nowrap">{compacto(v)}</span>
+                      {v > 0 && (
+                        <span
+                          className="text-[9px] font-bold text-ink-soft mb-1 whitespace-nowrap"
+                          style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+                        >
+                          {compacto(v)}
+                        </span>
                       )}
                       <div
                         className="w-full rounded-t-md"
-                        style={{ height: `${Math.max(v > 0 ? 2 : 0, (v / maximo) * 88)}%`, background: cor }}
+                        style={{ height: `${Math.max(v > 0 ? 2 : 0, (v / maximo) * 70)}%`, background: cor }}
                       />
                     </div>
                   );
