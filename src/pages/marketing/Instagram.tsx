@@ -12,6 +12,17 @@ function dataHora(iso: string): string {
   return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 }
 
+function baixarComentariosCsv(live: InstagramLive) {
+  const linhas = (live.mensagens ?? []).map((m) => [dataHora(m.quando), `@${m.arroba}`, m.texto.replace(/[\r\n;]+/g, ' ')]);
+  const csv = ['quando;arroba;comentario', ...linhas.map((l) => l.join(';'))].join('\n');
+  const url = URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `comentarios-live-${live.iniciadaEm.slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function baixarCsv(live: InstagramLive) {
   const linhas = Object.entries(live.arrobas)
     .sort((a, b) => b[1].comentarios - a[1].comentarios)
@@ -294,9 +305,19 @@ export default function InstagramLives() {
         )}
       </div>
       <div className="bg-white border border-line rounded-2xl p-6">
-        <h2 className="text-sm font-extrabold text-ink mb-4">
-          Comentários da live{live?.mensagens?.length ? ` (${live.mensagens.length})` : ''}
-        </h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-extrabold text-ink">
+            Comentários da live{live?.mensagens?.length ? ` (${live.mensagens.length})` : ''}
+          </h2>
+          {live?.mensagens?.length ? (
+            <button
+              onClick={() => baixarComentariosCsv(live)}
+              className="rounded-xl border border-line text-ink text-xs font-bold px-3 py-2 hover:bg-surface"
+            >
+              Baixar comentários (CSV)
+            </button>
+          ) : null}
+        </div>
         {!live || !live.mensagens?.length ? (
           <p className="text-sm text-ink-soft">Os comentários aparecem aqui assim que alguém comentar na live.</p>
         ) : (
