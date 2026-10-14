@@ -77,7 +77,7 @@ export default function AnaliseMarketing() {
   const semColunaFechamento = colunasFechamentoIds.length === 0;
 
   return (
-    <div className="p-6 w-full max-w-5xl">
+    <div className="p-6 w-full">
       <h1 className="text-base font-extrabold text-ink mb-1">Análise Marketing</h1>
       <p className="text-sm text-ink-soft mb-6">ROI e CAC do investimento em anúncios e lives, mês a mês.</p>
 

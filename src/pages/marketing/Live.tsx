@@ -205,7 +205,7 @@ export default function Live() {
   }
 
   return (
-    <div className="p-6 w-full max-w-5xl">
+    <div className="p-6 w-full">
       <h1 className="text-base font-extrabold text-ink mb-1">Live</h1>
       <p className="text-sm text-ink-soft mb-6">
         Agende as lives do mês, encerre com as métricas de audiência e importe a reserva de cada live pra ver quem
