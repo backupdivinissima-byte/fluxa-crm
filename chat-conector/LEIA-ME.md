@@ -28,3 +28,18 @@ match /conversas/{id} { allow read, write: if request.auth != null;
 match /chatSaida/{id} { allow read, write: if request.auth != null; }
 match /chatConexoes/{id} { allow read, write: if request.auth != null; }
 ```
+
+## Backup das conversas por e-mail
+Todos os canais (WhatsApp, Instagram Direct e Messenger) gravam as conversas no mesmo lugar do Fluxa, então um único comando faz o backup de todos:
+1. Na conta Gmail que vai **enviar** (pode ser a própria backupdivinissima@gmail.com): ative a verificação em duas etapas e crie uma **senha de app** (Conta Google → Segurança → Senhas de app).
+2. No PowerShell:
+   ```
+   $env:EMPRESA_ID="<id da empresa>"
+   $env:GOOGLE_APPLICATION_CREDENTIALS="C:\caminho\conta-servico.json"
+   $env:BACKUP_EMAIL_PARA="backupdivinissima@gmail.com"
+   $env:BACKUP_EMAIL_DE="backupdivinissima@gmail.com"
+   $env:BACKUP_EMAIL_SENHA="<senha de app>"
+   npm run backup
+   ```
+3. Para repetir todo dia, crie uma tarefa no **Agendador de Tarefas do Windows** que rode `npm run backup` (uma tarefa por empresa).
+O e-mail leva um CSV com as mensagens das últimas 24 horas. Não coloque a senha de app em nenhum arquivo do repositório.
