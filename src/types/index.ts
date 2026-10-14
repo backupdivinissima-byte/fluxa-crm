@@ -319,4 +319,12 @@ export interface InstagramLive {
   atualizadoEm: string; // ISO
   encerrada?: boolean;
   arrobas: Record<string, ArrobaLive>;
+  mensagens?: MensagemLive[]; // comentários da live, em ordem de chegada
+}
+
+export interface MensagemLive {
+  id: string;
+  arroba: string;
+  texto: string;
+  quando: string; // ISO
 }

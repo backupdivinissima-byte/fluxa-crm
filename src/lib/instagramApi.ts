@@ -1,4 +1,4 @@
-import type { ArrobaLive } from '../types';
+import type { ArrobaLive, MensagemLive } from '../types';
 
 // Leitura das lives do Instagram pela API oficial (Instagram Graph API),
 // feita pelo navegador do administrador. O Instagram NÃO informa quem está
@@ -47,6 +47,7 @@ export interface LiveAgora {
   id: string;
   iniciadaEm: string;
   arrobas: Record<string, ArrobaLive>;
+  mensagens: MensagemLive[];
 }
 
 /** Busca a(s) live(s) em andamento agora e os comentaristas até o momento. */
@@ -74,10 +75,12 @@ export async function buscarLivesAgora(contaInstagramId: string, token: string):
       proxima = j.paging?.next;
     }
     const arrobas: Record<string, ArrobaLive> = {};
+    const mensagens: MensagemLive[] = [];
     for (const c of comentarios) {
       const nome = (c.username ?? c.from?.username ?? '').trim().toLowerCase();
       if (!nome) continue;
       const quando = c.timestamp ?? new Date().toISOString();
+      mensagens.push({ id: c.id, arroba: nome, texto: c.text ?? '', quando });
       const atual = arrobas[nome];
       if (!atual) {
         arrobas[nome] = { comentarios: 1, primeiraVez: quando, ultimaVez: quando, ultimoTexto: c.text };
@@ -90,7 +93,7 @@ export async function buscarLivesAgora(contaInstagramId: string, token: string):
         }
       }
     }
-    resultado.push({ id: live.id, iniciadaEm: live.timestamp ?? new Date().toISOString(), arrobas });
+    resultado.push({ id: live.id, iniciadaEm: live.timestamp ?? new Date().toISOString(), arrobas, mensagens });
   }
   return resultado;
 }

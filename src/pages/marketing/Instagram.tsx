@@ -3,7 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { ouvirInstagramLives, salvarInstagramConexao, salvarInstagramLive } from '../../lib/marketingData';
 import * as igApi from '../../lib/instagramApi';
 import { buscarLivesAgora, guardarTokenInstagram, lerTokenInstagram } from '../../lib/instagramApi';
-import type { ArrobaLive, InstagramLive } from '../../types';
+import type { ArrobaLive, InstagramLive, MensagemLive } from '../../types';
 
 const INTERVALO_MS = 20_000;
 
@@ -101,7 +101,12 @@ export default function InstagramLives() {
                 }
               : novo;
           }
+          const porId = new Map<string, MensagemLive>();
+          for (const m of antiga?.mensagens ?? []) porId.set(m.id, m);
+          for (const m of live.mensagens) porId.set(m.id, m);
+          const mensagens = [...porId.values()].sort((a, b) => a.quando.localeCompare(b.quando)).slice(-3000);
           await salvarInstagramLive(empresaId!, {
+            mensagens,
             id: live.id,
             iniciadaEm: antiga?.iniciadaEm ?? live.iniciadaEm,
             atualizadoEm: new Date().toISOString(),
@@ -286,6 +291,30 @@ export default function InstagramLives() {
               </tbody>
             </table>
           </div>
+        )}
+      </div>
+      <div className="bg-white border border-line rounded-2xl p-6">
+        <h2 className="text-sm font-extrabold text-ink mb-4">
+          Comentários da live{live?.mensagens?.length ? ` (${live.mensagens.length})` : ''}
+        </h2>
+        {!live || !live.mensagens?.length ? (
+          <p className="text-sm text-ink-soft">Os comentários aparecem aqui assim que alguém comentar na live.</p>
+        ) : (
+          <ul className="max-h-[520px] overflow-y-auto divide-y divide-line">
+            {[...live.mensagens].reverse().map((m) => (
+              <li key={m.id} className="py-2 flex gap-3 text-sm">
+                <span className="text-ink-soft whitespace-nowrap tabular-nums">
+                  {new Date(m.quando).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </span>
+                <span>
+                  <a href={`https://instagram.com/${m.arroba}`} target="_blank" rel="noreferrer" className="font-bold text-ink hover:underline">
+                    @{m.arroba}
+                  </a>{' '}
+                  <span className="text-ink">{m.texto}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
         )}
       </div>
     </div>
