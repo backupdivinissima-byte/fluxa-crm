@@ -287,6 +287,10 @@ export interface ReservaLive {
 export interface MetaAdsConexao {
   contaAnuncioId: string; // ID da conta de anúncios (ex.: "act_1234567890")
   tokenAcesso?: string;
+  // Só entram as campanhas cujo nome contém algum destes termos (separados por
+  // vírgula; sem diferenciar maiúsculas/acentos). Serve quando a mesma conta de
+  // anúncios atende mais de uma empresa. Vazio = todas as campanhas.
+  filtroNome?: string;
   configuradoEm?: string;
   ultimaSincronizacao?: string;
 }

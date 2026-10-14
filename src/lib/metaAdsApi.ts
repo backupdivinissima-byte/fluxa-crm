@@ -50,6 +50,14 @@ async function buscarTudo<T>(url: string): Promise<T[]> {
   return itens;
 }
 
+function normalizar(texto: string): string {
+  return texto
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
 interface CampanhaApi {
   id: string;
   name: string;
@@ -76,14 +84,21 @@ const STATUS: Record<string, CampanhaMeta['status']> = {
 /** Busca as campanhas da conta e o desempenho do mês corrente. */
 export async function buscarCampanhasMeta(
   contaAnuncioId: string,
-  token: string
+  token: string,
+  filtroNome = ''
 ): Promise<Omit<CampanhaMeta, 'id' | 'origem'>[]> {
   const conta = contaAnuncioId.trim().startsWith('act_') ? contaAnuncioId.trim() : `act_${contaAnuncioId.trim()}`;
   const t = encodeURIComponent(token.trim());
 
-  const campanhas = await buscarTudo<CampanhaApi>(
+  const termos = filtroNome
+    .split(',')
+    .map((x) => normalizar(x))
+    .filter(Boolean);
+  const todas = await buscarTudo<CampanhaApi>(
     `${GRAPH}/${conta}/campaigns?fields=id,name,status,daily_budget,lifetime_budget&limit=200&access_token=${t}`
   );
+  const campanhas =
+    termos.length === 0 ? todas : todas.filter((c) => termos.some((t) => normalizar(c.name).includes(t)));
   const insights = await buscarTudo<InsightApi>(
     `${GRAPH}/${conta}/insights?level=campaign&date_preset=this_month&fields=campaign_id,spend,impressions,reach,actions,cost_per_action_type&limit=200&access_token=${t}`
   );

@@ -42,6 +42,7 @@ export default function MetaAds() {
   const conexaoSalva = empresa?.metaAdsConexao;
   const [contaAnuncioId, setContaAnuncioId] = useState(conexaoSalva?.contaAnuncioId ?? '');
   const [token, setToken] = useState('');
+  const [filtroNome, setFiltroNome] = useState(conexaoSalva?.filtroNome ?? '');
   const [salvandoConexao, setSalvandoConexao] = useState(false);
   const [sincronizando, setSincronizando] = useState(false);
   const [erroConexao, setErroConexao] = useState('');
@@ -125,6 +126,7 @@ export default function MetaAds() {
       if (t) guardarTokenLocal(empresaId, t);
       await salvarMetaAdsConexao(empresaId, {
         contaAnuncioId: contaAnuncioId.trim(),
+        filtroNome: filtroNome.trim(),
         configuradoEm: conexaoSalva?.configuradoEm ?? new Date().toISOString(),
         ultimaSincronizacao: conexaoSalva?.ultimaSincronizacao,
       });
@@ -147,12 +149,13 @@ export default function MetaAds() {
     setErroConexao('');
     setAvisoSync('');
     try {
-      const lidas = await buscarCampanhasMeta(contaAnuncioId, t);
+      const lidas = await buscarCampanhasMeta(contaAnuncioId, t, filtroNome);
       const mes = mesAtualISO();
       const total = await importarCampanhasMeta(empresaId, lidas, mes, 'api');
       guardarTokenLocal(empresaId, t);
       await salvarMetaAdsConexao(empresaId, {
         contaAnuncioId: contaAnuncioId.trim(),
+        filtroNome: filtroNome.trim(),
         configuradoEm: conexaoSalva?.configuradoEm ?? new Date().toISOString(),
         ultimaSincronizacao: new Date().toISOString(),
       });
@@ -316,6 +319,21 @@ export default function MetaAds() {
               placeholder="act_1234567890"
               className="w-full rounded-lg border border-line px-3 py-2 text-sm"
             />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1.5">
+              Só campanhas com o nome (opcional)
+            </label>
+            <input
+              value={filtroNome}
+              onChange={(e) => setFiltroNome(e.target.value)}
+              placeholder="Ex.: Divinissima (vários: Divinissima, Semijoias)"
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+            />
+            <p className="text-[11px] text-ink-soft mt-1">
+              Use quando a mesma conta de anúncios atende mais de uma empresa: só entram as campanhas cujo nome contém
+              esse texto. Deixe vazio para trazer todas.
+            </p>
           </div>
           <div>
             <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1.5">
