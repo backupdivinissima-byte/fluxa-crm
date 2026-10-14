@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { ouvirInstagramLives, salvarInstagramConexao, salvarInstagramLive } from '../../lib/marketingData';
+import { ouvirComentariosInstagram, ouvirInstagramLives, salvarInstagramConexao, salvarInstagramLive } from '../../lib/marketingData';
 import * as igApi from '../../lib/instagramApi';
 import { buscarLivesAgora, guardarTokenInstagram, lerTokenInstagram } from '../../lib/instagramApi';
 import type { ArrobaLive, InstagramLive, MensagemLive } from '../../types';
@@ -142,7 +142,42 @@ export default function InstagramLives() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monitorando, empresaId]);
 
-  const live = useMemo(() => lives.find((l) => l.id === (escolhidaId ?? lives[0]?.id)) ?? null, [lives, escolhidaId]);
+  const liveBase = useMemo(() => lives.find((l) => l.id === (escolhidaId ?? lives[0]?.id)) ?? null, [lives, escolhidaId]);
+  const [doWebhook, setDoWebhook] = useState<{ liveId: string; itens: MensagemLive[] }>({ liveId: '', itens: [] });
+
+  useEffect(() => {
+    if (!empresaId || !liveBase?.id) return;
+    const id = liveBase.id;
+    return ouvirComentariosInstagram(empresaId, id, (itens) => setDoWebhook({ liveId: id, itens }));
+  }, [empresaId, liveBase?.id]);
+
+  // Junta os comentários captados pela consulta com os recebidos pelo webhook.
+  const live = useMemo<InstagramLive | null>(() => {
+    if (!liveBase) return null;
+    const porId = new Map<string, MensagemLive>();
+    for (const m of liveBase.mensagens ?? []) porId.set(m.id, m);
+    if (doWebhook.liveId === liveBase.id) for (const m of doWebhook.itens) porId.set(m.id, m);
+    const mensagens = [...porId.values()].sort((a, b) => a.quando.localeCompare(b.quando));
+    const arrobas: Record<string, ArrobaLive> = { ...liveBase.arrobas };
+    if (doWebhook.liveId === liveBase.id && doWebhook.itens.length) {
+      for (const k of Object.keys(arrobas)) if (!mensagens.some((m) => m.arroba === k)) delete arrobas[k];
+      const contagem: Record<string, ArrobaLive> = {};
+      for (const m of mensagens) {
+        const a = contagem[m.arroba];
+        if (!a) contagem[m.arroba] = { comentarios: 1, primeiraVez: m.quando, ultimaVez: m.quando, ultimoTexto: m.texto };
+        else {
+          a.comentarios += 1;
+          if (m.quando < a.primeiraVez) a.primeiraVez = m.quando;
+          if (m.quando >= a.ultimaVez) {
+            a.ultimaVez = m.quando;
+            a.ultimoTexto = m.texto;
+          }
+        }
+      }
+      return { ...liveBase, mensagens, arrobas: contagem };
+    }
+    return { ...liveBase, mensagens, arrobas };
+  }, [liveBase, doWebhook]);
   const ordenados = useMemo(
     () => (live ? Object.entries(live.arrobas).sort((a, b) => b[1].comentarios - a[1].comentarios) : []),
     [live]

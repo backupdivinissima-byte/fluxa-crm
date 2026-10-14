@@ -17,7 +17,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { CampanhaMeta, InstagramConexao, InstagramLive, Live, MetaAdsConexao, ReservaLive } from '../types';
+import type { CampanhaMeta, InstagramConexao, InstagramLive, MensagemLive, Live, MetaAdsConexao, ReservaLive } from '../types';
 
 function campanhasMetaCol(empresaId: string) {
   return collection(db, 'empresas', empresaId, 'campanhasMeta');
@@ -208,5 +208,21 @@ export async function salvarInstagramLive(empresaId: string, live: InstagramLive
   const { id, ...dados } = live;
   await setDoc(doc(db, 'empresas', empresaId, 'instagramLives', id), semUndefined(dados as unknown as Record<string, unknown>), {
     merge: true,
+  });
+}
+
+/** Comentários gravados pelo servidor do webhook (subcoleção da live). */
+export function ouvirComentariosInstagram(
+  empresaId: string,
+  liveId: string,
+  cb: (mensagens: MensagemLive[]) => void
+): Unsubscribe {
+  return onSnapshot(collection(db, 'empresas', empresaId, 'instagramLives', liveId, 'comentarios'), (snap) => {
+    cb(
+      snap.docs.map((d) => {
+        const x = d.data() as { arroba?: string; texto?: string; quando?: string };
+        return { id: d.id, arroba: x.arroba ?? '', texto: x.texto ?? '', quando: x.quando ?? '' };
+      })
+    );
   });
 }

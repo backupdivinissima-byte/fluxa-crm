@@ -1,0 +1,3 @@
+name = "fluxa-instagram-webhook"
+main = "index.js"
+compatibility_date = "2025-01-01"
