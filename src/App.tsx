@@ -17,6 +17,7 @@ import Marketing from './pages/Marketing';
 import MetaAds from './pages/marketing/MetaAds';
 import Live from './pages/marketing/Live';
 import AnaliseMarketing from './pages/marketing/AnaliseMarketing';
+import InstagramLives from './pages/marketing/Instagram';
 
 function Carregando() {
   return <div className="min-h-screen flex items-center justify-center text-ink-soft text-sm">Carregando...</div>;
@@ -65,6 +66,7 @@ function AppRoutes() {
           <Route index element={null} />
           <Route path="meta" element={<MetaAds />} />
           <Route path="live" element={<Live />} />
+          <Route path="instagram" element={<InstagramLives />} />
           <Route path="analise" element={<AnaliseMarketing />} />
         </Route>
       </Route>

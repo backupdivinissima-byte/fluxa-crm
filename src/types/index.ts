@@ -302,3 +302,21 @@ export interface InstagramConexao {
   tokenAcesso?: string;
   configuradoEm?: string;
 }
+
+// ===== Instagram (arrobas captados durante as lives) =====
+
+export interface ArrobaLive {
+  comentarios: number;
+  primeiraVez: string; // ISO
+  ultimaVez: string; // ISO
+  ultimoTexto?: string;
+}
+
+/** Uma transmissão ao vivo do Instagram monitorada, com os @ de quem comentou. */
+export interface InstagramLive {
+  id: string; // id da transmissão no Instagram
+  iniciadaEm: string; // ISO
+  atualizadoEm: string; // ISO
+  encerrada?: boolean;
+  arrobas: Record<string, ArrobaLive>;
+}

@@ -1,10 +1,11 @@
 import { NavLink, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { IconMarketing, IconMetaAds, IconLive } from '../components/NavIcons';
+import { IconMarketing, IconMetaAds, IconLive, IconInstagram } from '../components/NavIcons';
 
 const ABAS = [
   { to: '/marketing/meta', label: 'Meta', icon: <IconMetaAds /> },
   { to: '/marketing/live', label: 'Live', icon: <IconLive /> },
+  { to: '/marketing/instagram', label: 'Instagram', icon: <IconInstagram /> },
   { to: '/marketing/analise', label: 'Análise Marketing', icon: <IconMarketing /> },
 ];
 

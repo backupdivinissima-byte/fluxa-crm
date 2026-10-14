@@ -17,7 +17,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { CampanhaMeta, InstagramConexao, Live, MetaAdsConexao, ReservaLive } from '../types';
+import type { CampanhaMeta, InstagramConexao, InstagramLive, Live, MetaAdsConexao, ReservaLive } from '../types';
 
 function campanhasMetaCol(empresaId: string) {
   return collection(db, 'empresas', empresaId, 'campanhasMeta');
@@ -189,4 +189,24 @@ export async function salvarMetaAdsConexao(empresaId: string, conexao: MetaAdsCo
 
 export async function salvarInstagramConexao(empresaId: string, conexao: InstagramConexao) {
   await updateDoc(doc(db, 'empresas', empresaId), { instagramConexao: semUndefined(conexao as unknown as Record<string, unknown>) });
+}
+
+// ===== Instagram: arrobas das lives =====
+
+function instagramLivesCol(empresaId: string) {
+  return collection(db, 'empresas', empresaId, 'instagramLives');
+}
+
+export function ouvirInstagramLives(empresaId: string, cb: (lives: InstagramLive[]) => void): Unsubscribe {
+  const q = query(instagramLivesCol(empresaId), orderBy('iniciadaEm', 'desc'));
+  return onSnapshot(q, (snap) => {
+    cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as InstagramLive));
+  });
+}
+
+export async function salvarInstagramLive(empresaId: string, live: InstagramLive) {
+  const { id, ...dados } = live;
+  await setDoc(doc(db, 'empresas', empresaId, 'instagramLives', id), semUndefined(dados as unknown as Record<string, unknown>), {
+    merge: true,
+  });
 }

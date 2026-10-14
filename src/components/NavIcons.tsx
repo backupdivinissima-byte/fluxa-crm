@@ -145,3 +145,13 @@ export function IconLive(props: { className?: string }) {
     </NavIcon>
   );
 }
+
+export function IconInstagram(props: { className?: string }) {
+  return (
+    <NavIcon {...props}>
+      <rect x="4" y="4" width="16" height="16" rx="4.5" />
+      <circle cx="12" cy="12" r="3.6" />
+      <circle cx="16.8" cy="7.3" r="0.9" fill="currentColor" stroke="none" />
+    </NavIcon>
+  );
+}
