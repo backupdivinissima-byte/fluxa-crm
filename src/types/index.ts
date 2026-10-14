@@ -328,3 +328,38 @@ export interface MensagemLive {
   texto: string;
   quando: string; // ISO
 }
+
+// ===== Fluxa Chat (WhatsApp / Instagram Direct / Messenger) =====
+
+export type CanalChat = 'whatsapp' | 'instagram' | 'facebook';
+
+export interface ConversaChat {
+  id: string; // `${canal}_${contato}`
+  canal: CanalChat;
+  contato: string; // telefone (só dígitos) ou id da conta no Instagram/Facebook
+  nome: string;
+  telefone?: string;
+  ultimaMensagem: string;
+  ultimaEm: string; // ISO
+  ultimaDe: 'cliente' | 'equipe'; // sem resposta = a última foi do cliente
+  naoLidas?: number;
+  vendedorLogin?: string; // quem pegou o atendimento (sem valor = livre para todos)
+  vendedorNome?: string;
+  clienteId?: string; // cliente do CRM vinculado
+  atendimentoEm?: string; // ISO — quando o vendedor pegou
+}
+
+export interface MensagemChat {
+  id: string;
+  de: 'cliente' | 'equipe';
+  texto: string;
+  em: string; // ISO
+  autor?: string; // nome de quem da equipe enviou
+}
+
+export interface ConexaoChat {
+  status: 'desconectado' | 'solicitado' | 'aguardando_qr' | 'conectado';
+  qr?: string; // imagem (data URL) do QR Code
+  telefone?: string;
+  atualizadoEm?: string;
+}

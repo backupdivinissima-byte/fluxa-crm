@@ -11,6 +11,7 @@ import {
   IconLinks,
   IconImportar,
   IconMarketing,
+  IconChat,
 } from './NavIcons';
 
 const itens = [
@@ -25,6 +26,8 @@ const itens = [
   { to: '/importar', label: 'Importar / Sincronização', icon: <IconImportar />, apenasAdmin: true },
   // Análise gerencial (anúncios, lives, ROI/CAC) — só admin, mesma regra de "Importar".
   { to: '/marketing', label: 'Marketing', icon: <IconMarketing />, apenasAdmin: true },
+  // Atendimento (WhatsApp, Instagram Direct, Messenger): admin e vendedores.
+  { to: '/chat', label: 'Chat', icon: <IconChat /> },
 ];
 
 /** Nav superior única (marca + abas): nada de menu lateral, todas as abas

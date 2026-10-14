@@ -1,0 +1,13 @@
+{
+  "name": "fluxa-chat-conector",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": { "start": "node index.js" },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.9",
+    "firebase-admin": "^12.6.0",
+    "pino": "^9.4.0",
+    "qrcode": "^1.5.4"
+  }
+}

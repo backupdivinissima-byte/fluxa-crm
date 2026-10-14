@@ -155,3 +155,12 @@ export function IconInstagram(props: { className?: string }) {
     </NavIcon>
   );
 }
+
+export function IconChat(props: { className?: string }) {
+  return (
+    <NavIcon {...props}>
+      <path d="M5 5.5h14a1.5 1.5 0 0 1 1.5 1.5v8A1.5 1.5 0 0 1 19 16.5h-7l-4 3.5v-3.5H5A1.5 1.5 0 0 1 3.5 15V7A1.5 1.5 0 0 1 5 5.5Z" />
+      <path d="M8 10h8M8 13h5" />
+    </NavIcon>
+  );
+}

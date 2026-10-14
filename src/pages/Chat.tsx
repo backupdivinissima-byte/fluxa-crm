@@ -1,0 +1,320 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { ouvirClientes, ouvirEmpresa, atualizarCampoCliente, salvarCliente } from '../lib/crmData';
+import { acaoDaColuna } from '../lib/crmLogic';
+import {
+  acharClientePorTelefone,
+  assumirConversa,
+  chaveTelefone,
+  enviarMensagemChat,
+  liberarConversa,
+  ouvirConexaoWhatsapp,
+  ouvirConversas,
+  ouvirMensagens,
+  solicitarConexaoWhatsapp,
+} from '../lib/chatData';
+import type { Cliente, ColunaCrm, ConexaoChat, ConversaChat, MensagemChat } from '../types';
+
+const NOME_CANAL = { whatsapp: 'WhatsApp', instagram: 'Instagram', facebook: 'Messenger' } as const;
+
+function hora(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const hoje = new Date();
+  return d.toDateString() === hoje.toDateString()
+    ? d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+}
+
+function Cartao({ titulo, valor, dica }: { titulo: string; valor: number; dica: string }) {
+  return (
+    <div className="bg-white border border-line rounded-2xl p-4">
+      <div className="text-[11px] font-bold text-ink-soft uppercase tracking-wide">{titulo}</div>
+      <div className="text-3xl font-extrabold text-ink mt-1 tabular-nums">{valor}</div>
+      <div className="text-[11px] text-ink-soft mt-1">{dica}</div>
+    </div>
+  );
+}
+
+/** Fluxa Chat: caixa única de atendimento (WhatsApp por QR Code; Instagram
+ * Direct e Messenger entram na fase seguinte). O vendedor que abre a conversa
+ * e clica em "Assumir" fica responsável por ela e pelo cliente no CRM. */
+export default function Chat() {
+  const { empresa, papel, sessaoVendedor, perfil } = useAuth();
+  const empresaId = empresa?.id;
+  const souAdmin = papel === 'admin';
+  const meuLogin = souAdmin ? '__admin__' : (sessaoVendedor?.vendedor.login ?? '');
+  const meuNome = souAdmin ? (perfil?.nome ?? 'Administrador') : (sessaoVendedor?.vendedor.nome ?? '');
+
+  const [conversas, setConversas] = useState<ConversaChat[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [colunas, setColunas] = useState<ColunaCrm[]>([]);
+  const [conexao, setConexao] = useState<ConexaoChat>({ status: 'desconectado' });
+  const [filtro, setFiltro] = useState<'todas' | 'livres' | 'minhas'>('todas');
+  const [abertaId, setAbertaId] = useState<string | null>(null);
+  const [mensagens, setMensagens] = useState<MensagemChat[]>([]);
+  const [texto, setTexto] = useState('');
+  const [erro, setErro] = useState('');
+  const fimRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!empresaId) return;
+    const u1 = ouvirConversas(empresaId, setConversas);
+    const u2 = ouvirClientes(empresaId, setClientes);
+    const u4 = ouvirEmpresa(empresaId, (e) => setColunas(e?.crmColunas ?? []));
+    const u5 = ouvirConexaoWhatsapp(empresaId, setConexao);
+    return () => {
+      u1();
+      u2();
+      u4();
+      u5();
+    };
+  }, [empresaId]);
+
+  useEffect(() => {
+    if (!empresaId || !abertaId) return;
+    return ouvirMensagens(empresaId, abertaId, setMensagens);
+  }, [empresaId, abertaId]);
+
+  useEffect(() => {
+    fimRef.current?.scrollIntoView({ block: 'end' });
+  }, [mensagens]);
+
+  // O vendedor só enxerga as conversas livres e as dele; o admin vê todas.
+  const visiveis = useMemo(
+    () => (souAdmin ? conversas : conversas.filter((c) => !c.vendedorLogin || c.vendedorLogin === meuLogin)),
+    [conversas, souAdmin, meuLogin]
+  );
+  const lista = useMemo(
+    () =>
+      visiveis.filter((c) =>
+        filtro === 'livres' ? !c.vendedorLogin : filtro === 'minhas' ? c.vendedorLogin === meuLogin : true
+      ),
+    [visiveis, filtro, meuLogin]
+  );
+
+  const aguardando = visiveis.filter((c) => !c.vendedorLogin && c.ultimaDe === 'cliente').length;
+  const emAtendimento = visiveis.filter((c) => !!c.vendedorLogin).length;
+  const semResposta = visiveis.filter((c) => c.ultimaDe === 'cliente').length;
+  const novos = visiveis.filter(
+    (c) => !c.vendedorLogin && !c.clienteId && !acharClientePorTelefone(clientes, c.telefone)
+  ).length;
+
+  const aberta = conversas.find((c) => c.id === abertaId) ?? null;
+  const donaDoAtendimento = aberta?.vendedorLogin && aberta.vendedorLogin !== meuLogin ? aberta.vendedorNome : '';
+
+  async function assumir(c: ConversaChat) {
+    if (!empresaId) return;
+    setErro('');
+    try {
+      let clienteId = c.clienteId;
+      const colAtend = colunas.find((x) => acaoDaColuna(x) === 'atendimento');
+      if (c.telefone && colAtend && !souAdmin) {
+        const existente = acharClientePorTelefone(clientes, c.telefone);
+        const agora = new Date().toISOString();
+        if (existente) {
+          clienteId = existente.id;
+          await atualizarCampoCliente(empresaId, existente.id, {
+            crmColunaId: colAtend.id,
+            crmVendedorLogin: meuLogin,
+            crmColunaChangedAt: agora,
+          });
+        } else {
+          // Contato novo: salva no CRM já em atendimento pelo vendedor.
+          const k = chaveTelefone(c.telefone);
+          clienteId = `chat-${k}`;
+          await salvarCliente(empresaId, {
+            id: clienteId,
+            cod: clienteId,
+            nome: c.nome,
+            telefone: c.telefone,
+            crmColunaId: colAtend.id,
+            crmVendedorLogin: meuLogin,
+            crmColunaChangedAt: agora,
+          });
+        }
+      }
+      await assumirConversa(empresaId, c.id, meuLogin, meuNome, clienteId);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Não foi possível assumir o atendimento.');
+    }
+  }
+
+  async function enviar() {
+    if (!empresaId || !aberta || !texto.trim()) return;
+    setErro('');
+    const t = texto.trim();
+    setTexto('');
+    try {
+      await enviarMensagemChat(empresaId, aberta, t, meuNome);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Não foi possível enviar.');
+    }
+  }
+
+  if (!empresaId) return null;
+
+  return (
+    <div className="p-6 w-full space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-base font-extrabold text-ink mb-1">Fluxa Chat</h1>
+          <p className="text-sm text-ink-soft">Atendimento de WhatsApp, Instagram Direct e Messenger em um só lugar.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span
+            className={`rounded-full px-3 py-1 font-bold ${
+              conexao.status === 'conectado' ? 'bg-emerald-100 text-emerald-700' : 'bg-surface text-ink-soft border border-line'
+            }`}
+          >
+            WhatsApp: {conexao.status === 'conectado' ? `conectado${conexao.telefone ? ` (${conexao.telefone})` : ''}` : conexao.status === 'aguardando_qr' ? 'aguardando leitura do QR' : conexao.status === 'solicitado' ? 'gerando QR…' : 'desconectado'}
+          </span>
+          <span className="rounded-full px-3 py-1 bg-surface text-ink-soft border border-line">Instagram Direct: em breve</span>
+          <span className="rounded-full px-3 py-1 bg-surface text-ink-soft border border-line">Messenger: em breve</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Cartao titulo="Aguardando atendimento" valor={aguardando} dica="Clientes sem vendedor esperando resposta" />
+        <Cartao titulo="Em atendimento" valor={emAtendimento} dica="Conversas com um vendedor responsável" />
+        <Cartao titulo="Abertas sem resposta" valor={semResposta} dica="A última mensagem foi do cliente" />
+        <Cartao titulo="Clientes novos" valor={novos} dica="Contatos sem cadastro no CRM" />
+      </div>
+
+      {souAdmin && conexao.status !== 'conectado' && (
+        <div className="bg-white border border-line rounded-2xl p-6">
+          <h2 className="text-sm font-extrabold text-ink mb-1">Conectar o WhatsApp</h2>
+          <p className="text-sm text-ink-soft mb-3 max-w-3xl">
+            Clique em "Gerar QR Code" e, no celular, abra o WhatsApp → Aparelhos conectados → Conectar um aparelho e
+            leia o código. Funciona como o WhatsApp Web, e o conector precisa estar ligado (veja chat-conector/LEIA-ME.md).
+          </p>
+          <button
+            onClick={() => void solicitarConexaoWhatsapp(empresaId)}
+            className="rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-4 py-2.5 hover:opacity-90"
+          >
+            Gerar QR Code
+          </button>
+          {conexao.qr ? <img src={conexao.qr} alt="QR Code do WhatsApp" className="mt-4 w-56 h-56 border border-line rounded-lg" /> : null}
+        </div>
+      )}
+
+      {erro && <p className="text-xs text-red-500">{erro}</p>}
+
+      <div className="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-4 items-start">
+        <div className="bg-white border border-line rounded-2xl overflow-hidden">
+          <div className="flex border-b border-line text-xs font-bold">
+            {(['todas', 'livres', 'minhas'] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFiltro(f)}
+                className={`flex-1 py-2.5 ${filtro === f ? 'text-teal-500 border-b-2 border-teal-500' : 'text-ink-soft'}`}
+              >
+                {f === 'todas' ? 'Todas' : f === 'livres' ? 'Livres' : 'Minhas'}
+              </button>
+            ))}
+          </div>
+          <ul className="max-h-[560px] overflow-y-auto divide-y divide-line">
+            {lista.length === 0 && <li className="p-6 text-sm text-ink-soft text-center">Nenhuma conversa por aqui.</li>}
+            {lista.map((c) => (
+              <li key={c.id}>
+                <button
+                  onClick={() => setAbertaId(c.id)}
+                  className={`w-full text-left px-4 py-3 hover:bg-surface ${abertaId === c.id ? 'bg-surface' : ''}`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-sm text-ink truncate">{c.nome || c.telefone || c.contato}</span>
+                    <span className="text-[11px] text-ink-soft shrink-0">{hora(c.ultimaEm)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 mt-0.5">
+                    <span className="text-xs text-ink-soft truncate">{c.ultimaMensagem}</span>
+                    {c.ultimaDe === 'cliente' && <span className="w-2 h-2 rounded-full bg-teal-500 shrink-0" title="Sem resposta" />}
+                  </div>
+                  <div className="text-[10px] text-ink-soft mt-1">
+                    {NOME_CANAL[c.canal]} · {c.vendedorNome ? `com ${c.vendedorNome}` : 'livre'}
+                  </div>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="bg-white border border-line rounded-2xl flex flex-col min-h-[420px]">
+          {!aberta ? (
+            <div className="m-auto text-sm text-ink-soft p-6">Escolha uma conversa na lista.</div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-line">
+                <div>
+                  <div className="font-bold text-sm text-ink">{aberta.nome || aberta.telefone || aberta.contato}</div>
+                  <div className="text-[11px] text-ink-soft">
+                    {NOME_CANAL[aberta.canal]}
+                    {aberta.telefone ? ` · ${aberta.telefone}` : ''}
+                    {aberta.vendedorNome ? ` · atendimento de ${aberta.vendedorNome}` : ' · livre'}
+                  </div>
+                </div>
+                {!aberta.vendedorLogin && !souAdmin && (
+                  <button
+                    onClick={() => void assumir(aberta)}
+                    className="rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-xs font-bold px-3 py-2 hover:opacity-90"
+                  >
+                    Assumir atendimento
+                  </button>
+                )}
+                {aberta.vendedorLogin === meuLogin && (
+                  <button
+                    onClick={() => void liberarConversa(empresaId, aberta.id)}
+                    className="rounded-xl border border-line text-ink text-xs font-bold px-3 py-2 hover:bg-surface"
+                  >
+                    Liberar
+                  </button>
+                )}
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-2 max-h-[420px]">
+                {mensagens.map((m) => (
+                  <div key={m.id} className={`flex ${m.de === 'equipe' ? 'justify-end' : 'justify-start'}`}>
+                    <div
+                      className={`max-w-[75%] rounded-2xl px-3 py-2 text-sm ${
+                        m.de === 'equipe' ? 'bg-teal-500/10 text-ink' : 'bg-surface text-ink'
+                      }`}
+                    >
+                      <div className="whitespace-pre-wrap break-words">{m.texto}</div>
+                      <div className="text-[10px] text-ink-soft mt-1">
+                        {m.autor ? `${m.autor} · ` : ''}
+                        {hora(m.em)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <div ref={fimRef} />
+              </div>
+              <div className="border-t border-line p-3">
+                {!aberta.vendedorLogin && !souAdmin ? (
+                  <p className="text-xs text-ink-soft">Clique em "Assumir atendimento" para responder. O cliente entra no seu CRM em "Em Atendimento".</p>
+                ) : donaDoAtendimento && !souAdmin ? (
+                  <p className="text-xs text-ink-soft">Este atendimento é de {donaDoAtendimento}.</p>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      value={texto}
+                      onChange={(e) => setTexto(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && void enviar()}
+                      placeholder="Escreva sua resposta…"
+                      className="flex-1 rounded-lg border border-line px-3 py-2 text-sm"
+                    />
+                    <button
+                      onClick={() => void enviar()}
+                      disabled={!texto.trim()}
+                      className="rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-4 disabled:opacity-60"
+                    >
+                      Enviar
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
