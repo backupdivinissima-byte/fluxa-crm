@@ -114,6 +114,154 @@ async function guardarComentario(env, c) {
   if (novo) await atualizarLive(env, c.empresaId, c.liveId, c.quando);
 }
 
+
+// ===== Mensagens diretas: Instagram Direct e Messenger =====
+// Variáveis extras:
+//   TOKENS_JSON  {"<idDaEmpresa>:instagram": "<token>", "<idDaEmpresa>:facebook": "<token da Página>"}
+//                (usados para responder e para buscar o nome do contato)
+
+const DOCS = (env) => `projects/${env.FIREBASE_PROJECT_ID}/databases/(default)/documents`;
+
+async function commitFirestore(env, writes) {
+  const token = await tokenGoogle(env);
+  const r = await fetch(`https://firestore.googleapis.com/v1/${DOCS(env)}:commit`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ writes }),
+  });
+  if (!r.ok) throw new Error(`Firestore commit ${r.status}: ${await r.text()}`);
+}
+
+function tokenDoCanal(env, empresaId, canal) {
+  try {
+    return JSON.parse(env.TOKENS_JSON || '{}')[`${empresaId}:${canal}`] || '';
+  } catch {
+    return '';
+  }
+}
+
+async function nomeDoContato(env, empresaId, canal, idContato) {
+  const t = tokenDoCanal(env, empresaId, canal);
+  if (!t) return '';
+  const host = canal === 'instagram' ? 'graph.instagram.com' : 'graph.facebook.com';
+  const campos = canal === 'instagram' ? 'name,username' : 'name';
+  try {
+    const r = await fetch(`https://${host}/v21.0/${idContato}?fields=${campos}&access_token=${encodeURIComponent(t)}`);
+    const j = await r.json();
+    return j.name || (j.username ? `@${j.username}` : '');
+  } catch {
+    return '';
+  }
+}
+
+async function guardarMensagemDireta(env, canal, empresaId, evento) {
+  const msg = evento.message;
+  if (!msg || msg.is_echo || !msg.mid) return; // ignora ecos das nossas próprias respostas
+  const contato = String(evento.sender?.id ?? '');
+  if (!contato) return;
+  const texto = msg.text || (msg.attachments?.length ? '[anexo]' : '[mensagem]');
+  const quando = new Date(Number(evento.timestamp ?? Date.now())).toISOString();
+  const idConversa = `${canal}_${contato}`;
+  const raiz = `${DOCS(env)}/empresas/${empresaId}/conversas/${idConversa}`;
+
+  // Só busca o nome quando a conversa ainda não tem um.
+  const token = await tokenGoogle(env);
+  const atual = await fetch(`https://firestore.googleapis.com/v1/${raiz}?mask.fieldPaths=nome`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  let nome = '';
+  if (atual.status === 404 || !(await atual.json().catch(() => ({}))).fields?.nome) {
+    nome = (await nomeDoContato(env, empresaId, canal, contato)) || contato;
+  }
+
+  await commitFirestore(env, [
+    {
+      update: {
+        name: raiz,
+        fields: {
+          canal: { stringValue: canal },
+          contato: { stringValue: contato },
+          ...(nome ? { nome: { stringValue: nome } } : {}),
+          ultimaMensagem: { stringValue: texto },
+          ultimaEm: { stringValue: quando },
+          ultimaDe: { stringValue: 'cliente' },
+        },
+      },
+      updateMask: { fieldPaths: ['canal', 'contato', ...(nome ? ['nome'] : []), 'ultimaMensagem', 'ultimaEm', 'ultimaDe'] },
+      updateTransforms: [{ fieldPath: 'naoLidas', increment: { integerValue: '1' } }],
+    },
+    {
+      update: {
+        name: `${raiz}/mensagens/${encodeURIComponent(msg.mid)}`,
+        fields: { de: { stringValue: 'cliente' }, texto: { stringValue: texto }, em: { stringValue: quando } },
+      },
+    },
+  ]);
+}
+
+async function tratarMensagensDiretas(env, corpo) {
+  const canal = corpo.object === 'instagram' ? 'instagram' : 'facebook';
+  for (const entrada of corpo.entry ?? []) {
+    const empresaId = empresaDaConta(env, String(entrada.id ?? ''));
+    if (!empresaId) continue;
+    for (const evento of entrada.messaging ?? []) await guardarMensagemDireta(env, canal, empresaId, evento);
+  }
+}
+
+// Respostas escritas no Fluxa para Instagram/Messenger: a cada minuto o
+// servidor lê a fila (chatSaida) e envia pela API da Meta.
+async function enviarFila(env) {
+  const empresas = [...new Set(Object.values(JSON.parse(env.EMPRESAS_JSON || '{}')))];
+  if (env.EMPRESA_ID && !empresas.includes(env.EMPRESA_ID)) empresas.push(env.EMPRESA_ID);
+  const token = await tokenGoogle(env);
+  for (const empresaId of empresas) {
+    const r = await fetch(`https://firestore.googleapis.com/v1/${DOCS(env)}/empresas/${empresaId}:runQuery`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        structuredQuery: {
+          from: [{ collectionId: 'chatSaida' }],
+          where: { fieldFilter: { field: { fieldPath: 'enviada' }, op: 'EQUAL', value: { booleanValue: false } } },
+          limit: 20,
+        },
+      }),
+    });
+    if (!r.ok) continue;
+    for (const linha of await r.json()) {
+      const doc = linha.document;
+      if (!doc) continue;
+      const f = doc.fields ?? {};
+      const canal = f.canal?.stringValue;
+      if (canal !== 'instagram' && canal !== 'facebook') continue; // WhatsApp é do conector
+      let erro = '';
+      const t = tokenDoCanal(env, empresaId, canal);
+      if (!t) erro = `sem token de ${canal} no servidor`;
+      else {
+        const host = canal === 'instagram' ? 'graph.instagram.com' : 'graph.facebook.com';
+        const envio = await fetch(`https://${host}/v21.0/me/messages?access_token=${encodeURIComponent(t)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            recipient: { id: f.para?.stringValue },
+            ...(canal === 'facebook' ? { messaging_type: 'RESPONSE' } : {}),
+            message: { text: f.texto?.stringValue ?? '' },
+          }),
+        });
+        if (!envio.ok) erro = `${envio.status}: ${(await envio.text()).slice(0, 300)}`;
+      }
+      await commitFirestore(env, [
+        {
+          update: {
+            name: doc.name,
+            fields: { enviada: { booleanValue: true }, ...(erro ? { erro: { stringValue: erro } } : { enviadaEm: { stringValue: new Date().toISOString() } }) },
+          },
+          updateMask: { fieldPaths: ['enviada', erro ? 'erro' : 'enviadaEm'] },
+        },
+      ]);
+    }
+  }
+}
+
 function extrair(corpo, env) {
   const lista = [];
   for (const entrada of corpo.entry ?? []) {
@@ -155,11 +303,21 @@ export default {
     }
 
     try {
-      for (const c of extrair(JSON.parse(texto), env)) await guardarComentario(env, c);
+      const corpo = JSON.parse(texto);
+      if (corpo.object === 'instagram' && (corpo.entry ?? []).some((e) => e.messaging?.length)) await tratarMensagensDiretas(env, corpo);
+      else if (corpo.object === 'page') await tratarMensagensDiretas(env, corpo);
+      for (const c of extrair(corpo, env)) await guardarComentario(env, c);
     } catch (e) {
       console.error(e);
       return new Response('Erro ao gravar', { status: 500 });
     }
     return new Response('ok', { status: 200 });
+  },
+  async scheduled(_evento, env) {
+    try {
+      await enviarFila(env);
+    } catch (e) {
+      console.error('Erro na fila de envio:', e);
+    }
   },
 };

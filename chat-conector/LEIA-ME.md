@@ -43,3 +43,11 @@ Todos os canais (WhatsApp, Instagram Direct e Messenger) gravam as conversas no 
    ```
 3. Para repetir todo dia, crie uma tarefa no **Agendador de Tarefas do Windows** que rode `npm run backup` (uma tarefa por empresa).
 O e-mail leva um CSV com as mensagens das últimas 24 horas. Não coloque a senha de app em nenhum arquivo do repositório.
+
+## Backup no Google Drive (backupdivinissima@gmail.com)
+Alternativa ao e-mail, sem senha de app: salva um CSV por dia numa pasta "Fluxa Chat Backup" do Drive.
+1. Google Cloud (projeto fluxa-crm) → APIs e serviços → ative a **Google Drive API**.
+2. Credenciais → Criar credenciais → **ID do cliente OAuth** → tipo **App para computador**. Anote o ID e a chave secreta. Se pedir a tela de consentimento, deixe como **Externo** e adicione backupdivinissima@gmail.com como usuário de teste.
+3. No PowerShell (nesta pasta), com `EMPRESA_ID`, `GOOGLE_APPLICATION_CREDENTIALS`, `DRIVE_CLIENT_ID` e `DRIVE_CLIENT_SECRET` definidos:
+   `npm run backup-drive -- --autorizar` (faz o login uma vez) e depois `npm run backup-drive` todo dia (Agendador de Tarefas).
+Não guarde `drive-token.json` nem a chave secreta no repositório.

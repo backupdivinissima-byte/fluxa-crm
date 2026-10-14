@@ -4,3 +4,8 @@ dist
 *.png
 verify-log.json
 shot*.cjs
+
+drive-token.json
+chat-conector/drive-token.json
+chat-conector/sessao-*
+chat-conector/node_modules
