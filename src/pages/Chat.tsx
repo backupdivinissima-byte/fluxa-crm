@@ -169,8 +169,8 @@ export default function Chat() {
           >
             WhatsApp: {conexao.status === 'conectado' ? `conectado${conexao.telefone ? ` (${conexao.telefone})` : ''}` : conexao.status === 'aguardando_qr' ? 'aguardando leitura do QR' : conexao.status === 'solicitado' ? 'gerando QR…' : 'desconectado'}
           </span>
-          <span className="rounded-full px-3 py-1 bg-surface text-ink-soft border border-line">Instagram Direct: em breve</span>
-          <span className="rounded-full px-3 py-1 bg-surface text-ink-soft border border-line">Messenger: em breve</span>
+          <span className="rounded-full px-3 py-1 bg-surface text-ink-soft border border-line">Instagram Direct: pelo servidor (Cloudflare)</span>
+          <span className="rounded-full px-3 py-1 bg-surface text-ink-soft border border-line">Messenger: pelo servidor (Cloudflare)</span>
         </div>
       </div>
 
