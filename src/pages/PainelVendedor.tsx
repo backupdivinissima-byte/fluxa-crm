@@ -8,6 +8,7 @@ import {
   diasUteisDoMes,
   formatarMoeda,
   inicioRiscoDe,
+  metasDoVendedor,
   nivelDeMeta,
   resumoCarteiraVendedor,
   vendasDoMesVendedor,
@@ -207,7 +208,7 @@ export default function PainelVendedor() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [colunas, setColunas] = useState<ColunaCrm[]>(empresa?.crmColunas ?? CRM_COLUNAS_PADRAO);
-  const [metas, setMetas] = useState<MetaTier[]>(empresa?.metas ?? METAS_PADRAO);
+  const [metasEmpresa, setMetasEmpresa] = useState<MetaTier[]>(empresa?.metas ?? METAS_PADRAO);
   const [comissaoBase, setComissaoBase] = useState<number>(empresa?.comissaoBase ?? COMISSAO_BASE_PADRAO);
   const [diasInatividade, setDiasInatividade] = useState<number>(empresa?.diasInatividade ?? DIAS_INATIVIDADE_PADRAO);
 
@@ -217,7 +218,7 @@ export default function PainelVendedor() {
     const unsubV = ouvirVendedores(empresaId, setVendedores);
     const unsubE = ouvirEmpresa(empresaId, (emp) => {
       setColunas(emp?.crmColunas && emp.crmColunas.length > 0 ? emp.crmColunas : CRM_COLUNAS_PADRAO);
-      setMetas(emp?.metas && emp.metas.length > 0 ? emp.metas : METAS_PADRAO);
+      setMetasEmpresa(emp?.metas && emp.metas.length > 0 ? emp.metas : METAS_PADRAO);
       setComissaoBase(emp?.comissaoBase ?? COMISSAO_BASE_PADRAO);
       setDiasInatividade(emp?.diasInatividade ?? DIAS_INATIVIDADE_PADRAO);
     });
@@ -234,7 +235,10 @@ export default function PainelVendedor() {
 
   const colunasFechamentoIds = useMemo(() => colunas.filter((c) => c.fechamento).map((c) => c.id), [colunas]);
   const meuCadastro = vendedores.find((v) => v.login === loginAtual) ?? sessaoVendedor?.vendedor;
-  const metaPessoal = meuCadastro?.meta ?? 0;
+  // Metas do próprio vendedor (se cadastradas) ou o padrão da empresa.
+  const metas = metasDoVendedor(meuCadastro, metasEmpresa);
+  const temMetasProprias = !!meuCadastro?.metas && meuCadastro.metas.length > 0;
+  const metaPessoal = temMetasProprias ? 0 : (meuCadastro?.meta ?? 0);
 
   const carteira = useMemo(
     () => resumoCarteiraVendedor(clientes, loginAtual, nomeAtual, colunas, diasInatividade),

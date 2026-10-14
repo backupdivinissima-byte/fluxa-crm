@@ -766,3 +766,8 @@ export function resumoCarteiraVendedor(
   resumo.inativosDeValor = resumo.inativosDeValor.slice(0, limiteLista);
   return resumo;
 }
+
+/** Faixas de meta que valem pro vendedor: as próprias, se cadastradas; senão o padrão da empresa. */
+export function metasDoVendedor(vendedor: { metas?: MetaTier[] } | undefined | null, metasEmpresa: MetaTier[]): MetaTier[] {
+  return vendedor?.metas && vendedor.metas.length > 0 ? vendedor.metas : metasEmpresa;
+}

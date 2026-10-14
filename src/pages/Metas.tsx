@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { ouvirClientes, ouvirEmpresa, ouvirVendedores, salvarMetasEmpresa } from '../lib/crmData';
+import { ouvirClientes, ouvirEmpresa, ouvirVendedores, salvarMetasEmpresa, salvarMetasVendedor } from '../lib/crmData';
 import { COMISSAO_BASE_PADRAO, CRM_COLUNAS_PADRAO, METAS_PADRAO, type Cliente, type ColunaCrm, type MetaTier, type Vendedor } from '../types';
-import { formatarMoeda, nivelDeMeta, vendasDoMesVendedor } from '../lib/crmLogic';
+import { formatarMoeda, metasDoVendedor, nivelDeMeta, vendasDoMesVendedor } from '../lib/crmLogic';
 import { IconMetas } from '../components/NavIcons';
 
 /** Faixas de meta/comissão da empresa + acompanhamento por vendedor.
@@ -15,6 +15,9 @@ export default function Metas() {
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [metas, setMetas] = useState<MetaTier[]>(empresa?.metas ?? METAS_PADRAO);
+  const [metasEmpresa, setMetasEmpresa] = useState<MetaTier[]>(empresa?.metas ?? METAS_PADRAO);
+  // Quem está sendo editado: o padrão da empresa ou um vendedor (id).
+  const [alvo, setAlvo] = useState<string>('empresa');
   const [colunas, setColunas] = useState<ColunaCrm[]>(empresa?.crmColunas ?? CRM_COLUNAS_PADRAO);
   const [comissaoBase, setComissaoBase] = useState<number>(empresa?.comissaoBase ?? COMISSAO_BASE_PADRAO);
   const [salvando, setSalvando] = useState(false);
@@ -32,10 +35,8 @@ export default function Metas() {
       setColunas(emp?.crmColunas && emp.crmColunas.length > 0 ? emp.crmColunas : CRM_COLUNAS_PADRAO);
       // Metas sempre vêm do banco (o `empresa` do login fica desatualizado
       // depois de salvar — por isso as metas "sumiam" ao trocar de aba).
-      if (!editando.current) {
-        setMetas(emp?.metas && emp.metas.length > 0 ? emp.metas : METAS_PADRAO);
-        setComissaoBase(emp?.comissaoBase ?? COMISSAO_BASE_PADRAO);
-      }
+      setMetasEmpresa(emp?.metas && emp.metas.length > 0 ? emp.metas : METAS_PADRAO);
+      if (!editando.current) setComissaoBase(emp?.comissaoBase ?? COMISSAO_BASE_PADRAO);
     });
     return () => {
       unsubV();
@@ -44,6 +45,25 @@ export default function Metas() {
     };
   }, [empresaId]);
 
+  // Carrega no editor as faixas de quem está selecionado (sem pisar em edição em andamento).
+  useEffect(() => {
+    if (editando.current) return;
+    if (alvo === 'empresa') {
+      setMetas(metasEmpresa);
+    } else {
+      const v = vendedores.find((x) => x.id === alvo);
+      setMetas(v?.metas && v.metas.length > 0 ? v.metas : metasEmpresa.map((m) => ({ ...m })));
+    }
+  }, [alvo, metasEmpresa, vendedores]);
+
+  function trocarAlvo(novo: string) {
+    if (editando.current && !window.confirm('Há alterações não salvas. Trocar mesmo assim e descartá-las?')) return;
+    editando.current = false;
+    setAlvo(novo);
+  }
+
+  const vendedorAlvo = alvo === 'empresa' ? null : (vendedores.find((v) => v.id === alvo) ?? null);
+
   // IDs das colunas marcadas como "fechamento" — só essas contam como venda
   // concluída pra fins de comissão (independente de como a empresa nomeou
   // ou organizou o resto do quadro).
@@ -51,10 +71,9 @@ export default function Metas() {
 
   const hoje = new Date();
   const mesRef = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
-  const metasOrdenadas = useMemo(() => metas.filter((m) => m.valor > 0), [metas]);
 
-  function calcularNivel(vendasMes: number) {
-    const n = nivelDeMeta(metasOrdenadas, vendasMes, comissaoBase);
+  function calcularNivel(vendasMes: number, faixas: MetaTier[] = metasEmpresa) {
+    const n = nivelDeMeta(faixas.filter((m) => m.valor > 0), vendasMes, comissaoBase);
     return { tier: n.tier, comissao: n.comissao };
   }
 
@@ -62,7 +81,8 @@ export default function Metas() {
     if (!empresaId) return;
     setSalvando(true);
     try {
-      await salvarMetasEmpresa(empresaId, metas, comissaoBase);
+      if (vendedorAlvo) await salvarMetasVendedor(empresaId, vendedorAlvo.id, metas);
+      else await salvarMetasEmpresa(empresaId, metas, comissaoBase);
       editando.current = false;
       setSalvoOk(true);
       setTimeout(() => setSalvoOk(false), 3000);
@@ -111,8 +131,11 @@ export default function Metas() {
   // Visão do próprio vendedor: progresso pessoal.
   if (!ehAdmin) {
     const meu = sessaoVendedor?.vendedor;
+    const faixasMinhas = metasDoVendedor(vendedores.find((v) => v.login === meu?.login) ?? meu, metasEmpresa).filter(
+      (m) => m.valor > 0
+    );
     const vendasMes = meu ? vendasDoMesVendedor(clientes, meu.login, meu.nome, colunasFechamentoIds, mesRef) : 0;
-    const nivel = calcularNivel(vendasMes);
+    const nivel = calcularNivel(vendasMes, faixasMinhas);
     return (
       <div className="p-6 w-full max-w-lg">
         <h1 className="text-base font-extrabold text-ink flex items-center gap-2 mb-4">
@@ -139,7 +162,7 @@ export default function Metas() {
           )}
         </div>
         <div className="space-y-2">
-          {metasOrdenadas.map((m) => {
+          {faixasMinhas.map((m) => {
             const pct = Math.min(100, Math.round((vendasMes / m.valor) * 100));
             return (
               <div key={m.label + m.valor} className="bg-white border border-line rounded-xl p-3">
@@ -166,7 +189,30 @@ export default function Metas() {
       </h1>
 
       <div className="bg-white border border-line rounded-2xl p-5 mb-6 overflow-x-auto">
-        <h2 className="text-sm font-extrabold text-ink mb-3">Faixas de meta da empresa</h2>
+        <div className="flex flex-wrap items-center gap-3 mb-3">
+          <h2 className="text-sm font-extrabold text-ink">Faixas de meta</h2>
+          <select
+            value={alvo}
+            onChange={(e) => trocarAlvo(e.target.value)}
+            aria-label="Cadastrar metas de"
+            className="rounded-lg border border-line px-3 py-1.5 text-sm font-semibold text-ink"
+          >
+            <option value="empresa">Padrão da empresa</option>
+            {vendedores.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.nome}
+                {v.metas && v.metas.length > 0 ? ' ✓' : ''}
+              </option>
+            ))}
+          </select>
+          {vendedorAlvo && (
+            <span className="text-xs text-ink-soft">
+              {vendedorAlvo.metas && vendedorAlvo.metas.length > 0
+                ? 'Este vendedor tem metas próprias.'
+                : 'Usando o padrão da empresa — ao salvar, ele passa a ter metas próprias.'}
+            </span>
+          )}
+        </div>
         <table className="w-full text-sm min-w-[480px]">
           <thead className="text-xs text-ink-soft uppercase tracking-wide">
             <tr>
@@ -227,6 +273,7 @@ export default function Metas() {
             ))}
           </tbody>
         </table>
+        {!vendedorAlvo && (
         <div className="flex items-center gap-2 mt-4 text-sm text-ink">
           <label htmlFor="comissao-base" className="font-bold">
             Abaixo da Meta 1, comissão de
@@ -243,6 +290,7 @@ export default function Metas() {
           />
           <span>% sobre as vendas</span>
         </div>
+        )}
         <div className="flex items-center gap-3 mt-4">
           <button
             onClick={salvarMetas}
@@ -259,6 +307,18 @@ export default function Metas() {
           >
             + Meta
           </button>
+          {vendedorAlvo && vendedorAlvo.metas && vendedorAlvo.metas.length > 0 && (
+            <button
+              onClick={async () => {
+                if (!empresaId || !window.confirm('Voltar este vendedor para as metas padrão da empresa?')) return;
+                await salvarMetasVendedor(empresaId, vendedorAlvo.id, []);
+                editando.current = false;
+              }}
+              className="rounded-xl border border-line text-ink-soft text-sm font-bold px-4 py-2.5 hover:bg-surface"
+            >
+              Usar padrão da empresa
+            </button>
+          )}
           {salvoOk && <span className="text-xs font-bold text-green-600">✓ Metas salvas</span>}
           {metas.length >= LIMITE_FAIXAS && (
             <span className="text-xs text-ink-soft">Máximo de {LIMITE_FAIXAS} faixas.</span>
@@ -278,8 +338,9 @@ export default function Metas() {
           </thead>
           <tbody>
             {vendedoresComVendas.map(({ vendedor, vendasMes }) => {
-              const nivel = calcularNivel(vendasMes);
-              const proxima = metasOrdenadas[0];
+              const faixas = metasDoVendedor(vendedor, metasEmpresa).filter((m) => m.valor > 0);
+              const nivel = calcularNivel(vendasMes, faixas);
+              const proxima = faixas[0];
               return (
                 <tr key={vendedor.id} className="border-t border-line">
                   <td className="px-4 py-2.5 font-bold text-ink">{vendedor.nome}</td>

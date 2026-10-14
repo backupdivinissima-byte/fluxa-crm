@@ -119,6 +119,7 @@ export interface Vendedor {
   ativo: boolean;
   criadoEm?: string;
   meta?: number; // meta pessoal em R$ (opcional, além das faixas globais)
+  metas?: MetaTier[]; // faixas de meta/comissão/bônus próprias deste vendedor (se vazio, vale o padrão da empresa)
 }
 
 // ===== CRM =====

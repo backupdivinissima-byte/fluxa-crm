@@ -112,6 +112,11 @@ export async function removerVendedor(empresaId: string, vendedorId: string) {
   await deleteDoc(doc(db, 'empresas', empresaId, 'vendedores', vendedorId));
 }
 
+/** Grava as faixas próprias de um vendedor (lista vazia = volta ao padrão da empresa). */
+export async function salvarMetasVendedor(empresaId: string, vendedorId: string, metas: MetaTier[]) {
+  await updateDoc(doc(db, 'empresas', empresaId, 'vendedores', vendedorId), { metas });
+}
+
 export async function salvarMetasEmpresa(empresaId: string, metas: MetaTier[], comissaoBase: number) {
   await updateDoc(doc(db, 'empresas', empresaId), { metas, comissaoBase });
 }
