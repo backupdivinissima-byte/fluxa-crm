@@ -342,8 +342,15 @@ export default function PainelVendedor() {
             {metasValidas.length > 0 ? (
               <div className="flex gap-3 overflow-x-auto pb-1">
                 {metasValidas.map((m, i) => {
+                  // Efeito cascata: cada meta só começa a ser preenchida depois que
+                  // a anterior foi batida. O "alvo" do card é o trecho entre a meta
+                  // anterior e esta (ex.: Meta 2 de R$ 121 mil depois da Meta 1 de
+                  // R$ 110 mil = trecho de R$ 11 mil).
+                  const base = i === 0 ? 0 : metasValidas[i - 1].valor;
+                  const trecho = Math.max(0, m.valor - base);
+                  const vendido = Math.min(trecho, Math.max(0, vendasMes - base));
                   const atingida = vendasMes >= m.valor;
-                  const pct = Math.min(100, Math.round((vendasMes / m.valor) * 100));
+                  const pct = trecho > 0 ? Math.min(100, Math.round((vendido / trecho) * 100)) : 100;
                   const cor = corProgresso(pct, atingida);
                   return (
                     <div key={i} className="rounded-xl border p-3 flex-1 min-w-[190px]" style={{ borderColor: cor, borderTopWidth: 3 }}>
@@ -357,13 +364,15 @@ export default function PainelVendedor() {
                         <div className="h-full rounded-full" style={{ width: `${pct}%`, background: cor }} />
                       </div>
                       <p className="text-[11px] text-ink-soft">
-                        Alvo: <b className="text-ink">{formatarMoeda(m.valor)}</b>
+                        Alvo: <b className="text-ink">{formatarMoeda(trecho)}</b>
+                        {i > 0 && <span className="ml-1">(meta total {formatarMoeda(m.valor)})</span>}
                       </p>
-                      {!atingida && (
-                        <p className="text-[11px]" style={{ color: COR_INATIVO }}>
-                          Falta: <b>{formatarMoeda(m.valor - vendasMes)}</b>
-                        </p>
-                      )}
+                      <p className="text-[11px] text-ink-soft">
+                        Vendido: <b className="text-ink">{formatarMoeda(vendido)}</b>
+                      </p>
+                      <p className="text-[11px]" style={{ color: atingida ? COR_ATIVO : COR_INATIVO }}>
+                        Falta: <b>{formatarMoeda(trecho - vendido)}</b>
+                      </p>
                     </div>
                   );
                 })}
