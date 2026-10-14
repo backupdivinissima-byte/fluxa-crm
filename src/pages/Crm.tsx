@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   ouvirClientes,
@@ -7,14 +7,16 @@ import {
   atualizarCampoCliente,
   salvarFiltrosCrm,
   salvarColunasCrm,
+  aplicarFunilPadrao,
 } from '../lib/crmData';
-import { CRM_FUNIL_RECOMENDADO, CRM_COLUNAS_PADRAO, MAX_COLUNAS_CRM, type Cliente, type ColunaCrm, type FiltroCrm, type Vendedor } from '../types';
+import { CRM_COLUNAS_PADRAO, MAX_COLUNAS_CRM, type Cliente, type ColunaCrm, type FiltroCrm, type Vendedor } from '../types';
 import {
   DIAS_INATIVIDADE_PADRAO,
   acaoDaColuna,
   cartaoVisivelPara,
   clientePassaFiltro,
   colunaEfetivaDoCliente,
+  padronizarColunas,
   diasSemAtend,
   formatarMoeda,
   parseValorBR,
@@ -82,6 +84,8 @@ export default function Crm() {
   const [salvandoFiltro, setSalvandoFiltro] = useState(false);
   const [diasInatividade, setDiasInatividade] = useState<number>(empresa?.diasInatividade ?? DIAS_INATIVIDADE_PADRAO);
 
+  const migrouFunil = useRef(false);
+
   useEffect(() => {
     if (!empresaId) return;
     const unsubC = ouvirClientes(empresaId, setClientes);
@@ -90,13 +94,24 @@ export default function Crm() {
       setFiltros(emp?.crmFiltros ?? []);
       setColunas(emp?.crmColunas && emp.crmColunas.length > 0 ? emp.crmColunas : CRM_COLUNAS_PADRAO);
       setDiasInatividade(emp?.diasInatividade ?? DIAS_INATIVIDADE_PADRAO);
+      // Funil padrão do Fluxa CRM: aplicado uma única vez em cada empresa, na
+      // primeira vez que o administrador abre o CRM (aproveita colunas que já
+      // batem com o padrão, mantendo os clientes nelas).
+      if (emp && !emp.crmFunilPadrao && papel === 'admin' && !migrouFunil.current) {
+        migrouFunil.current = true;
+        const atuais = emp.crmColunas && emp.crmColunas.length > 0 ? emp.crmColunas : [];
+        aplicarFunilPadrao(empresaId, padronizarColunas(atuais)).catch((err) => {
+          migrouFunil.current = false;
+          console.error('Erro ao aplicar o funil padrão:', err);
+        });
+      }
     });
     return () => {
       unsubC();
       unsubV();
       unsubE();
     };
-  }, [empresaId]);
+  }, [empresaId, papel]);
 
   const ehAdmin = papel === 'admin';
   const loginAtual = ehAdmin ? undefined : sessaoVendedor?.vendedor.login;
@@ -227,7 +242,7 @@ export default function Crm() {
       return;
     setSalvandoColuna(true);
     try {
-      await salvarColunasCrm(empresaId, CRM_FUNIL_RECOMENDADO);
+      await aplicarFunilPadrao(empresaId, padronizarColunas(colunas));
     } catch (err) {
       console.error('Erro ao aplicar funil:', err);
       alert('Não foi possível aplicar o funil. Tente novamente em instantes.');

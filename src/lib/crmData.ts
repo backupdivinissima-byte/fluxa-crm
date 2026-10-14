@@ -133,6 +133,11 @@ export async function salvarColunasCrm(empresaId: string, colunas: ColunaCrm[]) 
   await updateDoc(doc(db, 'empresas', empresaId), { crmColunas: colunas });
 }
 
+/** Aplica o funil padrão do Fluxa CRM e marca a empresa como padronizada. */
+export async function aplicarFunilPadrao(empresaId: string, colunas: ColunaCrm[]) {
+  await updateDoc(doc(db, 'empresas', empresaId), { crmColunas: colunas, crmFunilPadrao: true });
+}
+
 // Histórico de vendas por ano/mês (gráfico "Evolução de vendas por mês" do
 // Dashboard) — mesmo padrão de `crmFiltros`/`crmColunas`.
 export async function salvarVendasAnuais(empresaId: string, vendasAnuais: { ano: number; meses: number[] }[]) {

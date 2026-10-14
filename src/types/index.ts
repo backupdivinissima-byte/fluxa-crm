@@ -44,6 +44,9 @@ export interface Empresa {
   // Só vale pro funil do Dashboard; o corte fixo usado em Clientes/detalhe
   // do cliente continua como antes.
   diasInatividade?: number;
+  // true depois que o funil padrão do Fluxa CRM foi aplicado a esta empresa
+  // (acontece uma vez, na primeira vez que o administrador abre o CRM).
+  crmFunilPadrao?: boolean;
   // Conexão "puxando" dados de fora (sentido oposto ao apiKeyHash acima):
   // aqui é o Fluxa CRM que chama a API do sistema atual da empresa (ERP,
   // e-commerce etc.) e importa a lista de clientes automaticamente. Guarda
@@ -206,7 +209,8 @@ export const MAX_COLUNAS_CRM = 8;
  * com valor em aberto e concluídos (que contam como venda). */
 export const CRM_FUNIL_RECOMENDADO: ColunaCrm[] = [
   { id: 'funil-inativos', nome: 'Clientes Inativos', auto: 'inativos' },
-  { id: 'funil-risco', nome: 'Em risco', auto: 'risco' },
+  { id: 'funil-risco', nome: 'Clientes em risco', auto: 'risco' },
+  { id: 'funil-ativos', nome: 'Clientes Ativos', acao: 'nenhuma' },
   { id: 'funil-atendimento', nome: 'Em Atendimento', acao: 'atendimento' },
   { id: 'funil-orcamento-live', nome: 'Orçamento Live', acao: 'orcamento' },
   { id: 'funil-orcamento-catalogo', nome: 'Orçamento Catálogo', acao: 'orcamento' },

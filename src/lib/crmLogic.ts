@@ -1,5 +1,5 @@
 // Funções puras de regra de negócio do CRM.
-import type { Cliente, ColunaCrm, FiltroCrm, MetaTier, Vendedor } from '../types';
+import { CRM_FUNIL_RECOMENDADO, type Cliente, type ColunaCrm, type FiltroCrm, type MetaTier, type Vendedor } from '../types';
 
 /** Transforma um código/login em um ID de documento Firestore seguro e
  * determinístico (mesmo valor de entrada sempre vira o mesmo ID) — usado
@@ -770,4 +770,34 @@ export function resumoCarteiraVendedor(
 /** Faixas de meta que valem pro vendedor: as próprias, se cadastradas; senão o padrão da empresa. */
 export function metasDoVendedor(vendedor: { metas?: MetaTier[] } | undefined | null, metasEmpresa: MetaTier[]): MetaTier[] {
   return vendedor?.metas && vendedor.metas.length > 0 ? vendedor.metas : metasEmpresa;
+}
+
+function chaveNome(nome: string): string {
+  return nome
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Monta o funil padrão do Fluxa CRM aproveitando o que a empresa já tem:
+ * colunas com o mesmo papel (mesmo nome) mantêm o id — e portanto os clientes
+ * que já estão nelas — e o que for de outro jeito é substituído pelo padrão. */
+export function padronizarColunas(existentes: ColunaCrm[]): ColunaCrm[] {
+  const usados = new Set<string>();
+  return CRM_FUNIL_RECOMENDADO.map((padrao) => {
+    const alvo = chaveNome(padrao.nome);
+    const igual = existentes.find((e) => {
+      if (usados.has(e.id)) return false;
+      const n = chaveNome(e.nome);
+      if (padrao.auto === 'inativos') return e.auto === 'inativos' || n.includes('inativo');
+      if (padrao.auto === 'risco') return e.auto === 'risco' || n.includes('risco');
+      return n === alvo;
+    });
+    if (!igual) return { ...padrao };
+    usados.add(igual.id);
+    // Mantém o id (e os clientes) e aplica a função padrão da coluna.
+    return { ...padrao, id: igual.id };
+  });
 }
