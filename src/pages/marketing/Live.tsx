@@ -103,7 +103,7 @@ export default function Live() {
 
   if (papel !== 'admin' || !empresaId) {
     return (
-      <div className="p-6 w-full">
+      <div className="p-6 w-full max-w-5xl">
         <p className="text-sm text-ink-soft">Somente administradores acessam essa tela.</p>
       </div>
     );
