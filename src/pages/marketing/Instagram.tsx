@@ -1,11 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { ouvirComentariosInstagram, ouvirInstagramLives, salvarInstagramConexao, salvarInstagramLive } from '../../lib/marketingData';
+import { ouvirComentariosInstagram, ouvirInstagramLives, ouvirLives, salvarInstagramConexao, salvarInstagramLive } from '../../lib/marketingData';
 import * as igApi from '../../lib/instagramApi';
 import { buscarLivesAgora, guardarTokenInstagram, lerTokenInstagram } from '../../lib/instagramApi';
-import type { ArrobaLive, InstagramLive, MensagemLive } from '../../types';
+import type { ArrobaLive, InstagramLive, Live, MensagemLive } from '../../types';
 
 const INTERVALO_MS = 20_000;
+const ANTES_MS = 10 * 60_000; // começa 10 min antes do horário agendado
+const DEPOIS_MS = 30 * 60_000; // continua 30 min após o fim previsto
+
+function janelaDaLive(l: Live): { inicio: number; fim: number } | null {
+  const ini = new Date(`${l.data}T${l.horaInicio || '00:00'}:00`).getTime();
+  if (Number.isNaN(ini)) return null;
+  let fim = new Date(`${l.data}T${l.horaFim || ''}:00`).getTime();
+  if (Number.isNaN(fim) || fim <= ini) fim = ini + 3 * 3_600_000;
+  return { inicio: ini - ANTES_MS, fim: fim + DEPOIS_MS };
+}
 
 function dataHora(iso: string): string {
   const d = new Date(iso);
@@ -55,6 +65,50 @@ export default function InstagramLives() {
   const [status, setStatus] = useState('');
   const livesRef = useRef<InstagramLive[]>([]);
   livesRef.current = lives;
+  const [agendadas, setAgendadas] = useState<Live[]>([]);
+  const [automatico, setAutomatico] = useState(() => {
+    try {
+      return localStorage.getItem(`fluxacrm_instagram_auto_${empresa?.id ?? ''}`) !== '0';
+    } catch {
+      return true;
+    }
+  });
+  const iniciadoAuto = useRef(false);
+  const pausadaPelaUsuaria = useRef('');
+  const [agora, setAgora] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!empresaId) return;
+    return ouvirLives(empresaId, (l) => setAgendadas(l.filter((x) => x.status === 'agendada')));
+  }, [empresaId]);
+
+  useEffect(() => {
+    const t = setInterval(() => setAgora(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+
+  const proxima = useMemo(() => {
+    const itens = agendadas
+      .map((l) => ({ l, j: janelaDaLive(l) }))
+      .filter((x): x is { l: Live; j: { inicio: number; fim: number } } => !!x.j && x.j.fim > agora)
+      .sort((a, b) => a.j.inicio - b.j.inicio);
+    return itens[0] ?? null;
+  }, [agendadas, agora]);
+
+  // Liga e desliga sozinho conforme o horário agendado na aba Live.
+  useEffect(() => {
+    if (!automatico || !empresaId) return;
+    const dentro = !!proxima && agora >= proxima.j.inicio && agora <= proxima.j.fim;
+    if (dentro && !monitorando && pausadaPelaUsuaria.current !== proxima?.l.id && contaId.trim() && (token.trim() || lerTokenInstagram(empresaId))) {
+      iniciadoAuto.current = true;
+      setMonitorando(true);
+    } else if (!dentro && monitorando && iniciadoAuto.current) {
+      iniciadoAuto.current = false;
+      setMonitorando(false);
+      setStatus('Monitoramento encerrado automaticamente (fim do horário da live).');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agora, proxima, automatico, empresaId, contaId]);
 
   useEffect(() => {
     if (!empresaId) return;
@@ -260,6 +314,8 @@ export default function InstagramLives() {
             onClick={() => {
               if (!monitorando && empresaId && tokenEmUso()) guardarTokenInstagram(empresaId, tokenEmUso());
               setErro('');
+              if (monitorando) pausadaPelaUsuaria.current = proxima?.l.id ?? '';
+              iniciadoAuto.current = false;
               setMonitorando((m) => !m);
             }}
             disabled={!contaId.trim() || (!monitorando && !tokenEmUso())}
@@ -270,6 +326,33 @@ export default function InstagramLives() {
             {monitorando ? 'Parar monitoramento' : 'Iniciar monitoramento da live'}
           </button>
         </div>
+        <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-ink-soft">
+          <label className="inline-flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={automatico}
+              onChange={(e) => {
+                setAutomatico(e.target.checked);
+                try {
+                  localStorage.setItem(`fluxacrm_instagram_auto_${empresaId}`, e.target.checked ? '1' : '0');
+                } catch {
+                  /* sem armazenamento local */
+                }
+              }}
+            />
+            <span className="font-bold text-ink">Iniciar sozinho no horário das lives agendadas na aba Live</span>
+          </label>
+          <span>
+            {proxima
+              ? `Próxima: ${new Date(proxima.l.data + 'T00:00:00').toLocaleDateString('pt-BR')} às ${proxima.l.horaInicio}${proxima.l.titulo ? ` — ${proxima.l.titulo}` : ''}`
+              : 'Nenhuma live agendada.'}
+          </span>
+        </div>
+        {automatico && (
+          <p className="text-[11px] text-ink-soft mt-1">
+            Começa 10 min antes do horário e termina 30 min após o fim previsto. Funciona só com esta aba aberta no navegador.
+          </p>
+        )}
         {monitorando && (
           <p className="text-xs text-ink-soft mt-3">
             {status || 'Consultando o Instagram...'} Mantenha esta aba aberta durante a live: o monitoramento só roda enquanto ela estiver aberta.
