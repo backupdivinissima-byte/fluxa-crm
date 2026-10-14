@@ -65,6 +65,8 @@ export default function Crm() {
     destino: string;
     tipo: 'fechamento' | 'atendimento' | 'orcamento';
   } | null>(null);
+  // Telefone do cliente: obrigatório ao vincular em atendimento (liga o cliente ao Fluxa Chat).
+  const [telefoneAtend, setTelefoneAtend] = useState('');
   const [vendedorEscolhido, setVendedorEscolhido] = useState('');
   const [valorOrcamento, setValorOrcamento] = useState('');
 
@@ -379,6 +381,7 @@ export default function Crm() {
     // inativos/risco/ativos (sem vínculo vigente). Quem já é do vendedor e
     // só está mudando de coluna não precisa confirmar de novo.
     if (acaoDestino === 'atendimento' && !vinculado) {
+      setTelefoneAtend(cliente.telefone ?? '');
       setPendMove({ cliente, destino: destino.id, tipo: 'atendimento' });
       setVendedorEscolhido(loginAtual ?? '');
       return;
@@ -403,7 +406,11 @@ export default function Crm() {
         alert('Escolha um vendedor responsável.');
         return;
       }
-      campos = { crmColunaId: destino, crmColunaChangedAt: agora, crmVendedorLogin: loginParaUsar };
+      if (telefoneAtend.replace(/\D/g, '').length < 10) {
+        alert('Informe o telefone do cliente (com DDD). Ele liga o cliente ao atendimento no Chat.');
+        return;
+      }
+      campos = { crmColunaId: destino, crmColunaChangedAt: agora, crmVendedorLogin: loginParaUsar, telefone: telefoneAtend.trim() };
     } else if (tipo === 'orcamento') {
       const valor = parseValorBR(valorOrcamento);
       if (!(valor > 0)) {
@@ -735,8 +742,16 @@ export default function Crm() {
                 <option value={loginAtual ?? ''}>{nomeAtual ?? loginAtual}</option>
               )}
             </select>
+            <label className="block text-sm font-semibold text-ink mt-4 mb-2">Telefone do cliente (obrigatório)</label>
+            <input
+              value={telefoneAtend}
+              onChange={(e) => setTelefoneAtend(e.target.value)}
+              placeholder="DDD + número, ex.: 37 99999-9999"
+              className="w-full rounded-xl border border-line bg-surface px-4 py-3 text-sm text-ink outline-none focus:ring-2 focus:ring-teal-500/30"
+            />
             <p className="text-xs text-ink-soft mt-3 mb-6">
-              A partir da vinculação, este cliente passa a aparecer apenas para o vendedor selecionado.
+              A partir da vinculação, este cliente passa a aparecer apenas para o vendedor selecionado. O telefone liga o
+              cliente às conversas do Chat.
             </p>
             <div className="flex justify-end gap-3">
               <button
