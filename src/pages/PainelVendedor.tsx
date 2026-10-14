@@ -153,23 +153,22 @@ function GraficoMensal({ vendas }: { vendas: Record<string, number> }) {
       </div>
 
       <div className="overflow-x-auto">
-        <div className="min-w-[640px]">
+        <div className="min-w-[1700px]">
           <div className="flex items-end gap-2 h-72 border-b border-line px-1">
             {MESES_CURTO.map((mes, m) => (
-              <div key={mes} className="flex-1 h-full flex items-end justify-center gap-0.5">
+              <div key={mes} className="flex-1 h-full flex items-end justify-center gap-1">
                 {selecionados.map((ano) => {
                   const v = valorDe(ano, m);
                   const cor = CORES_ANOS[anos.indexOf(ano) % CORES_ANOS.length];
                   return (
                     <div
                       key={ano}
-                      className="flex-1 max-w-7 h-full flex flex-col justify-end items-center"
+                      className="flex-1 min-w-[42px] max-w-14 h-full flex flex-col justify-end items-center"
                       title={`${mes}/${ano}: ${formatarMoeda(v)}`}
                     >
                       {v > 0 && (
                         <span
-                          className="text-[9px] font-bold text-ink-soft mb-1 whitespace-nowrap"
-                          style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+                          className="text-[10px] font-bold text-ink-soft mb-1 whitespace-nowrap"
                         >
                           {compacto(v)}
                         </span>
