@@ -12,6 +12,7 @@ function enderecoApi(token: string): string {
 }
 /** Resumo da última consulta (para diagnóstico na tela). */
 export let ultimaConsulta = '';
+let avisoComentarios = '';
 const chave = (empresaId: string) => `fluxacrm_instagram_token_${empresaId}`;
 
 export function lerTokenInstagram(empresaId: string): string {
@@ -64,10 +65,27 @@ export async function buscarLivesAgora(contaInstagramId: string, token: string):
     );
   }
   const resultado: LiveAgora[] = [];
+  avisoComentarios = '';
   ultimaConsulta = `${enderecoApi(token).includes('instagram.com') ? 'graph.instagram.com' : 'graph.facebook.com'}: ${(json.data ?? []).length} live(s), ${(json.data ?? []).map((l) => `${l.id}=${l.comments?.data?.length ?? 0} coment.`).join('; ') || 'nenhuma'}`;
   for (const live of json.data ?? []) {
-    const comentarios = [...(live.comments?.data ?? [])];
+    let comentarios = [...(live.comments?.data ?? [])];
     let proxima = live.comments?.paging?.next;
+    if (comentarios.length === 0) {
+      // Alternativa: consulta direta dos comentários da live (edge /comments).
+      try {
+        const rc = await fetch(
+          `${enderecoApi(token)}/${live.id}/comments?fields=${encodeURIComponent('id,text,timestamp,username,from')}&limit=100&access_token=${t}`
+        );
+        const jc = (await rc.json().catch(() => ({}))) as { data?: ComentarioApi[]; paging?: { next?: string }; error?: { message?: string } };
+        if (jc.error) avisoComentarios = `comentários: ${jc.error.message ?? 'erro'}`;
+        else {
+          comentarios = [...(jc.data ?? [])];
+          proxima = jc.paging?.next;
+        }
+      } catch (e) {
+        avisoComentarios = `comentários: ${e instanceof Error ? e.message : 'falha'}`;
+      }
+    }
     for (let pagina = 0; proxima && pagina < 20; pagina++) {
       const r: Response = await fetch(proxima);
       const j = (await r.json().catch(() => ({}))) as { data?: ComentarioApi[]; paging?: { next?: string } };
@@ -93,6 +111,7 @@ export async function buscarLivesAgora(contaInstagramId: string, token: string):
         }
       }
     }
+    ultimaConsulta += ` | live ${live.id}: ${comentarios.length} comentário(s)${avisoComentarios ? ` (${avisoComentarios})` : ''}`;
     resultado.push({ id: live.id, iniciadaEm: live.timestamp ?? new Date().toISOString(), arrobas, mensagens });
   }
   return resultado;
