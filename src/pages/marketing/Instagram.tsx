@@ -183,9 +183,11 @@ export default function InstagramLives() {
           </div>
         </div>
         <p className="text-[11px] text-ink-soft mt-3 max-w-3xl">
-          O token precisa das permissões <code className="bg-surface rounded px-1">instagram_basic</code> e{' '}
-          <code className="bg-surface rounded px-1">pages_read_engagement</code>, e a conta do Instagram precisa ser
-          comercial e estar ligada a uma Página do Facebook.
+          Aceita o token gerado no app pelo login do Instagram (permissões{' '}
+          <code className="bg-surface rounded px-1">instagram_business_basic</code> e{' '}
+          <code className="bg-surface rounded px-1">instagram_business_manage_comments</code>) ou o token do Business
+          Manager (<code className="bg-surface rounded px-1">instagram_basic</code> e{' '}
+          <code className="bg-surface rounded px-1">pages_read_engagement</code>). A conta precisa ser comercial.
         </p>
         <div className="flex flex-wrap items-center gap-3 mt-4">
           <button

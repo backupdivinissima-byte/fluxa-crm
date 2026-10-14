@@ -5,7 +5,11 @@ import type { ArrobaLive } from '../types';
 // apenas assistindo; informa só quem COMENTA durante a transmissão.
 // O token fica só neste navegador (localStorage), nunca no banco.
 
-const GRAPH = 'https://graph.facebook.com/v21.0';
+// Token gerado no app pelo "login do Instagram" (começa com IG...) usa o
+// endereço do Instagram; token do Business Manager (começa com EA...) usa o do Facebook.
+function enderecoApi(token: string): string {
+  return /^IG/i.test(token.trim()) ? 'https://graph.instagram.com/v21.0' : 'https://graph.facebook.com/v21.0';
+}
 const chave = (empresaId: string) => `fluxacrm_instagram_token_${empresaId}`;
 
 export function lerTokenInstagram(empresaId: string): string {
@@ -47,7 +51,7 @@ export interface LiveAgora {
 export async function buscarLivesAgora(contaInstagramId: string, token: string): Promise<LiveAgora[]> {
   const t = encodeURIComponent(token.trim());
   const campos = encodeURIComponent('id,timestamp,comments.limit(100){id,text,timestamp,username,from}');
-  const resp = await fetch(`${GRAPH}/${contaInstagramId.trim()}/live_media?fields=${campos}&access_token=${t}`);
+  const resp = await fetch(`${enderecoApi(token)}/${contaInstagramId.trim()}/live_media?fields=${campos}&access_token=${t}`);
   const json = (await resp.json().catch(() => ({}))) as { data?: LiveApi[]; error?: { message?: string; code?: number } };
   if (!resp.ok || json.error) {
     throw new Error(
