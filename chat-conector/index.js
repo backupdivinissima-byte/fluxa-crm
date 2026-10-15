@@ -166,6 +166,16 @@ function textoDe(msg) {
     m.buttonsResponseMessage?.selectedDisplayText ||
     m.listResponseMessage?.title ||
     m.templateButtonReplyMessage?.selectedDisplayText ||
+    m.buttonsMessage?.contentText ||
+    m.listMessage?.description ||
+    m.interactiveMessage?.body?.text ||
+    m.templateMessage?.hydratedTemplate?.hydratedContentText ||
+    m.interactiveResponseMessage?.body?.text ||
+    m.pollCreationMessage?.name ||
+    m.pollCreationMessageV3?.name ||
+    m.productMessage?.product?.title ||
+    m.orderMessage?.message ||
+    m.eventMessage?.name ||
     '';
   if (t) return t;
   if (m.imageMessage) return '[imagem]';
@@ -175,6 +185,11 @@ function textoDe(msg) {
   if (m.stickerMessage) return '[figurinha]';
   if (m.contactMessage || m.contactsArrayMessage) return '[contato]';
   if (m.locationMessage || m.liveLocationMessage) return '[localização]';
+  if (m.ptvMessage) return '[vídeo]';
+  if (m.productMessage) return '[produto]';
+  if (m.orderMessage) return '[pedido]';
+  if (m.interactiveMessage || m.buttonsMessage || m.listMessage || m.templateMessage || m.interactiveResponseMessage) return '[mensagem automática]';
+  if (m.pollCreationMessage || m.pollCreationMessageV3) return '[enquete]';
   return null;
 }
 

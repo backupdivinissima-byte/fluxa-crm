@@ -15,6 +15,7 @@
     "pino": "^9.4.0",
     "qrcode": "^1.5.4",
     "nodemailer": "^6.9.15",
-    "googleapis": "^144.0.0"
+    "googleapis": "^144.0.0",
+    "link-preview-js": "^3.0.5"
   }
 }
