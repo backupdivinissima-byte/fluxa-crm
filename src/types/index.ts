@@ -355,6 +355,8 @@ export interface MensagemChat {
   texto: string;
   em: string; // ISO
   autor?: string; // nome de quem da equipe enviou
+  midiaTipo?: 'imagem' | 'video';
+  midiaUrl?: string; // data URL (imagem ou miniatura do vídeo)
 }
 
 export interface ConexaoChat {

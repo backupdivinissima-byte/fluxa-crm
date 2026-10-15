@@ -323,7 +323,11 @@ export default function Chat() {
                         m.de === 'equipe' ? 'bg-teal-500/10 text-ink' : 'bg-surface text-ink'
                       }`}
                     >
-                      <div className="whitespace-pre-wrap break-words">{m.texto}</div>
+                      {m.midiaUrl && (
+                        <img src={m.midiaUrl} alt={m.midiaTipo === 'video' ? 'Miniatura do vídeo' : 'Foto'} className="rounded-lg mb-1 max-h-64 max-w-full" />
+                      )}
+                      {m.midiaTipo === 'video' && <div className="text-[11px] italic mb-1">🎥 Vídeo (veja o original no celular)</div>}
+                      {(!m.midiaTipo || (m.texto && !m.texto.startsWith('['))) && <div className="whitespace-pre-wrap break-words">{m.texto}</div>}
                       <div className="text-[10px] text-ink-soft mt-1">
                         {m.autor ? `${m.autor} · ` : ''}
                         {hora(m.em)}

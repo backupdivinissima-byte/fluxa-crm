@@ -10,7 +10,7 @@
 //   EMPRESA_ID                       id da empresa no Fluxa
 //   GOOGLE_APPLICATION_CREDENTIALS   caminho do .json da conta de serviço do Firebase
 import fs from 'node:fs';
-import makeWASocket, { DisconnectReason, useMultiFileAuthState, fetchLatestBaileysVersion } from '@whiskeysockets/baileys';
+import makeWASocket, { DisconnectReason, useMultiFileAuthState, fetchLatestBaileysVersion, downloadMediaMessage } from '@whiskeysockets/baileys';
 import { initializeApp, applicationDefault } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import QRCode from 'qrcode';
@@ -54,6 +54,25 @@ function textoDe(msg) {
   );
 }
 
+// Foto/vídeo: guarda a imagem (ou a miniatura do vídeo) dentro da própria mensagem,
+// no limite do Firestore. Vídeo completo não é guardado (fica no celular).
+async function midiaDe(msg) {
+  const m = msg.message ?? {};
+  const img = m.imageMessage;
+  const vid = m.videoMessage;
+  if (!img && !vid) return null;
+  try {
+    if (img) {
+      const buf = await downloadMediaMessage(msg, 'buffer', {}, { logger: log, reuploadRequest: sock.updateMediaMessage });
+      if (buf.length <= 600_000) return { midiaTipo: 'imagem', midiaUrl: `data:${img.mimetype || 'image/jpeg'};base64,${buf.toString('base64')}` };
+    }
+  } catch (e) {
+    console.error('Mídia:', e.message);
+  }
+  const th = (img ?? vid).jpegThumbnail;
+  return { midiaTipo: vid ? 'video' : 'imagem', ...(th ? { midiaUrl: `data:image/jpeg;base64,${Buffer.from(th).toString('base64')}` } : {}) };
+}
+
 async function guardarMensagem(msg) {
   const jid = msg.key.remoteJid;
   if (!jid || !jid.endsWith('@s.whatsapp.net')) return; // ignora grupos, status e listas
@@ -66,6 +85,7 @@ async function guardarMensagem(msg) {
     console.log(`[${deCliente ? 'RECEBIDA' : 'ENVIADA'}] ${msg.pushName || numero} (${numero}): ${texto}`);
     return;
   }
+  const midia = await midiaDe(msg);
   const conversaRef = base.collection('conversas').doc(`whatsapp_${numero}`);
   await conversaRef.set(
     {
@@ -82,7 +102,7 @@ async function guardarMensagem(msg) {
   );
   const snap = await conversaRef.get();
   if (!snap.data()?.nome) await conversaRef.set({ nome: msg.pushName || numero }, { merge: true });
-  await conversaRef.collection('mensagens').doc(msg.key.id).set({ de: deCliente ? 'cliente' : 'equipe', texto, em: quando });
+  await conversaRef.collection('mensagens').doc(msg.key.id).set({ de: deCliente ? 'cliente' : 'equipe', texto, em: quando, ...(deCliente ? {} : { autor: 'Celular' }), ...(midia ?? {}) });
 }
 
 async function iniciar() {
@@ -146,8 +166,11 @@ async function iniciar() {
     });
 
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
-      if (type !== 'notify') return;
+      // 'notify' = mensagens novas; 'append' também traz o que foi enviado pelo celular
+      // (aparelhos vinculados). Só aceita o que for recente, para não reimportar histórico.
+      if (type !== 'notify' && type !== 'append') return;
       for (const msg of messages) {
+        if (Date.now() / 1000 - Number(msg.messageTimestamp ?? 0) > 600) continue;
         try {
           await guardarMensagem(msg);
         } catch (e) {
