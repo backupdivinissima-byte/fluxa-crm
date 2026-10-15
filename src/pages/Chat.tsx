@@ -480,18 +480,8 @@ export default function Chat() {
 
       {erro && <p className="text-xs text-red-500">{erro}</p>}
 
-      {clienteAberto && aberta && (
-        <ClienteDetalheModal
-          empresaId={empresaId}
-          cliente={clienteAberto}
-          vendedores={vendedoresCrm}
-          ehAdmin={souAdmin}
-          telefoneInicial={aberta.telefone}
-          onClose={() => setClienteAberto(null)}
-        />
-      )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[340px_minmax(0,600px)] lg:justify-start gap-4 items-start">
+      <div className={`grid grid-cols-1 lg:justify-start gap-4 items-start ${clienteAberto && aberta ? 'lg:grid-cols-[340px_minmax(0,560px)_minmax(360px,520px)]' : 'lg:grid-cols-[340px_minmax(0,600px)]'}`}>
         <div className="bg-white border border-line rounded-2xl overflow-hidden">
           <div className="flex border-b border-line text-xs font-bold">
             {(['todas', 'novos', 'minhas'] as const).map((f) => (
@@ -778,6 +768,21 @@ export default function Chat() {
             </>
           )}
         </div>
+
+        {clienteAberto && aberta && (
+          <div className="min-w-0 lg:sticky lg:top-4">
+            <ClienteDetalheModal
+              key={`${aberta.id}-${clienteAberto.id}`}
+              embutido
+              empresaId={empresaId}
+              cliente={clienteAberto}
+              vendedores={vendedoresCrm}
+              ehAdmin={souAdmin}
+              telefoneInicial={aberta.telefone}
+              onClose={() => setClienteAberto(null)}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

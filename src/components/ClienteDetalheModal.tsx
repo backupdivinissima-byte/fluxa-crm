@@ -26,6 +26,8 @@ interface Props {
   vinculoVigente?: boolean;
   // Telefone já preenchido (ex.: o do contato do Chat que está sendo cadastrado).
   telefoneInicial?: string;
+  // Mostra o cadastro como painel fixo dentro da página (sem janela por cima).
+  embutido?: boolean;
   onClose: () => void;
 }
 
@@ -55,6 +57,7 @@ export default function ClienteDetalheModal({
   diasInatividade = DIAS_INATIVIDADE_PADRAO,
   vinculoVigente = true,
   telefoneInicial,
+  embutido = false,
   onClose,
 }: Props) {
   const { papel, sessaoVendedor } = useAuth();
@@ -130,9 +133,13 @@ export default function ClienteDetalheModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-ink/40 flex items-center justify-center p-4" onClick={onClose}>
+    <div className={embutido ? '' : 'fixed inset-0 z-50 bg-ink/40 flex items-center justify-center p-4'} onClick={embutido ? undefined : onClose}>
       <div
-        className="bg-white rounded-2xl max-w-5xl w-full max-h-[92vh] overflow-y-auto shadow-xl"
+        className={
+          embutido
+            ? 'bg-white border border-line rounded-2xl w-full max-h-[calc(100vh-140px)] overflow-y-auto'
+            : 'bg-white rounded-2xl max-w-5xl w-full max-h-[92vh] overflow-y-auto shadow-xl'
+        }
         onClick={(e) => e.stopPropagation()}
       >
         {/* Cabeçalho */}
@@ -163,7 +170,7 @@ export default function ClienteDetalheModal({
 
         <div className="px-6 sm:px-8 py-6">
           {/* Dados do cliente */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+          <div className={`grid grid-cols-1 ${embutido ? '' : 'md:grid-cols-2'} gap-x-8 gap-y-4`}>
             <div>
               <span className={ROTULO}>Razão social</span>
               <div className="text-[15px] text-ink">{cliente.razao ?? cliente.nome ?? '—'}</div>
@@ -219,7 +226,7 @@ export default function ClienteDetalheModal({
           </div>
 
           {/* Últimas compras e produtos */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 mt-7">
+          <div className={`grid grid-cols-1 ${embutido ? '' : 'md:grid-cols-2'} gap-x-8 gap-y-6 mt-7`}>
             <div>
               <span className={ROTULO}>Últimas compras</span>
               {compras.length > 0 ? (
