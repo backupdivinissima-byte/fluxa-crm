@@ -59,3 +59,6 @@ npm install
 npm start
 ```
 O QR Code aparece no próprio terminal. Leia no celular (WhatsApp → Aparelhos conectados → Conectar um aparelho) e mande uma mensagem de outro número: ela aparece no terminal como `[RECEBIDA]`. Para sair, Ctrl+C. A sessão fica salva na pasta `sessao-teste`.
+
+## Fotos, vídeos, áudios e documentos no Drive
+Com o Drive autorizado (`npm run backup-drive -- --autorizar`, uma vez) e `DRIVE_CLIENT_ID`/`DRIVE_CLIENT_SECRET` definidos, o conector salva cada mídia em "Fluxa Chat Midias/<número>" no Drive de backupdivinissima@gmail.com e a conversa mostra o link "Abrir ... no Drive". Sem isso, só foto pequena e miniatura de vídeo aparecem. Quem abrir o link precisa estar logado nessa conta do Google.

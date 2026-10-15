@@ -326,7 +326,13 @@ export default function Chat() {
                       {m.midiaUrl && (
                         <img src={m.midiaUrl} alt={m.midiaTipo === 'video' ? 'Miniatura do vídeo' : 'Foto'} className="rounded-lg mb-1 max-h-64 max-w-full" />
                       )}
-                      {m.midiaTipo === 'video' && <div className="text-[11px] italic mb-1">🎥 Vídeo (veja o original no celular)</div>}
+                      {m.midiaLink ? (
+                        <a href={m.midiaLink} target="_blank" rel="noreferrer" className="block text-[11px] font-bold underline mb-1">
+                          Abrir {m.midiaTipo === 'video' ? 'vídeo' : m.midiaTipo === 'audio' ? 'áudio' : m.midiaTipo === 'documento' ? 'documento' : 'foto'} completo no Drive
+                        </a>
+                      ) : (
+                        m.midiaTipo === 'video' && <div className="text-[11px] italic mb-1">🎥 Vídeo (veja o original no celular)</div>
+                      )}
                       {(!m.midiaTipo || (m.texto && !m.texto.startsWith('['))) && <div className="whitespace-pre-wrap break-words">{m.texto}</div>}
                       <div className="text-[10px] text-ink-soft mt-1">
                         {m.autor ? `${m.autor} · ` : ''}

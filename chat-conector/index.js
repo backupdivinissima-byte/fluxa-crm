@@ -15,6 +15,7 @@ import { initializeApp, applicationDefault } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import QRCode from 'qrcode';
 import pino from 'pino';
+import { guardarNoDrive, driveLigado } from './drive-midia.js';
 
 // MODO TESTE: sem banco. Mostra o QR Code no terminal e escreve as mensagens
 // recebidas na tela. Ativa com MODO_TESTE=1 ou quando não há credenciais.
@@ -54,23 +55,37 @@ function textoDe(msg) {
   );
 }
 
-// Foto/vídeo: guarda a imagem (ou a miniatura do vídeo) dentro da própria mensagem,
-// no limite do Firestore. Vídeo completo não é guardado (fica no celular).
-async function midiaDe(msg) {
+// Mídia: foto até ~600 KB vai dentro da própria mensagem; qualquer foto, vídeo,
+// áudio ou documento também vai para o Google Drive (se estiver autorizado),
+// e a conversa mostra o link. Sem Drive, vídeo fica só com a miniatura.
+const EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'video/mp4': 'mp4', 'audio/ogg; codecs=opus': 'ogg', 'audio/mpeg': 'mp3', 'application/pdf': 'pdf' };
+async function midiaDe(msg, numero) {
   const m = msg.message ?? {};
   const img = m.imageMessage;
   const vid = m.videoMessage;
-  if (!img && !vid) return null;
+  const aud = m.audioMessage;
+  const doc = m.documentMessage;
+  const alvo = img ?? vid ?? aud ?? doc;
+  if (!alvo) return null;
+  const tipo = img ? 'imagem' : vid ? 'video' : aud ? 'audio' : 'documento';
+  const out = { midiaTipo: tipo };
+  let buf = null;
   try {
-    if (img) {
-      const buf = await downloadMediaMessage(msg, 'buffer', {}, { logger: log, reuploadRequest: sock.updateMediaMessage });
-      if (buf.length <= 600_000) return { midiaTipo: 'imagem', midiaUrl: `data:${img.mimetype || 'image/jpeg'};base64,${buf.toString('base64')}` };
-    }
+    if (img || driveLigado()) buf = await downloadMediaMessage(msg, 'buffer', {}, { logger: log, reuploadRequest: sock.updateMediaMessage });
   } catch (e) {
     console.error('Mídia:', e.message);
   }
-  const th = (img ?? vid).jpegThumbnail;
-  return { midiaTipo: vid ? 'video' : 'imagem', ...(th ? { midiaUrl: `data:image/jpeg;base64,${Buffer.from(th).toString('base64')}` } : {}) };
+  if (buf) {
+    if (img && buf.length <= 600_000) out.midiaUrl = `data:${img.mimetype || 'image/jpeg'};base64,${buf.toString('base64')}`;
+    const nome = doc?.fileName || `${tipo}-${msg.key.id}.${EXT[alvo.mimetype] ?? 'bin'}`;
+    const link = await guardarNoDrive(buf, nome, alvo.mimetype, numero);
+    if (link) out.midiaLink = link;
+  }
+  if (!out.midiaUrl) {
+    const th = (img ?? vid)?.jpegThumbnail;
+    if (th) out.midiaUrl = `data:image/jpeg;base64,${Buffer.from(th).toString('base64')}`;
+  }
+  return out;
 }
 
 async function guardarMensagem(msg) {
@@ -85,7 +100,7 @@ async function guardarMensagem(msg) {
     console.log(`[${deCliente ? 'RECEBIDA' : 'ENVIADA'}] ${msg.pushName || numero} (${numero}): ${texto}`);
     return;
   }
-  const midia = await midiaDe(msg);
+  const midia = await midiaDe(msg, numero);
   const conversaRef = base.collection('conversas').doc(`whatsapp_${numero}`);
   await conversaRef.set(
     {
