@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { initializeAuth, browserSessionPersistence } from 'firebase/auth';
-import { initializeFirestore } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 
 // Projeto Firebase próprio do Fluxa CRM (fluxa-crm) — os dados foram
 // migrados do projeto antigo (divinissima-crm), que segue existindo
@@ -27,4 +27,12 @@ export const auth = initializeAuth(app, { persistence: browserSessionPersistence
 // (ex.: nome do cabeçalho só se autenticação = header). Sem essa opção, o
 // Firestore rejeita a escrita inteira com "Unsupported field value:
 // undefined" em vez de simplesmente ignorar esses campos.
-export const db = initializeFirestore(app, { ignoreUndefinedProperties: true });
+//
+// Cache local (IndexedDB, compartilhado entre abas): ao trocar de tela ou
+// recarregar, o Firestore só lê do servidor o que MUDOU desde a última vez,
+// em vez de reler a base de clientes inteira. Isso corta quase todo o
+// consumo de leituras da cota diária.
+export const db = initializeFirestore(app, {
+  ignoreUndefinedProperties: true,
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+});

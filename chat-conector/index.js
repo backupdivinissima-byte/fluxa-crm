@@ -361,21 +361,31 @@ async function enviarSaida(d) {
 }
 
 if (!MODO_TESTE) {
+  // Mensagens agendadas ficam numa lista em memória (sem reler o banco a cada 30 s).
+  const agendadasPendentes = new Map();
   base
     .collection('chatSaida')
     .where('enviada', '==', false)
     .onSnapshot((snap) => {
-      for (const mudanca of snap.docChanges()) if (mudanca.type === 'added') void enviarSaida(mudanca.doc);
+      for (const mudanca of snap.docChanges()) {
+        const d = mudanca.doc;
+        if (mudanca.type === 'removed') {
+          agendadasPendentes.delete(d.id);
+        } else if (d.data().agendadaPara) {
+          agendadasPendentes.set(d.id, d);
+        }
+        if (mudanca.type === 'added') void enviarSaida(d);
+      }
     });
-  // Mensagens agendadas: confere a cada 30 s se já chegou a hora.
-  setInterval(async () => {
-    try {
-      const snap = await base.collection('chatSaida').where('enviada', '==', false).get();
-      for (const d of snap.docs) if (d.data().agendadaPara) void enviarSaida(d);
-    } catch (e) {
-      console.error('Agendadas:', e.message);
+  setInterval(() => {
+    for (const [id, d] of agendadasPendentes) {
+      const quando = d.data().agendadaPara;
+      if (quando && new Date(quando).getTime() <= Date.now() && !processando.has(id)) {
+        agendadasPendentes.delete(id);
+        void enviarSaida(d);
+      }
     }
-  }, 30000);
+  }, 15000);
 }
 
 if (MODO_TESTE || fs.existsSync(PASTA_SESSAO)) void iniciar();
