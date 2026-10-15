@@ -74,6 +74,35 @@ function Cartao({ titulo, valor, dica, cor }: { titulo: string; valor: number; d
   );
 }
 
+function PainelCanal({ titulo, itens, abertaId, aoAbrir, vazio }: { titulo: string; itens: ConversaChat[]; abertaId: string | null; aoAbrir: (id: string) => void; vazio: string }) {
+  return (
+    <div className="bg-white border border-line rounded-2xl overflow-hidden flex flex-col lg:h-[var(--ph)] lg:min-h-[320px] min-h-[200px]">
+      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-line">
+        <span className="text-xs font-bold text-ink">{titulo}</span>
+        <span className="text-[11px] font-bold text-ink-soft">{itens.length}</span>
+      </div>
+      <ul className="flex-1 min-h-0 overflow-y-auto divide-y divide-line">
+        {itens.length === 0 && <li className="p-4 text-xs text-ink-soft text-center">{vazio}</li>}
+        {itens.map((c) => (
+          <li key={c.id}>
+            <button onClick={() => aoAbrir(c.id)} className={`w-full text-left px-3 py-2.5 hover:bg-surface ${abertaId === c.id ? 'bg-surface' : ''}`}>
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-bold text-xs text-ink truncate">{c.nome || c.contato}</span>
+                <span className="text-[10px] text-ink-soft shrink-0">{hora(c.ultimaEm)}</span>
+              </div>
+              <div className="flex items-center justify-between gap-2 mt-0.5">
+                <span className="text-[11px] text-ink-soft truncate">{c.ultimaMensagem}</span>
+                {c.ultimaDe === 'cliente' && <span className="w-2 h-2 rounded-full bg-teal-500 shrink-0" title="Sem resposta" />}
+              </div>
+              <div className="text-[10px] text-ink-soft mt-0.5">{c.vendedorNome ? `com ${c.vendedorNome}` : 'livre'}</div>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** Fluxa Chat: caixa única de atendimento (WhatsApp por QR Code; Instagram
  * Direct e Messenger entram na fase seguinte). O vendedor que abre a conversa
  * e clica em "Assumir" fica responsável por ela e pelo cliente no CRM. */
@@ -742,7 +771,7 @@ export default function Chat() {
       {erro && <p className="text-xs text-red-500">{erro}</p>}
 
 
-      <div ref={gradeRef} style={{ ["--ph" as string]: `${alturaPainel}px` }} className="grid grid-cols-1 lg:grid-cols-[380px_minmax(0,680px)_minmax(240px,300px)] lg:justify-start gap-4 items-stretch">
+      <div ref={gradeRef} style={{ ["--ph" as string]: `${alturaPainel}px` }} className="grid grid-cols-1 lg:grid-cols-[minmax(300px,380px)_minmax(0,680px)_minmax(190px,240px)_minmax(190px,240px)_minmax(220px,300px)] lg:justify-start gap-4 items-stretch">
         <div className="bg-white border border-line rounded-2xl overflow-hidden flex flex-col lg:h-[var(--ph)] lg:min-h-[320px]">
           <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-line">
             <span className="text-xs font-bold text-ink">Conversas</span>
@@ -1166,6 +1195,8 @@ export default function Chat() {
           )}
         </div>
 
+        <PainelCanal titulo="Instagram Direct" itens={visiveis.filter((c) => c.canal === 'instagram')} abertaId={abertaId} aoAbrir={setAbertaId} vazio="Nenhuma mensagem do Instagram Direct ainda." />
+        <PainelCanal titulo="Messenger" itens={visiveis.filter((c) => c.canal === 'facebook')} abertaId={abertaId} aoAbrir={setAbertaId} vazio="Nenhuma mensagem do Messenger ainda." />
         <div className="bg-white border border-line rounded-2xl p-3 flex flex-col lg:h-[var(--ph)] lg:min-h-[320px] min-h-[200px]">
           <div className="text-[10px] font-bold text-ink-soft uppercase tracking-wide mb-2">Ligações pelo WhatsApp — hoje</div>
           <div className="grid grid-cols-2 gap-2 mb-3">
