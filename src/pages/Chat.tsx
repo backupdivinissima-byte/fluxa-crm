@@ -18,6 +18,7 @@ import {
   type MensagemAgendada,
   chaveTelefone,
   enviarMensagemChat,
+  enviarAudioChat,
   liberarConversa,
   ouvirConexaoWhatsapp,
   ouvirConversas,
@@ -100,6 +101,12 @@ export default function Chat() {
   const [novaCor, setNovaCor] = useState(PALETA[5]);
   const [erro, setErro] = useState('');
   const fimRef = useRef<HTMLDivElement>(null);
+  const [fotoGrande, setFotoGrande] = useState<{ url: string; link?: string } | null>(null);
+  const [gravando, setGravando] = useState(false);
+  const [segGravacao, setSegGravacao] = useState(0);
+  const gravadorRef = useRef<MediaRecorder | null>(null);
+  const pedacosRef = useRef<Blob[]>([]);
+  const enviarAoParar = useRef(true);
 
   useEffect(() => {
     if (!empresaId) return;
@@ -292,6 +299,67 @@ export default function Chat() {
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Não foi possível assumir o atendimento.');
     }
+  }
+
+  useEffect(() => {
+    if (!gravando) return;
+    const t = setInterval(() => {
+      setSegGravacao((x) => {
+        if (x + 1 >= 150) pararGravacao(true); // limite de 2min30 por áudio
+        return x + 1;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gravando]);
+  useEffect(() => {
+    if (!fotoGrande) return;
+    const f = (e: KeyboardEvent) => e.key === 'Escape' && setFotoGrande(null);
+    window.addEventListener('keydown', f);
+    return () => window.removeEventListener('keydown', f);
+  }, [fotoGrande]);
+  useEffect(() => () => pararGravacao(false), []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function iniciarGravacao() {
+    setErro('');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const rec = new MediaRecorder(stream, { audioBitsPerSecond: 32000 });
+      pedacosRef.current = [];
+      enviarAoParar.current = true;
+      rec.ondataavailable = (e) => e.data.size && pedacosRef.current.push(e.data);
+      rec.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        setGravando(false);
+        if (!enviarAoParar.current || !aberta || !empresaId) return;
+        const blob = new Blob(pedacosRef.current, { type: rec.mimeType || 'audio/webm' });
+        if (blob.size < 1500) return;
+        if (blob.size > 650_000) {
+          setErro('Áudio muito longo. Grave até 2 minutos.');
+          return;
+        }
+        const leitor = new FileReader();
+        leitor.onload = () => {
+          void enviarAudioChat(empresaId, aberta, String(leitor.result), meuNome).catch((e) =>
+            setErro(e instanceof Error ? e.message : 'Não foi possível enviar o áudio.')
+          );
+        };
+        leitor.readAsDataURL(blob);
+      };
+      gravadorRef.current = rec;
+      setSegGravacao(0);
+      setGravando(true);
+      rec.start();
+    } catch {
+      setErro('Não consegui usar o microfone. Permita o microfone no cadeado ao lado do endereço do site.');
+    }
+  }
+
+  function pararGravacao(enviarAgora: boolean) {
+    enviarAoParar.current = enviarAgora;
+    const rec = gravadorRef.current;
+    if (rec && rec.state !== 'inactive') rec.stop();
+    gravadorRef.current = null;
   }
 
   async function enviar() {
@@ -652,7 +720,17 @@ export default function Chat() {
                       }`}
                     >
                       {m.midiaUrl && (
-                        <img src={m.midiaUrl} alt={m.midiaTipo === 'video' ? 'Miniatura do vídeo' : 'Foto'} className="rounded-lg mb-1 max-h-64 max-w-full" />
+                        m.midiaTipo === 'audio' ? (
+                          <audio controls src={m.midiaUrl} className="max-w-full mb-1" />
+                        ) : (
+                          <img
+                            src={m.midiaUrl}
+                            alt={m.midiaTipo === 'video' ? 'Miniatura do vídeo' : 'Foto'}
+                            onClick={() => setFotoGrande({ url: m.midiaUrl as string, link: m.midiaLink })}
+                            title="Clique para ampliar"
+                            className="rounded-lg mb-1 max-h-64 max-w-full cursor-zoom-in"
+                          />
+                        )
                       )}
                       {m.midiaLink ? (
                         <a href={m.midiaLink} target="_blank" rel="noreferrer" className="block text-[11px] font-bold underline mb-1">
@@ -731,6 +809,25 @@ export default function Chat() {
                         <span>{quando ? 'Clique no avião para agendar.' : 'Escolha a data e a hora.'}</span>
                       </div>
                     )}
+                    {gravando ? (
+                      <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
+                        <span className="text-sm font-bold text-red-600 tabular-nums">
+                          Gravando {Math.floor(segGravacao / 60)}:{String(segGravacao % 60).padStart(2, '0')}
+                        </span>
+                        <span className="flex-1" />
+                        <button type="button" onClick={() => pararGravacao(false)} className="text-xs font-bold text-ink-soft hover:text-red-600">
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => pararGravacao(true)}
+                          className="rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-xs font-bold px-4 py-2"
+                        >
+                          Enviar áudio
+                        </button>
+                      </div>
+                    ) : (
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
@@ -767,7 +864,18 @@ export default function Chat() {
                           <path d="M22 2 15 22l-4-9-9-4 20-7Z" />
                         </svg>
                       </button>
+                      {aberta.canal === 'whatsapp' && !texto.trim() && (
+                        <button
+                          type="button"
+                          onClick={() => void iniciarGravacao()}
+                          title="Gravar áudio"
+                          className="w-9 h-9 rounded-lg text-xl hover:bg-surface"
+                        >
+                          🎤
+                        </button>
+                      )}
                     </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -776,6 +884,19 @@ export default function Chat() {
         </div>
 
       </div>
+      {fotoGrande && (
+        <div className="fixed inset-0 z-50 bg-black/85 flex flex-col items-center justify-center p-4" onClick={() => setFotoGrande(null)}>
+          <button className="absolute top-4 right-5 text-white text-3xl leading-none" onClick={() => setFotoGrande(null)} title="Fechar">
+            ×
+          </button>
+          <img src={fotoGrande.url} alt="Foto ampliada" className="max-h-[88vh] max-w-[94vw] rounded-lg object-contain" onClick={(e) => e.stopPropagation()} />
+          {fotoGrande.link && (
+            <a href={fotoGrande.link} target="_blank" rel="noreferrer" className="mt-3 text-xs font-bold text-white underline" onClick={(e) => e.stopPropagation()}>
+              Abrir original no Drive
+            </a>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -10,6 +10,10 @@
 //   EMPRESA_ID                       id da empresa no Fluxa
 //   GOOGLE_APPLICATION_CREDENTIALS   caminho do .json da conta de serviço do Firebase
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { execFile } from 'node:child_process';
+import ffmpegPath from 'ffmpeg-static';
 import makeWASocket, { DisconnectReason, useMultiFileAuthState, fetchLatestBaileysVersion, downloadMediaMessage, normalizeMessageContent } from '@whiskeysockets/baileys';
 import { initializeApp, applicationDefault } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
@@ -107,12 +111,14 @@ async function midiaDe(msg, numero) {
   const out = { midiaTipo: tipo };
   let buf = null;
   try {
-    if (img || driveLigado()) buf = await downloadMediaMessage(msg, 'buffer', {}, { logger: log, reuploadRequest: sock.updateMediaMessage });
+    if (img || aud || driveLigado()) buf = await downloadMediaMessage(msg, 'buffer', {}, { logger: log, reuploadRequest: sock.updateMediaMessage });
   } catch (e) {
     console.error('Mídia:', e.message);
   }
   if (buf) {
     if (img && buf.length <= 600_000) out.midiaUrl = `data:${img.mimetype || 'image/jpeg'};base64,${buf.toString('base64')}`;
+    // Áudio curto vai dentro da mensagem para tocar direto no Chat.
+    if (aud && buf.length <= 600_000) out.midiaUrl = `data:${(aud.mimetype || 'audio/ogg').split(';')[0]};base64,${buf.toString('base64')}`;
     const nome = doc?.fileName || `${tipo}-${msg.key.id}.${EXT[alvo.mimetype] ?? 'bin'}`;
     const link = await guardarNoDrive(buf, nome, alvo.mimetype, numero);
     if (link) out.midiaLink = link;
@@ -357,6 +363,23 @@ refConexao.onSnapshot(async (snap) => {
 });
 
 // Fila de envio: respostas escritas pelos vendedores no Fluxa (imediatas ou agendadas).
+// Converte o áudio gravado no navegador (webm/opus, mp4...) para ogg/opus,
+// o formato das mensagens de voz do WhatsApp.
+function paraOggOpus(buf) {
+  return new Promise((resolve, reject) => {
+    const base = path.join(os.tmpdir(), `fluxa-audio-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    fs.writeFileSync(`${base}.in`, buf);
+    execFile(ffmpegPath, ['-y', '-i', `${base}.in`, '-vn', '-c:a', 'libopus', '-b:a', '32k', '-ar', '48000', '-ac', '1', '-f', 'ogg', `${base}.ogg`], (err) => {
+      try {
+        if (err) return reject(new Error('Falha ao converter o áudio: ' + err.message));
+        resolve(fs.readFileSync(`${base}.ogg`));
+      } finally {
+        for (const e of ['.in', '.ogg']) fs.rmSync(base + e, { force: true });
+      }
+    });
+  });
+}
+
 async function enviarSaida(d) {
   const dado = d.data();
   if (dado.canal !== 'whatsapp' || processando.has(d.id)) return;
@@ -364,7 +387,15 @@ async function enviarSaida(d) {
   processando.add(d.id);
   try {
     if (!aberto || !sock) throw new Error('WhatsApp desconectado');
-    const enviada = await sock.sendMessage(dado.paraJid || `${dado.para}@s.whatsapp.net`, { text: dado.texto });
+    const destino = dado.paraJid || `${dado.para}@s.whatsapp.net`;
+    let enviada;
+    if (dado.tipo === 'audio') {
+      const bruto = Buffer.from(String(dado.audioUrl).split(',')[1] ?? '', 'base64');
+      const ogg = await paraOggOpus(bruto);
+      enviada = await sock.sendMessage(destino, { audio: ogg, mimetype: 'audio/ogg; codecs=opus', ptt: true });
+    } else {
+      enviada = await sock.sendMessage(destino, { text: dado.texto });
+    }
     if (enviada?.key?.id) enviadasPorNos.add(enviada.key.id);
     await d.ref.update({ enviada: true, enviadaEm: agora() });
     if (dado.jaRegistrada === false) {

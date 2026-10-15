@@ -112,6 +112,39 @@ export async function enviarMensagemChat(
   });
 }
 
+/** Envia um áudio (data URL gravado no navegador) pelo WhatsApp. O conector converte
+ * para o formato de mensagem de voz do WhatsApp e envia. */
+export async function enviarAudioChat(empresaId: string, conversa: ConversaChat, audioUrl: string, autor: string) {
+  await chatPronto;
+  const agora = new Date().toISOString();
+  await addDoc(collection(db, 'empresas', empresaId, 'conversas', conversa.id, 'mensagens'), {
+    de: 'equipe',
+    texto: '[áudio]',
+    em: agora,
+    autor,
+    midiaTipo: 'audio',
+    midiaUrl: audioUrl,
+  });
+  await updateDoc(doc(db, 'empresas', empresaId, 'conversas', conversa.id), {
+    ultimaMensagem: '🎤 Áudio',
+    ultimaEm: agora,
+    ultimaDe: 'equipe',
+  });
+  await addDoc(collection(db, 'empresas', empresaId, 'chatSaida'), {
+    conversaId: conversa.id,
+    canal: conversa.canal,
+    para: conversa.contato,
+    ...(conversa.contatoJid ? { paraJid: conversa.contatoJid } : {}),
+    tipo: 'audio',
+    audioUrl,
+    texto: '[áudio]',
+    autor,
+    criadoEm: agora,
+    enviada: false,
+    jaRegistrada: true,
+  });
+}
+
 export interface MensagemAgendada {
   id: string;
   texto: string;
