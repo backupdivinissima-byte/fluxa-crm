@@ -15,7 +15,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Cliente, ConexaoChat, ConversaChat, MensagemChat } from '../types';
+import type { Cliente, ConexaoChat, ConversaChat, MensagemChat, TagChat } from '../types';
 
 const conversasCol = (e: string) => collection(db, 'empresas', e, 'conversas');
 
@@ -131,4 +131,22 @@ export function acharClientePorTelefone(clientes: Cliente[], telefone?: string):
   const k = chaveTelefone(telefone);
   if (k.length < 8) return undefined;
   return clientes.find((c) => chaveTelefone(c.telefone) === k);
+}
+
+export function ouvirTags(empresaId: string, cb: (t: TagChat[]) => void): Unsubscribe {
+  return onSnapshot(collection(db, 'empresas', empresaId, 'chatTags'), (snap) => {
+    cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<TagChat, 'id'>) })).sort((a, b) => a.nome.localeCompare(b.nome)));
+  });
+}
+
+export async function salvarTag(empresaId: string, nome: string, cor: string) {
+  await addDoc(collection(db, 'empresas', empresaId, 'chatTags'), { nome, cor });
+}
+
+export async function excluirTag(empresaId: string, id: string) {
+  await deleteDoc(doc(db, 'empresas', empresaId, 'chatTags', id));
+}
+
+export async function definirTagsConversa(empresaId: string, conversaId: string, tags: string[]) {
+  await updateDoc(doc(db, 'empresas', empresaId, 'conversas', conversaId), { tags });
 }

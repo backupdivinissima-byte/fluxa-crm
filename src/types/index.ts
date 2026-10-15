@@ -333,6 +333,12 @@ export interface MensagemLive {
 
 export type CanalChat = 'whatsapp' | 'instagram' | 'facebook';
 
+export interface TagChat {
+  id: string;
+  nome: string;
+  cor: string; // hex
+}
+
 export interface ConversaChat {
   id: string; // `${canal}_${contato}`
   canal: CanalChat;
@@ -347,6 +353,8 @@ export interface ConversaChat {
   vendedorNome?: string;
   clienteId?: string; // cliente do CRM vinculado
   atendimentoEm?: string; // ISO — quando o vendedor pegou
+  origem?: 'trafego'; // veio da landing page (senão a origem é o próprio canal)
+  tags?: string[]; // ids das tags cadastradas (chatTags)
 }
 
 export interface MensagemChat {

@@ -5,6 +5,10 @@ import { acaoDaColuna } from '../lib/crmLogic';
 import {
   acharClientePorTelefone,
   assumirConversa,
+  definirTagsConversa,
+  excluirTag,
+  ouvirTags,
+  salvarTag,
   cancelarAgendada,
   ouvirAgendadas,
   type MensagemAgendada,
@@ -16,9 +20,28 @@ import {
   ouvirMensagens,
   solicitarConexaoWhatsapp,
 } from '../lib/chatData';
-import type { Cliente, ColunaCrm, ConexaoChat, ConversaChat, MensagemChat } from '../types';
+import type { Cliente, ColunaCrm, ConexaoChat, ConversaChat, MensagemChat, TagChat } from '../types';
 
 const EMOJIS = ['😀','😁','😂','🤣','😊','😍','😘','😉','🙂','😎','🤩','🥰','😇','🤗','🤔','😅','😢','😭','😡','🙏','👍','👏','🙌','💪','👌','✌️','🤝','🎉','🎁','❤️','💖','💕','🔥','✨','⭐','🌟','💎','💍','👑','🛍️','💰','✅','❌','📦','🚚','📞','📅','⏰','🌹','🌸','☀️','🙋‍♀️','😴','🥳','😋','🤭'];
+
+const PALETA = ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#d946ef', '#ec4899', '#64748b', '#78350f'];
+
+// Tags de origem: entram sozinhas, conforme de onde o contato veio.
+const ORIGENS = {
+  whatsapp: { nome: 'WhatsApp', cor: '#22c55e' },
+  instagram: { nome: 'Instagram', cor: '#d946ef' },
+  facebook: { nome: 'Facebook', cor: '#3b82f6' },
+  trafego: { nome: 'Tráfego', cor: '#f97316' },
+} as const;
+const origemDe = (c: ConversaChat): keyof typeof ORIGENS => c.origem ?? c.canal;
+
+function Etiqueta({ nome, cor }: { nome: string; cor: string }) {
+  return (
+    <span className="inline-block rounded-full px-2 py-0.5 text-[10px] font-bold text-white" style={{ background: cor }}>
+      {nome}
+    </span>
+  );
+}
 
 const NOME_CANAL = { whatsapp: 'WhatsApp', instagram: 'Instagram', facebook: 'Messenger' } as const;
 
@@ -64,6 +87,10 @@ export default function Chat() {
   const [mostrarRelogio, setMostrarRelogio] = useState(false);
   const [quando, setQuando] = useState(''); // datetime-local
   const campoRef = useRef<HTMLInputElement>(null);
+  const [tags, setTags] = useState<TagChat[]>([]);
+  const [gerenciarTags, setGerenciarTags] = useState(false);
+  const [novaTag, setNovaTag] = useState('');
+  const [novaCor, setNovaCor] = useState(PALETA[5]);
   const [erro, setErro] = useState('');
   const fimRef = useRef<HTMLDivElement>(null);
 
@@ -73,11 +100,13 @@ export default function Chat() {
     const u2 = ouvirClientes(empresaId, setClientes);
     const u4 = ouvirEmpresa(empresaId, (e) => setColunas(e?.crmColunas ?? []));
     const u5 = ouvirConexaoWhatsapp(empresaId, setConexao);
+    const u6 = ouvirTags(empresaId, setTags);
     return () => {
       u1();
       u2();
       u4();
       u5();
+      u6();
     };
   }, [empresaId]);
 
@@ -115,6 +144,35 @@ export default function Chat() {
   const emAtendimento = visiveis.filter((c) => !!c.vendedorLogin).length;
   const semResposta = visiveis.filter((c) => c.ultimaDe === 'cliente').length;
   const novos = visiveis.filter(ehNovo).length;
+  const porOrigem = (Object.keys(ORIGENS) as (keyof typeof ORIGENS)[]).map((k) => ({
+    chave: k,
+    ...ORIGENS[k],
+    total: visiveis.filter((c) => origemDe(c) === k).length,
+  }));
+  const porTag = tags.map((t) => ({ ...t, total: visiveis.filter((c) => c.tags?.includes(t.id)).length }));
+
+  async function criarTag() {
+    const nome = novaTag.trim();
+    if (!empresaId || !nome) return;
+    setErro('');
+    try {
+      await salvarTag(empresaId, nome, novaCor);
+      setNovaTag('');
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Não foi possível salvar a tag.');
+    }
+  }
+
+  async function alternarTag(c: ConversaChat, id: string) {
+    if (!empresaId) return;
+    const atuais = c.tags ?? [];
+    const novas = atuais.includes(id) ? atuais.filter((x) => x !== id) : [...atuais, id];
+    try {
+      await definirTagsConversa(empresaId, c.id, novas);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Não foi possível marcar a tag.');
+    }
+  }
 
   const aberta = conversas.find((c) => c.id === abertaId) ?? null;
   const donaDoAtendimento = aberta?.vendedorLogin && aberta.vendedorLogin !== meuLogin ? aberta.vendedorNome : '';
@@ -209,6 +267,73 @@ export default function Chat() {
         <Cartao titulo="Clientes novos" valor={novos} dica="Contatos sem cadastro no CRM" />
       </div>
 
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {porOrigem.map((o) => (
+          <Cartao key={o.chave} titulo={`Tag ${o.nome}`} valor={o.total} dica="Clientes com esta origem" />
+        ))}
+        {porTag.map((t) => (
+          <Cartao key={t.id} titulo={`Tag ${t.nome}`} valor={t.total} dica="Clientes com esta tag" />
+        ))}
+      </div>
+
+      {souAdmin && (
+        <div className="bg-white border border-line rounded-2xl p-4">
+          <button onClick={() => setGerenciarTags((v) => !v)} className="text-sm font-extrabold text-ink">
+            {gerenciarTags ? '▾' : '▸'} Cadastrar tags
+          </button>
+          {gerenciarTags && (
+            <div className="mt-3 space-y-3">
+              <p className="text-xs text-ink-soft">
+                WhatsApp, Instagram, Facebook e Tráfego entram sozinhas conforme a origem do contato. As tags abaixo são as que a equipe escolhe ao atender (ex.: Novo cliente, Já é cliente, VIP).
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  value={novaTag}
+                  onChange={(e) => setNovaTag(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && void criarTag()}
+                  placeholder="Nome da tag"
+                  className="rounded-lg border border-line px-3 py-2 text-sm"
+                />
+                <div className="flex flex-wrap gap-1.5">
+                  {PALETA.map((cor) => (
+                    <button
+                      key={cor}
+                      type="button"
+                      onClick={() => setNovaCor(cor)}
+                      title={cor}
+                      className={`w-6 h-6 rounded-full border-2 ${novaCor === cor ? 'border-ink' : 'border-transparent'}`}
+                      style={{ background: cor }}
+                    />
+                  ))}
+                </div>
+                <button
+                  onClick={() => void criarTag()}
+                  disabled={!novaTag.trim()}
+                  className="rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-4 py-2 disabled:opacity-60"
+                >
+                  Adicionar
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {tags.length === 0 && <span className="text-xs text-ink-soft">Nenhuma tag cadastrada ainda.</span>}
+                {tags.map((t) => (
+                  <span key={t.id} className="inline-flex items-center gap-1">
+                    <Etiqueta nome={t.nome} cor={t.cor} />
+                    <button
+                      onClick={() => empresaId && void excluirTag(empresaId, t.id)}
+                      className="text-[11px] text-red-500 font-bold"
+                      title="Excluir tag"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {souAdmin && conexao.status !== 'conectado' && (
         <div className="bg-white border border-line rounded-2xl p-6">
           <h2 className="text-sm font-extrabold text-ink mb-1">Conectar o WhatsApp</h2>
@@ -244,7 +369,7 @@ export default function Chat() {
                 onClick={() => setFiltro(f)}
                 className={`flex-1 py-2.5 ${filtro === f ? 'text-teal-500 border-b-2 border-teal-500' : 'text-ink-soft'}`}
               >
-                {f === 'todas' ? 'Todas' : f === 'novos' ? `Novas${novos ? ` (${novos})` : ''}` : 'Minhas'}
+                {f === 'todas' ? 'Todas' : f === 'novos' ? `Novo Contato${novos ? ` (${novos})` : ''}` : 'Minhas'}
               </button>
             ))}
           </div>
@@ -266,6 +391,13 @@ export default function Chat() {
                   </div>
                   <div className="text-[10px] text-ink-soft mt-1">
                     {NOME_CANAL[c.canal]} · {c.vendedorNome ? `com ${c.vendedorNome}` : 'livre'}
+                  </div>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    <Etiqueta nome={ORIGENS[origemDe(c)].nome} cor={ORIGENS[origemDe(c)].cor} />
+                    {(c.tags ?? []).map((id) => {
+                      const t = tags.find((x) => x.id === id);
+                      return t ? <Etiqueta key={id} nome={t.nome} cor={t.cor} /> : null;
+                    })}
                   </div>
                 </button>
               </li>
@@ -314,6 +446,24 @@ export default function Chat() {
                     Liberar
                   </button>
                 )}
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5 px-4 py-2 border-b border-line">
+                <Etiqueta nome={ORIGENS[origemDe(aberta)].nome} cor={ORIGENS[origemDe(aberta)].cor} />
+                <span className="text-[11px] text-ink-soft mx-1">Tags:</span>
+                {tags.length === 0 && <span className="text-[11px] text-ink-soft">nenhuma cadastrada (o gerencial cadastra em "Cadastrar tags")</span>}
+                {tags.map((t) => {
+                  const marcada = aberta.tags?.includes(t.id);
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => void alternarTag(aberta, t.id)}
+                      className="rounded-full px-2.5 py-0.5 text-[11px] font-bold border-2"
+                      style={marcada ? { background: t.cor, borderColor: t.cor, color: '#fff' } : { borderColor: t.cor, color: t.cor }}
+                    >
+                      {t.nome}
+                    </button>
+                  );
+                })}
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-2 max-h-[420px]">
                 {mensagens.map((m) => (
