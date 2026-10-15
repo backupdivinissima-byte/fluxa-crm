@@ -355,6 +355,7 @@ export interface ConversaChat {
   atendimentoEm?: string; // ISO — quando o vendedor pegou
   origem?: 'trafego'; // veio da landing page (senão a origem é o próprio canal)
   tags?: string[]; // ids das tags cadastradas (chatTags)
+  salvoNaAgenda?: boolean; // o nome veio da agenda do celular
 }
 
 export interface MensagemChat {

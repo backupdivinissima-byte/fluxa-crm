@@ -39,6 +39,8 @@ let sock = null;
 let aberto = false;
 let iniciando = false;
 const enviadasPorNos = new Set();
+// Nomes da agenda do celular (contatos salvos), por número.
+const agenda = new Map();
 const processando = new Set();
 
 const agora = () => new Date().toISOString();
@@ -88,6 +90,20 @@ async function midiaDe(msg, numero) {
   return out;
 }
 
+function lembrarContatos(lista) {
+  for (const c of lista ?? []) {
+    const id = c.id ?? '';
+    if (!id.endsWith('@s.whatsapp.net') || !c.name) continue; // `name` = nome salvo na agenda
+    const numero = soDigitos(id);
+    agenda.set(numero, c.name);
+    if (MODO_TESTE || !base) continue;
+    // Se já existe conversa com esse número, atualiza o nome para o da agenda.
+    base.collection('conversas').doc(`whatsapp_${numero}`).get().then((snap) => {
+      if (snap.exists) return snap.ref.set({ nome: c.name, salvoNaAgenda: true }, { merge: true });
+    }).catch(() => {});
+  }
+}
+
 async function guardarMensagem(msg) {
   const jid = msg.key.remoteJid;
   if (!jid || !jid.endsWith('@s.whatsapp.net')) return; // ignora grupos, status e listas
@@ -107,7 +123,7 @@ async function guardarMensagem(msg) {
       canal: 'whatsapp',
       contato: numero,
       telefone: numero,
-      ...(deCliente && msg.pushName ? { nome: msg.pushName } : {}),
+      ...(agenda.has(numero) ? { nome: agenda.get(numero), salvoNaAgenda: true } : deCliente && msg.pushName ? { nome: msg.pushName } : {}),
       ultimaMensagem: texto,
       ultimaEm: quando,
       ultimaDe: deCliente ? 'cliente' : 'equipe',
@@ -128,6 +144,10 @@ async function iniciar() {
     const { version } = await fetchLatestBaileysVersion();
     sock = makeWASocket({ version, auth: state, logger: log, printQRInTerminal: false, browser: ['Fluxa Chat', 'Chrome', '1.0'] });
     sock.ev.on('creds.update', saveCreds);
+    // Contatos salvos no celular chegam ao conectar e quando mudam.
+    sock.ev.on('contacts.upsert', lembrarContatos);
+    sock.ev.on('contacts.update', lembrarContatos);
+    sock.ev.on('messaging-history.set', ({ contacts }) => lembrarContatos(contacts));
 
     sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
       if (qr) {

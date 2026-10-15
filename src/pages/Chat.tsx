@@ -427,7 +427,10 @@ export default function Chat() {
                   className={`w-full text-left px-4 py-3 hover:bg-surface ${abertaId === c.id ? 'bg-surface' : ''}`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-bold text-sm text-ink truncate">{c.nome || c.telefone || c.contato}</span>
+                    <span className="font-bold text-sm text-ink truncate">
+                      {c.nome || c.telefone || c.contato}
+                      {c.salvoNaAgenda && <span title="Salvo na agenda do celular"> 📒</span>}
+                    </span>
                     <span className="text-[11px] text-ink-soft shrink-0">{hora(c.ultimaEm)}</span>
                   </div>
                   <div className="flex items-center justify-between gap-2 mt-0.5">
@@ -457,7 +460,10 @@ export default function Chat() {
             <>
               <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-line">
                 <div>
-                  <div className="font-bold text-sm text-ink">{aberta.nome || aberta.telefone || aberta.contato}</div>
+                  <div className="font-bold text-sm text-ink">
+                    {aberta.nome || aberta.telefone || aberta.contato}
+                    {aberta.salvoNaAgenda && <span className="ml-2 text-[10px] font-bold text-emerald-600">📒 Salvo na agenda do celular</span>}
+                  </div>
                   <div className="text-[11px] text-ink-soft">
                     {NOME_CANAL[aberta.canal]}
                     {aberta.telefone ? ` · ${aberta.telefone}` : ''}
