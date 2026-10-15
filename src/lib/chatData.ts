@@ -218,6 +218,16 @@ export function ouvirLigacoesHoje(empresaId: string, cb: (l: LigacaoChat[]) => v
 }
 
 /** Salva o contato na agenda do Fluxa Chat com o nome escolhido (o da agenda do celular ou outro). */
+/** Edita um contato já salvo: nome e (opcional) telefone. */
+export async function editarContatoChat(empresaId: string, conversaId: string, dados: { nome: string; telefone?: string }) {
+  await chatPronto;
+  await updateDoc(doc(db, 'empresas', empresaId, 'conversas', conversaId), {
+    nome: dados.nome,
+    salvo: true,
+    ...(dados.telefone ? { telefone: dados.telefone } : {}),
+  });
+}
+
 export async function salvarContatoChat(empresaId: string, conversaId: string, nome: string) {
   await chatPronto;
   await updateDoc(doc(db, 'empresas', empresaId, 'conversas', conversaId), { nome, salvo: true });

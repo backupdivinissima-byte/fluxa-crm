@@ -13,6 +13,7 @@ import {
   type LigacaoChat,
   salvarTag,
   salvarContatoChat,
+  editarContatoChat,
   cancelarAgendada,
   ouvirAgendadas,
   type MensagemAgendada,
@@ -130,6 +131,8 @@ export default function Chat() {
   const [telParear, setTelParear] = useState('');
   const [nomeContato, setNomeContato] = useState('');
   const [codigoCliente, setCodigoCliente] = useState('');
+  const [editando, setEditando] = useState(false);
+  const [telContato, setTelContato] = useState('');
   const [novaCor, setNovaCor] = useState(PALETA[5]);
   const [erro, setErro] = useState('');
   const fimRef = useRef<HTMLDivElement>(null);
@@ -215,6 +218,8 @@ export default function Chat() {
   // Ao abrir outra conversa, o campo de nome começa com o nome que chegou pronto.
   useEffect(() => {
     setNomeContato(aberta?.nome ?? aberta?.nomeSugerido ?? '');
+    setTelContato(aberta?.telefone ?? '');
+    setEditando(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [abertaId]);
 
@@ -259,9 +264,15 @@ export default function Chat() {
         await salvarContatoChat(empresaId, aberta.id, cli.razao ?? cli.nome ?? nomeContato.trim());
         await assumirConversa(empresaId, aberta.id, login, nomeVend, cli.id);
         setCodigoCliente('');
+        setEditando(false);
         return;
       }
       const nome = nomeContato.trim();
+      if (editando) {
+        await editarContatoChat(empresaId, aberta.id, { nome, telefone: telContato.replace(/\D/g, '') || undefined });
+        setEditando(false);
+        return;
+      }
       await salvarContatoChat(empresaId, aberta.id, nome);
       // Ao salvar o contato, ele passa a pertencer a quem salvou (se ainda não tiver dono).
       if (!aberta.vendedorLogin) await assumir({ ...aberta, nome });
@@ -690,6 +701,18 @@ export default function Chat() {
                     Assumir atendimento
                   </button>
                 )}
+                {aberta.salvo && !editando && (
+                  <button
+                    onClick={() => {
+                      setNomeContato(aberta.nome ?? '');
+                      setTelContato(aberta.telefone ?? clienteCrm?.telefone ?? '');
+                      setEditando(true);
+                    }}
+                    className="rounded-xl border border-line text-ink text-xs font-bold px-3 py-2 hover:bg-surface"
+                  >
+                    ✏️ Editar contato
+                  </button>
+                )}
                 {aberta.vendedorLogin === meuLogin && (
                   <button
                     onClick={() => void liberarConversa(empresaId, aberta.id)}
@@ -699,7 +722,7 @@ export default function Chat() {
                   </button>
                 )}
               </div>
-              {(!aberta.salvo || !aberta.clienteId) && (
+              {(!aberta.salvo || !aberta.clienteId || editando) && (
                 <div className="flex flex-wrap items-center gap-2 px-4 py-2 border-b border-line bg-amber-50 text-xs">
                   <input
                     value={codigoCliente}
@@ -709,7 +732,7 @@ export default function Chat() {
                     title="Digite o código do cliente e clique em Salvar contato: ele entra no CRM em Em atendimento"
                     className="w-36 rounded-lg border border-line px-2 py-1.5 text-sm bg-white"
                   />
-                  <span className="font-bold text-ink">Pré-cadastro — salvar contato:</span>
+                  <span className="font-bold text-ink">{editando ? 'Editar contato:' : 'Pré-cadastro — salvar contato:'}</span>
                   <input
                     value={nomeContato}
                     onChange={(e) => setNomeContato(e.target.value)}
@@ -717,6 +740,15 @@ export default function Chat() {
                     placeholder="Nome do contato"
                     className="rounded-lg border border-line px-2 py-1.5 text-sm bg-white"
                   />
+                  {editando && (
+                    <input
+                      value={telContato}
+                      onChange={(e) => setTelContato(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && void salvarContato()}
+                      placeholder="Telefone (DDD + número)"
+                      className="w-44 rounded-lg border border-line px-2 py-1.5 text-sm bg-white"
+                    />
+                  )}
                   {aberta.nomeSugerido && nomeContato.trim() !== aberta.nomeSugerido && (
                     <button onClick={() => setNomeContato(aberta.nomeSugerido ?? '')} className="text-ink-soft underline">
                       usar “{aberta.nomeSugerido}”
@@ -727,8 +759,13 @@ export default function Chat() {
                     disabled={!nomeContato.trim() && !codigoCliente.trim()}
                     className="rounded-lg bg-gradient-to-br from-teal-500 to-blue-600 text-white font-bold px-3 py-1.5 disabled:opacity-60"
                   >
-                    Salvar contato
+                    {editando ? 'Salvar alterações' : 'Salvar contato'}
                   </button>
+                  {editando && (
+                    <button onClick={() => setEditando(false)} className="text-ink-soft underline">
+                      Cancelar
+                    </button>
+                  )}
                 </div>
               )}
               <div className="flex flex-wrap items-center gap-1.5 px-4 py-2 border-b border-line">
