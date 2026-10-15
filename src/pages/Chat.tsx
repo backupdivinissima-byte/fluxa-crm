@@ -664,6 +664,7 @@ export default function Chat() {
         </div>
       </div>
 
+      {souAdmin && (
       <div className="grid grid-cols-1 gap-3 items-stretch">
         <div className="space-y-2">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -683,6 +684,7 @@ export default function Chat() {
       </div>
         </div>
       </div>
+      )}
 
       {souAdmin && (
         <div className="bg-white border border-line rounded-2xl p-4">
