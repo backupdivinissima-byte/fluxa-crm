@@ -837,10 +837,8 @@ export default function Chat() {
                 </div>
                 {aberta.canal === 'whatsapp' && aberta.telefone && (
                   <a
-                    href={`https://wa.me/${aberta.telefone.replace(/\D/g, '')}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    title="Abre o WhatsApp (celular ou WhatsApp Desktop) para ligar por voz"
+                    href={`whatsapp://send?phone=${aberta.telefone.replace(/\D/g, '')}`}
+                    title="Abre direto o aplicativo WhatsApp do computador nesta conversa; é só tocar no ícone de telefone"
                     onClick={() =>
                       void registrarLigacao(empresaId, { tipo: 'feita', conversaId: aberta.id, vendedorLogin: meuLogin, vendedorNome: meuNome }).catch(() => {})
                     }
