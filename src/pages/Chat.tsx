@@ -64,11 +64,12 @@ function hora(iso: string) {
     : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 }
 
-function Cartao({ titulo, valor, dica }: { titulo: string; valor: number; dica: string }) {
+function Cartao({ titulo, valor, dica, cor }: { titulo: string; valor: number; dica: string; cor?: 'verde' | 'laranja' | 'azul' }) {
+  const corValor = cor === 'verde' ? 'text-emerald-600' : cor === 'laranja' ? 'text-orange-500' : cor === 'azul' ? 'text-blue-600' : 'text-ink';
   return (
     <div className="bg-white border border-line rounded-xl px-3 py-2" title={dica}>
       <div className="text-[10px] font-bold text-ink-soft uppercase tracking-wide truncate">{titulo}</div>
-      <div className="text-xl font-extrabold text-ink tabular-nums">{valor}</div>
+      <div className={`text-xl font-extrabold tabular-nums ${corValor}`}>{valor}</div>
     </div>
   );
 }
@@ -608,13 +609,13 @@ export default function Chat() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-3 items-stretch">
+      <div className="grid grid-cols-1 gap-3 items-stretch">
         <div className="space-y-2">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         <Cartao titulo="Aguardando atendimento" valor={aguardando} dica="Clientes sem vendedor esperando resposta" />
-        <Cartao titulo="Em atendimento" valor={emAtendimento} dica="Conversas com um vendedor responsável" />
-        <Cartao titulo="Abertas sem resposta" valor={semResposta} dica="A última mensagem foi do cliente" />
-        <Cartao titulo="Clientes novos" valor={novos} dica="Contatos sem cadastro no CRM" />
+        <Cartao titulo="Em atendimento" valor={emAtendimento} dica="Conversas com um vendedor responsável" cor="verde" />
+        <Cartao titulo="Abertas sem resposta" valor={semResposta} dica="A última mensagem foi do cliente" cor="laranja" />
+        <Cartao titulo="Clientes novos" valor={novos} dica="Contatos sem cadastro no CRM" cor="azul" />
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -625,30 +626,6 @@ export default function Chat() {
           <Cartao key={t.id} titulo={`Tag ${t.nome}`} valor={t.total} dica="Clientes com esta tag" />
         ))}
       </div>
-        </div>
-        <div className="bg-white border border-line rounded-xl p-3 flex flex-col">
-          <div className="text-[10px] font-bold text-ink-soft uppercase tracking-wide mb-2">Ligações pelo WhatsApp — hoje</div>
-          <div className="grid grid-cols-2 gap-2 mb-2 flex-1">
-            <div className="rounded-lg bg-surface px-3 py-2 flex flex-col justify-center">
-              <div className="text-[10px] text-ink-soft font-bold">Feitas</div>
-              <div className="text-3xl font-extrabold text-ink tabular-nums">{minhasLig.filter((l) => l.tipo === 'feita').length}</div>
-            </div>
-            <div className="rounded-lg bg-surface px-3 py-2 flex flex-col justify-center">
-              <div className="text-[10px] text-ink-soft font-bold">Recebidas</div>
-              <div className="text-3xl font-extrabold text-ink tabular-nums">{minhasLig.filter((l) => l.tipo === 'recebida').length}</div>
-            </div>
-          </div>
-          {souAdmin && (
-            <ul className="space-y-1 max-h-28 overflow-y-auto">
-              {ligPorUsuario.length === 0 && <li className="text-[11px] text-ink-soft">Nenhuma ligação hoje.</li>}
-              {ligPorUsuario.map((u) => (
-                <li key={u.nome} className="flex justify-between text-[11px] text-ink">
-                  <span className="truncate">{u.nome}</span>
-                  <span className="tabular-nums shrink-0">{u.feitas} feitas · {u.recebidas} recebidas</span>
-                </li>
-              ))}
-            </ul>
-          )}
         </div>
       </div>
 
@@ -765,7 +742,7 @@ export default function Chat() {
       {erro && <p className="text-xs text-red-500">{erro}</p>}
 
 
-      <div ref={gradeRef} style={{ ["--ph" as string]: `${alturaPainel}px` }} className="grid grid-cols-1 lg:grid-cols-[340px_minmax(0,600px)] lg:justify-start gap-4 items-stretch">
+      <div ref={gradeRef} style={{ ["--ph" as string]: `${alturaPainel}px` }} className="grid grid-cols-1 lg:grid-cols-[380px_minmax(0,680px)_minmax(240px,300px)] lg:justify-start gap-4 items-stretch">
         <div className="bg-white border border-line rounded-2xl overflow-hidden flex flex-col lg:h-[var(--ph)] lg:min-h-[320px]">
           <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-line">
             <span className="text-xs font-bold text-ink">Conversas</span>
@@ -1174,6 +1151,30 @@ export default function Chat() {
           )}
         </div>
 
+        <div className="bg-white border border-line rounded-2xl p-3 flex flex-col lg:h-[var(--ph)] lg:min-h-[320px] min-h-[200px]">
+          <div className="text-[10px] font-bold text-ink-soft uppercase tracking-wide mb-2">Ligações pelo WhatsApp — hoje</div>
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            <div className="rounded-lg bg-surface px-3 py-2 flex flex-col justify-center">
+              <div className="text-[10px] text-ink-soft font-bold">Feitas</div>
+              <div className="text-3xl font-extrabold text-ink tabular-nums">{minhasLig.filter((l) => l.tipo === 'feita').length}</div>
+            </div>
+            <div className="rounded-lg bg-surface px-3 py-2 flex flex-col justify-center">
+              <div className="text-[10px] text-ink-soft font-bold">Recebidas</div>
+              <div className="text-3xl font-extrabold text-ink tabular-nums">{minhasLig.filter((l) => l.tipo === 'recebida').length}</div>
+            </div>
+          </div>
+          {souAdmin && (
+            <ul className="space-y-1 flex-1 min-h-0 overflow-y-auto">
+              {ligPorUsuario.length === 0 && <li className="text-[11px] text-ink-soft">Nenhuma ligação hoje.</li>}
+              {ligPorUsuario.map((u) => (
+                <li key={u.nome} className="flex justify-between text-[11px] text-ink">
+                  <span className="truncate">{u.nome}</span>
+                  <span className="tabular-nums shrink-0">{u.feitas} feitas · {u.recebidas} recebidas</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
       {novoContato && (
         <div className="fixed inset-0 z-50 bg-ink/40 flex items-center justify-center p-4" onClick={() => setNovoContato(null)}>
