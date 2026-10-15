@@ -50,7 +50,7 @@ export default function Chat() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [colunas, setColunas] = useState<ColunaCrm[]>([]);
   const [conexao, setConexao] = useState<ConexaoChat>({ status: 'desconectado' });
-  const [filtro, setFiltro] = useState<'todas' | 'livres' | 'minhas'>('todas');
+  const [filtro, setFiltro] = useState<'todas' | 'novos' | 'minhas'>('todas');
   const [abertaId, setAbertaId] = useState<string | null>(null);
   const [mensagens, setMensagens] = useState<MensagemChat[]>([]);
   const [texto, setTexto] = useState('');
@@ -85,20 +85,21 @@ export default function Chat() {
     () => (souAdmin ? conversas : conversas.filter((c) => !c.vendedorLogin || c.vendedorLogin === meuLogin)),
     [conversas, souAdmin, meuLogin]
   );
+  // Novos = primeiro contato: ninguém assumiu e o telefone ainda não existe no CRM.
+  const ehNovo = (c: ConversaChat) => !c.vendedorLogin && !c.clienteId && !acharClientePorTelefone(clientes, c.telefone);
   const lista = useMemo(
     () =>
       visiveis.filter((c) =>
-        filtro === 'livres' ? !c.vendedorLogin : filtro === 'minhas' ? c.vendedorLogin === meuLogin : true
+        filtro === 'novos' ? ehNovo(c) : filtro === 'minhas' ? c.vendedorLogin === meuLogin : true
       ),
-    [visiveis, filtro, meuLogin]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [visiveis, filtro, meuLogin, clientes]
   );
 
   const aguardando = visiveis.filter((c) => !c.vendedorLogin && c.ultimaDe === 'cliente').length;
   const emAtendimento = visiveis.filter((c) => !!c.vendedorLogin).length;
   const semResposta = visiveis.filter((c) => c.ultimaDe === 'cliente').length;
-  const novos = visiveis.filter(
-    (c) => !c.vendedorLogin && !c.clienteId && !acharClientePorTelefone(clientes, c.telefone)
-  ).length;
+  const novos = visiveis.filter(ehNovo).length;
 
   const aberta = conversas.find((c) => c.id === abertaId) ?? null;
   const donaDoAtendimento = aberta?.vendedorLogin && aberta.vendedorLogin !== meuLogin ? aberta.vendedorNome : '';
@@ -210,13 +211,13 @@ export default function Chat() {
       <div className="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-4 items-start">
         <div className="bg-white border border-line rounded-2xl overflow-hidden">
           <div className="flex border-b border-line text-xs font-bold">
-            {(['todas', 'livres', 'minhas'] as const).map((f) => (
+            {(['todas', 'novos', 'minhas'] as const).map((f) => (
               <button
                 key={f}
                 onClick={() => setFiltro(f)}
                 className={`flex-1 py-2.5 ${filtro === f ? 'text-teal-500 border-b-2 border-teal-500' : 'text-ink-soft'}`}
               >
-                {f === 'todas' ? 'Todas' : f === 'livres' ? 'Livres' : 'Minhas'}
+                {f === 'todas' ? 'Todas' : f === 'novos' ? `Novos clientes${novos ? ` (${novos})` : ''}` : 'Minhas'}
               </button>
             ))}
           </div>
