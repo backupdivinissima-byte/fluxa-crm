@@ -1240,7 +1240,7 @@ export default function Chat() {
         <PainelCanal titulo="Instagram Direct" icone={<IconeInstagram />} itens={visiveis.filter((c) => c.canal === 'instagram')} abertaId={abertaId} aoAbrir={setAbertaId} vazio="Nenhuma mensagem do Instagram Direct ainda." />
         <PainelCanal titulo="Messenger" icone={<IconeMessenger />} itens={visiveis.filter((c) => c.canal === 'facebook')} abertaId={abertaId} aoAbrir={setAbertaId} vazio="Nenhuma mensagem do Messenger ainda." />
         <div className="bg-white border border-line rounded-2xl p-3 flex flex-col lg:h-[var(--ph)] lg:min-h-[320px] min-h-[200px]">
-          <div className="text-[10px] font-bold text-ink-soft uppercase tracking-wide mb-2">Ligações pelo WhatsApp — hoje</div>
+          <div className="text-[10px] font-bold text-ink-soft uppercase tracking-wide mb-2 flex items-center gap-1.5"><IconeWhatsApp />Ligações pelo WhatsApp — hoje</div>
           <div className="grid grid-cols-2 gap-2 mb-3">
             <div className="rounded-lg bg-surface px-3 py-2 flex flex-col justify-center">
               <div className="text-[10px] text-ink-soft font-bold">Feitas</div>
