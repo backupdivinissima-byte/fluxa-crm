@@ -36,7 +36,20 @@ export default function Login() {
       if (modo === 'vendedor' && err instanceof Error && err.message) {
         setErro(err.message);
       } else {
-        setErro(modo === 'admin' ? 'E-mail ou senha inválidos.' : 'Login ou senha inválidos.');
+        const codigo = (err as { code?: string } | null)?.code ?? '';
+        if (codigo === 'auth/too-many-requests') {
+          setErro('Muitas tentativas seguidas. O acesso foi bloqueado por alguns minutos por segurança — espere uns 15 minutos ou redefina a senha.');
+        } else if (codigo === 'auth/network-request-failed') {
+          setErro('Sem conexão com o servidor. Verifique a internet e tente de novo.');
+        } else if (codigo === 'auth/user-disabled') {
+          setErro('Esta conta está desativada. Fale com o administrador.');
+        } else if (codigo === 'resource-exhausted' || codigo === 'unavailable' || codigo === 'permission-denied') {
+          setErro('O sistema está temporariamente indisponível (' + codigo + '). Tente de novo em alguns minutos.');
+        } else if (modo === 'admin' && codigo && !codigo.startsWith('auth/invalid-') && codigo !== 'auth/wrong-password' && codigo !== 'auth/user-not-found') {
+          setErro('Não foi possível entrar (' + codigo + '). Tente de novo em alguns minutos.');
+        } else {
+          setErro(modo === 'admin' ? 'E-mail ou senha inválidos.' : 'Login ou senha inválidos.');
+        }
       }
     } finally {
       setCarregando(false);
