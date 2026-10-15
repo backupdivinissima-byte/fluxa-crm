@@ -181,7 +181,10 @@ export default function Chat() {
     if (!empresaId || !aberta || !nomeContato.trim()) return;
     setErro('');
     try {
-      await salvarContatoChat(empresaId, aberta.id, nomeContato.trim());
+      const nome = nomeContato.trim();
+      await salvarContatoChat(empresaId, aberta.id, nome);
+      // Ao salvar o contato, ele passa a pertencer a quem salvou (se ainda não tiver dono).
+      if (!aberta.vendedorLogin) await assumir({ ...aberta, nome });
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Não foi possível salvar o contato.');
     }
@@ -452,7 +455,7 @@ export default function Chat() {
 
       {erro && <p className="text-xs text-red-500">{erro}</p>}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-4 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-[340px_minmax(0,600px)] lg:justify-center gap-4 items-start">
         <div className="bg-white border border-line rounded-2xl overflow-hidden">
           <div className="flex border-b border-line text-xs font-bold">
             {(['todas', 'novos', 'minhas'] as const).map((f) => (
@@ -608,6 +611,9 @@ export default function Chat() {
                       ) : (
                         m.midiaTipo === 'video' && <div className="text-[11px] italic mb-1">🎥 Vídeo (veja o original no celular)</div>
                       )}
+                      {m.de === 'equipe' && m.autor && m.autor !== 'Celular' && (
+                        <div className="text-[11px] font-bold text-teal-700 mb-0.5">{m.autor}</div>
+                      )}
                       {(!m.midiaTipo || (m.texto && !m.texto.startsWith('['))) && <div className="whitespace-pre-wrap break-words">{m.texto}</div>}
                       <div className="text-[10px] text-ink-soft mt-1">
                         {m.autor ? `${m.autor} · ` : ''}
@@ -625,6 +631,9 @@ export default function Chat() {
                   <p className="text-xs text-ink-soft">Este atendimento é de {donaDoAtendimento}.</p>
                 ) : (
                   <div className="space-y-2">
+                    {texto.trim() && (
+                      <div className="text-[11px] text-teal-700 font-bold">✍️ {meuNome} está respondendo este cliente…</div>
+                    )}
                     {agendadas.length > 0 && (
                       <ul className="space-y-1">
                         {agendadas.map((a) => (
