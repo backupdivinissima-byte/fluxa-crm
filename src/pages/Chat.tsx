@@ -237,10 +237,10 @@ export default function Chat() {
     [conversas, souAdmin, meuLogin]
   );
   // Novos = primeiro contato: ninguém assumiu e o telefone ainda não existe no CRM.
-  // Novo contato = cliente que chamou pela primeira vez (passivo): ninguém atende, nunca foi
+  // Novo contato = cliente que chamou pela PRIMEIRA vez (passivo, conversa criada por ele): ninguém atende, nunca foi
   // respondido, não está salvo e não tem cadastro no CRM.
   const ehNovo = (c: ConversaChat) =>
-    !c.vendedorLogin && !c.clienteId && !c.salvo && !c.teveResposta && !acharClientePorTelefone(clientes, c.telefone);
+    (c.primeiroContato === true || c.origem === 'trafego') && !c.vendedorLogin && !c.clienteId && !c.salvo && !c.teveResposta && !acharClientePorTelefone(clientes, c.telefone);
   const lista = useMemo(
     () =>
       visiveis.filter((c) =>

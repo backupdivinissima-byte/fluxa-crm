@@ -227,7 +227,10 @@ async function guardarMensagem(msg) {
   }
   const midia = await midiaDe(msg, numero);
   const conversaRef = base.collection('conversas').doc(`whatsapp_${numero}`);
-  const jaSalvo = !!(await conversaRef.get()).data()?.salvo; // nome confirmado pela equipe
+  const conversaAntes = await conversaRef.get();
+  const jaSalvo = !!conversaAntes.data()?.salvo; // nome confirmado pela equipe
+  // Primeiro contato: conversa que ainda não existia e a primeira mensagem veio do cliente.
+  const primeiroContato = !conversaAntes.exists && deCliente;
   const sugestao = agenda.get(numero) ?? (deCliente ? msg.pushName : undefined);
   await conversaRef.set(
     {
@@ -242,6 +245,7 @@ async function guardarMensagem(msg) {
       ultimaEm: quando,
       ultimaDe: deCliente ? 'cliente' : 'equipe',
       ...(deCliente ? {} : { teveResposta: true }),
+      ...(primeiroContato ? { primeiroContato: true } : {}),
       ...(deCliente ? { naoLidas: FieldValue.increment(1) } : {}),
     },
     { merge: true }
