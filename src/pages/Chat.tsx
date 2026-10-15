@@ -152,6 +152,7 @@ export default function Chat() {
   const emAtendimento = visiveis.filter((c) => !!c.vendedorLogin).length;
   const semResposta = visiveis.filter((c) => c.ultimaDe === 'cliente').length;
   const novos = visiveis.filter(ehNovo).length;
+  const minhasN = visiveis.filter((c) => c.vendedorLogin === meuLogin).length;
   const porOrigem = (Object.keys(ORIGENS) as (keyof typeof ORIGENS)[]).map((k) => ({
     chave: k,
     ...ORIGENS[k],
@@ -464,7 +465,7 @@ export default function Chat() {
                 onClick={() => setFiltro(f)}
                 className={`flex-1 py-2.5 ${filtro === f ? 'text-teal-500 border-b-2 border-teal-500' : 'text-ink-soft'}`}
               >
-                {f === 'todas' ? 'Todas' : f === 'novos' ? `Novo Contato${novos ? ` (${novos})` : ''}` : 'Minhas'}
+                {f === 'todas' ? `Todas (${visiveis.length})` : f === 'novos' ? `Novo Contato (${novos})` : `Minhas (${minhasN})`}
               </button>
             ))}
           </div>
