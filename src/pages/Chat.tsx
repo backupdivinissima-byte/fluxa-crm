@@ -81,69 +81,6 @@ function IconeWhatsApp() {
     </svg>
   );
 }
-function IconeInstagram() {
-  return (
-    <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0" aria-hidden="true">
-      <defs>
-        <linearGradient id="igGrad" x1="0" y1="1" x2="1" y2="0">
-          <stop offset="0" stopColor="#FEDA75" />
-          <stop offset="0.35" stopColor="#FA7E1E" />
-          <stop offset="0.6" stopColor="#D62976" />
-          <stop offset="0.8" stopColor="#962FBF" />
-          <stop offset="1" stopColor="#4F5BD5" />
-        </linearGradient>
-      </defs>
-      <rect width="24" height="24" rx="6.5" fill="url(#igGrad)" />
-      <rect x="5" y="5" width="14" height="14" rx="4.2" fill="none" stroke="#fff" strokeWidth="1.6" />
-      <circle cx="12" cy="12" r="3.3" fill="none" stroke="#fff" strokeWidth="1.6" />
-      <circle cx="16.3" cy="7.7" r="1" fill="#fff" />
-    </svg>
-  );
-}
-function IconeMessenger() {
-  return (
-    <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0" aria-hidden="true">
-      <defs>
-        <linearGradient id="msGrad" x1="0" y1="1" x2="1" y2="0">
-          <stop offset="0" stopColor="#0099FF" />
-          <stop offset="1" stopColor="#A033FF" />
-        </linearGradient>
-      </defs>
-      <path fill="url(#msGrad)" d="M12 1C5.9 1 1 5.6 1 11.3c0 3.2 1.600 6 4 7.900V23l3.700-2c1 .3 2.100.4 3.300.4 6.100 0 11-4.600 11-10.300S18.100 1 12 1Z" />
-      <path fill="#fff" d="m5.500 14.200 3.600-5.700a1.800 1.800 0 0 1 2.600-.5l2.800 2.100c.5.400 1.200.4 1.700 0l3.800-2.900c.5-.4 1.100.2.700.8l-3.600 5.700a1.800 1.800 0 0 1-2.600.5L12 11.100a1.400 1.400 0 0 0-1.700 0l-3.800 2.900c-.5.400-1.100-.200-.700-.800Z" />
-    </svg>
-  );
-}
-
-function PainelCanal({ titulo, icone, itens, abertaId, aoAbrir, vazio }: { titulo: string; icone: React.ReactNode; itens: ConversaChat[]; abertaId: string | null; aoAbrir: (id: string) => void; vazio: string }) {
-  return (
-    <div className="bg-white border border-line rounded-2xl overflow-hidden flex flex-col lg:h-[var(--ph)] lg:min-h-[320px] min-h-[200px]">
-      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-line">
-        <span className="text-xs font-bold text-ink flex items-center gap-1.5">{icone}{titulo}</span>
-        <span className="text-[11px] font-bold text-ink-soft">{itens.length}</span>
-      </div>
-      <ul className="flex-1 min-h-0 overflow-y-auto divide-y divide-line">
-        {itens.length === 0 && <li className="p-4 text-xs text-ink-soft text-center">{vazio}</li>}
-        {itens.map((c) => (
-          <li key={c.id}>
-            <button onClick={() => aoAbrir(c.id)} className={`w-full text-left px-3 py-2.5 hover:bg-surface ${abertaId === c.id ? 'bg-surface' : ''}`}>
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-bold text-xs text-ink truncate">{c.nome || c.contato}</span>
-                <span className="text-[10px] text-ink-soft shrink-0">{hora(c.ultimaEm)}</span>
-              </div>
-              <div className="flex items-center justify-between gap-2 mt-0.5">
-                <span className="text-[11px] text-ink-soft truncate">{c.ultimaMensagem}</span>
-                {c.ultimaDe === 'cliente' && <span className="w-2 h-2 rounded-full bg-teal-500 shrink-0" title="Sem resposta" />}
-              </div>
-              <div className="text-[10px] text-ink-soft mt-0.5">{c.vendedorNome ? `com ${c.vendedorNome}` : 'livre'}</div>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
 /** Fluxa Chat: caixa única de atendimento (WhatsApp por QR Code; Instagram
  * Direct e Messenger entram na fase seguinte). O vendedor que abre a conversa
  * e clica em "Assumir" fica responsável por ela e pelo cliente no CRM. */
