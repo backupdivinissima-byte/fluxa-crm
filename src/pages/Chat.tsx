@@ -818,18 +818,33 @@ export default function Chat() {
                     {aberta.vendedorNome ? ` · em atendimento por ${aberta.vendedorNome}` : ' · livre'}
                   </div>
                 </div>
-                {aberta.canal === 'whatsapp' && aberta.telefone && (
-                  <a
-                    href={`whatsapp://send?phone=${aberta.telefone.replace(/\D/g, '')}`}
-                    title="Abre direto o aplicativo WhatsApp do computador nesta conversa; é só tocar no ícone de telefone"
-                    onClick={() =>
-                      void registrarLigacao(empresaId, { tipo: 'feita', conversaId: aberta.id, vendedorLogin: meuLogin, vendedorNome: meuNome }).catch(() => {})
-                    }
-                    className="rounded-xl border border-line text-ink text-xs font-bold px-3 py-2 hover:bg-surface"
-                  >
-                    Ligar pelo WhatsApp
-                  </a>
-                )}
+                {aberta.canal === 'whatsapp' && (() => {
+                  let num = (aberta.telefone || clienteCrm?.telefone || (aberta.contatoJid?.endsWith('@lid') ? '' : aberta.contato) || '').replace(/\D/g, '');
+                  if (num && num.length <= 11) num = `55${num}`;
+                  if (!num) {
+                    return (
+                      <button
+                        onClick={() => setErro('Este contato ainda não tem telefone. Clique em "Editar contato", informe o número e salve para poder ligar.')}
+                        title="Falta o telefone deste contato"
+                        className="rounded-xl border border-line text-ink-soft text-xs font-bold px-3 py-2 hover:bg-surface"
+                      >
+                        Ligar pelo WhatsApp
+                      </button>
+                    );
+                  }
+                  return (
+                    <a
+                      href={`whatsapp://send?phone=${num}`}
+                      title="Abre o aplicativo WhatsApp do computador nesta conversa; toque no ícone de telefone para ligar"
+                      onClick={() =>
+                        void registrarLigacao(empresaId, { tipo: 'feita', conversaId: aberta.id, vendedorLogin: meuLogin, vendedorNome: meuNome }).catch(() => {})
+                      }
+                      className="rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-700 text-xs font-bold px-3 py-2 hover:bg-emerald-100"
+                    >
+                      📞 Ligar pelo WhatsApp
+                    </a>
+                  );
+                })()}
                 {!aberta.vendedorLogin && !souAdmin && (
                   <button
                     onClick={() => void assumir(aberta)}
