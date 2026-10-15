@@ -117,9 +117,9 @@ function lembrarContatos(lista) {
 }
 
 // Histórico: o WhatsApp envia as conversas antigas uma vez, ao conectar o aparelho.
-// Importa os últimos 30 dias (no máx. 3000 mensagens), sem mexer nas "não lidas".
-const DIAS_HISTORICO = 30;
-const MAX_HISTORICO = 3000;
+// Importa os últimos 7 dias (no máx. 800 mensagens; ajustável por DIAS_HISTORICO e MAX_HISTORICO), sem mexer nas "não lidas".
+const DIAS_HISTORICO = Number(process.env.DIAS_HISTORICO || 7);
+const MAX_HISTORICO = Number(process.env.MAX_HISTORICO || 800);
 async function importarHistorico(lista) {
   if (MODO_TESTE || !base || !lista?.length) return;
   const corte = Date.now() / 1000 - DIAS_HISTORICO * 86400;
