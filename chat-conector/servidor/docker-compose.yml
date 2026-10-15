@@ -1,0 +1,46 @@
+# Um serviço por empresa. Cada um tem o seu WhatsApp, a sua sessão e o seu id de empresa.
+# Use: docker compose up -d --build
+name: fluxa-chat
+
+x-conector: &conector
+  build:
+    context: ..
+    dockerfile: servidor/Dockerfile
+  restart: always            # reinicia sozinho se cair ou se o servidor reiniciar
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+  environment: &env-base
+    GOOGLE_APPLICATION_CREDENTIALS: /segredos/conta-servico.json
+  volumes:
+    - ./segredos/conta-servico.json:/segredos/conta-servico.json:ro
+
+services:
+  divinissima:
+    <<: *conector
+    container_name: fluxa-chat-divinissima
+    environment:
+      <<: *env-base
+      EMPRESA_ID: uVqpWP9nssgfcPCh68uG2zebqA63
+      PASTA_SESSAO: /dados/sessao
+      ARQ_LID: /dados/lid-mapa.json
+    volumes:
+      - ./segredos/conta-servico.json:/segredos/conta-servico.json:ro
+      - divinissima-dados:/dados
+
+  # Quando a Carla Fidelis tiver a conta criada, tire o "#" das linhas abaixo e troque o id da empresa dela.
+  # carlafidelis:
+  #   <<: *conector
+  #   container_name: fluxa-chat-carlafidelis
+  #   environment:
+  #     <<: *env-base
+  #     EMPRESA_ID: COLOQUE_AQUI_O_ID_DA_EMPRESA_DA_CARLA
+  #     PASTA_SESSAO: /dados/sessao
+  #     ARQ_LID: /dados/lid-mapa.json
+  #   volumes:
+  #     - ./segredos/conta-servico.json:/segredos/conta-servico.json:ro
+  #     - carlafidelis-dados:/dados
+
+volumes:
+  divinissima-dados:
+  # carlafidelis-dados:

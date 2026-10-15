@@ -26,7 +26,7 @@ import { guardarNoDrive, driveLigado } from './drive-midia.js';
 const MODO_TESTE = process.env.MODO_TESTE === '1' || !process.env.GOOGLE_APPLICATION_CREDENTIALS;
 const EMPRESA_ID = process.env.EMPRESA_ID || 'teste';
 if (!MODO_TESTE && !process.env.EMPRESA_ID) throw new Error('Defina EMPRESA_ID.');
-const PASTA_SESSAO = `./sessao-${EMPRESA_ID}`;
+const PASTA_SESSAO = process.env.PASTA_SESSAO || `./sessao-${EMPRESA_ID}`;
 
 let base = null;
 let refConexao = { set: async () => {}, onSnapshot: () => {} };
@@ -53,7 +53,7 @@ const soDigitos = (jid) => String(jid).split('@')[0].split(':')[0];
 
 // O WhatsApp novo identifica contatos por @lid; quando traz o número (Alt), usamos ele.
 // Mapa @lid -> número de telefone, guardado em arquivo (sobrevive a reinícios).
-const ARQ_LID = './lid-mapa.json';
+const ARQ_LID = process.env.ARQ_LID || './lid-mapa.json';
 const lidParaTel = new Map();
 try {
   for (const [k, v] of Object.entries(JSON.parse(fs.readFileSync(ARQ_LID, 'utf8')))) lidParaTel.set(k, v);
