@@ -19,6 +19,7 @@ import {
   chaveTelefone,
   enviarMensagemChat,
   enviarAudioChat,
+  carregarMidiaPartes,
   liberarConversa,
   ouvirConexaoWhatsapp,
   ouvirConversas,
@@ -71,6 +72,37 @@ function Cartao({ titulo, valor, dica }: { titulo: string; valor: number; dica: 
 /** Fluxa Chat: caixa única de atendimento (WhatsApp por QR Code; Instagram
  * Direct e Messenger entram na fase seguinte). O vendedor que abre a conversa
  * e clica em "Assumir" fica responsável por ela e pelo cliente no CRM. */
+/** Vídeo/áudio longo: só baixa as partes quando a pessoa clica em reproduzir. */
+function MidiaPartes({ empresaId, conversaId, msg }: { empresaId: string; conversaId: string; msg: MensagemChat }) {
+  const [url, setUrl] = useState('');
+  const [carregando, setCarregando] = useState(false);
+  const [falha, setFalha] = useState('');
+  const ehVideo = msg.midiaTipo === 'video';
+  async function carregar() {
+    setCarregando(true);
+    setFalha('');
+    try {
+      setUrl(await carregarMidiaPartes(empresaId, conversaId, msg.id, msg.midiaMime || (ehVideo ? 'video/mp4' : 'audio/ogg')));
+    } catch (e) {
+      setFalha(e instanceof Error ? e.message : 'Não foi possível carregar.');
+    } finally {
+      setCarregando(false);
+    }
+  }
+  if (url) return ehVideo ? <video controls autoPlay src={url} className="rounded-lg mb-1 max-h-72 max-w-full" /> : <audio controls autoPlay src={url} className="max-w-full mb-1" />;
+  return (
+    <button type="button" onClick={() => void carregar()} className="relative block mb-1 text-left">
+      {msg.midiaUrl && ehVideo && <img src={msg.midiaUrl} alt="Miniatura do vídeo" className="rounded-lg max-h-64 max-w-full" />}
+      <span className={`${msg.midiaUrl && ehVideo ? 'absolute inset-0 flex items-center justify-center' : 'inline-flex'}`}>
+        <span className="rounded-full bg-black/60 text-white text-xs font-bold px-3 py-2">
+          {carregando ? 'Carregando…' : ehVideo ? '▶ Reproduzir vídeo' : '▶ Ouvir áudio'}
+        </span>
+      </span>
+      {falha && <span className="block text-[11px] text-red-500 mt-1">{falha}</span>}
+    </button>
+  );
+}
+
 export default function Chat() {
   const { empresa, papel, sessaoVendedor, perfil } = useAuth();
   const empresaId = empresa?.id;
@@ -719,7 +751,10 @@ export default function Chat() {
                         m.de === 'equipe' ? 'bg-teal-500/10 text-ink' : 'bg-surface text-ink'
                       }`}
                     >
-                      {m.midiaUrl && (
+                      {m.midiaPartes && empresaId && aberta ? (
+                        <MidiaPartes empresaId={empresaId} conversaId={aberta.id} msg={m} />
+                      ) : null}
+                      {!m.midiaPartes && m.midiaUrl && (
                         m.midiaTipo === 'audio' ? (
                           <audio controls src={m.midiaUrl} className="max-w-full mb-1" />
                         ) : (
@@ -737,7 +772,7 @@ export default function Chat() {
                           Abrir {m.midiaTipo === 'video' ? 'vídeo' : m.midiaTipo === 'audio' ? 'áudio' : m.midiaTipo === 'documento' ? 'documento' : 'foto'} completo no Drive
                         </a>
                       ) : (
-                        m.midiaTipo === 'video' && <div className="text-[11px] italic mb-1">🎥 Vídeo (veja o original no celular)</div>
+                        m.midiaTipo === 'video' && !m.midiaPartes && <div className="text-[11px] italic mb-1">🎥 Vídeo (veja o original no celular)</div>
                       )}
                       {m.de === 'equipe' && m.autor && m.autor !== 'Celular' && (
                         <div className="text-[11px] font-bold text-teal-700 mb-0.5">{m.autor}</div>

@@ -253,3 +253,12 @@ export async function vincularPorTelefone(
   await assumirConversa(empresaId, conversa.id, vendedor.login, vendedor.nome, clienteId);
   return true;
 }
+
+/** Junta as partes de um vídeo/áudio longo guardado no banco e devolve uma URL tocável. */
+export async function carregarMidiaPartes(empresaId: string, conversaId: string, msgId: string, mime: string): Promise<string> {
+  await chatPronto;
+  const snap = await getDocs(query(collection(db, 'empresas', empresaId, 'conversas', conversaId, 'mensagens', msgId, 'partes'), orderBy('n', 'asc')));
+  const pedacos = snap.docs.map((d) => (d.data().dados as { toUint8Array(): Uint8Array }).toUint8Array() as BlobPart);
+  if (pedacos.length === 0) throw new Error('Vídeo ainda não terminou de chegar. Tente de novo em instantes.');
+  return URL.createObjectURL(new Blob(pedacos, { type: mime }));
+}

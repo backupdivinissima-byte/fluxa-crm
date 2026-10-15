@@ -370,6 +370,8 @@ export interface MensagemChat {
   midiaTipo?: 'imagem' | 'video' | 'audio' | 'documento';
   midiaLink?: string; // arquivo completo no Google Drive
   midiaUrl?: string; // data URL (imagem ou miniatura do vídeo)
+  midiaPartes?: number; // vídeo/áudio longo guardado em partes no banco
+  midiaMime?: string;
 }
 
 export interface ConexaoChat {

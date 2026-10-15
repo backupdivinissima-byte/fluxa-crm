@@ -98,6 +98,8 @@ function textoDe(msg) {
 // Mídia: foto até ~600 KB vai dentro da própria mensagem; qualquer foto, vídeo,
 // áudio ou documento também vai para o Google Drive (se estiver autorizado),
 // e a conversa mostra o link. Sem Drive, vídeo fica só com a miniatura.
+const TAM_PARTE = 800_000;
+const partesPendentes = new Map();
 const EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'video/mp4': 'mp4', 'audio/ogg; codecs=opus': 'ogg', 'audio/mpeg': 'mp3', 'application/pdf': 'pdf' };
 async function midiaDe(msg, numero) {
   const m = conteudoDe(msg);
@@ -111,7 +113,7 @@ async function midiaDe(msg, numero) {
   const out = { midiaTipo: tipo };
   let buf = null;
   try {
-    if (img || aud || driveLigado()) buf = await downloadMediaMessage(msg, 'buffer', {}, { logger: log, reuploadRequest: sock.updateMediaMessage });
+    if (img || aud || vid || driveLigado()) buf = await downloadMediaMessage(msg, 'buffer', {}, { logger: log, reuploadRequest: sock.updateMediaMessage });
   } catch (e) {
     console.error('Mídia:', e.message);
   }
@@ -119,6 +121,13 @@ async function midiaDe(msg, numero) {
     if (img && buf.length <= 600_000) out.midiaUrl = `data:${img.mimetype || 'image/jpeg'};base64,${buf.toString('base64')}`;
     // Áudio curto vai dentro da mensagem para tocar direto no Chat.
     if (aud && buf.length <= 600_000) out.midiaUrl = `data:${(aud.mimetype || 'audio/ogg').split(';')[0]};base64,${buf.toString('base64')}`;
+    // Vídeo (e áudio longo): vai picado em partes de ~800 KB no próprio banco, para tocar no Chat
+    // sem precisar de servidor. Limite de 20 MB por arquivo.
+    if ((vid || (aud && buf.length > 600_000)) && buf.length <= 20_000_000) {
+      out.midiaPartes = Math.ceil(buf.length / TAM_PARTE);
+      out.midiaMime = (alvo.mimetype || (vid ? 'video/mp4' : 'audio/ogg')).split(';')[0];
+      partesPendentes.set(msg.key.id, buf);
+    }
     const nome = doc?.fileName || `${tipo}-${msg.key.id}.${EXT[alvo.mimetype] ?? 'bin'}`;
     const link = await guardarNoDrive(buf, nome, alvo.mimetype, numero);
     if (link) out.midiaLink = link;
@@ -236,7 +245,15 @@ async function guardarMensagem(msg) {
   );
   const snap = await conversaRef.get();
   if (!snap.data()?.nome) await conversaRef.set({ nome: msg.pushName || numero }, { merge: true });
-  await conversaRef.collection('mensagens').doc(msg.key.id).set({ de: deCliente ? 'cliente' : 'equipe', texto, em: quando, ...(deCliente ? {} : { autor: 'Celular' }), ...(midia ?? {}) });
+  const msgRef = conversaRef.collection('mensagens').doc(msg.key.id);
+  await msgRef.set({ de: deCliente ? 'cliente' : 'equipe', texto, em: quando, ...(deCliente ? {} : { autor: 'Celular' }), ...(midia ?? {}) });
+  const bufPartes = partesPendentes.get(msg.key.id);
+  if (bufPartes) {
+    partesPendentes.delete(msg.key.id);
+    for (let i = 0; i * TAM_PARTE < bufPartes.length; i++) {
+      await msgRef.collection('partes').doc(String(i).padStart(4, '0')).set({ n: i, dados: bufPartes.subarray(i * TAM_PARTE, (i + 1) * TAM_PARTE) });
+    }
+  }
 }
 
 async function iniciar() {
