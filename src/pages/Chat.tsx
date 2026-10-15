@@ -281,7 +281,7 @@ export default function Chat() {
   if (!empresaId) return null;
 
   return (
-    <div className="p-6 w-full space-y-4">
+    <div className="py-6 pr-6 pl-2 w-full space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-base font-extrabold text-ink mb-1">Fluxa Chat</h1>
