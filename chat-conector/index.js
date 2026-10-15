@@ -106,13 +106,7 @@ function lembrarContatos(lista) {
     if (!id.endsWith('@s.whatsapp.net') || !c.name) continue; // `name` = nome salvo na agenda
     const numero = soDigitos(id);
     agenda.set(numero, c.name);
-    if (MODO_TESTE || !base) continue;
-    // Se já existe conversa com esse número, atualiza o nome para o da agenda.
-    base.collection('conversas').doc(`whatsapp_${numero}`).get().then((snap) => {
-      if (!snap.exists) return;
-      // Contato já salvo pela equipe no Fluxa: só atualiza a sugestão, nunca o nome.
-      return snap.ref.set(snap.data()?.salvo ? { nomeSugerido: c.name } : { nome: c.name, nomeSugerido: c.name, salvoNaAgenda: true }, { merge: true });
-    }).catch(() => {});
+    // Só guarda em memória: o nome entra na conversa quando uma mensagem é gravada (sem consultar o banco por contato).
   }
 }
 
