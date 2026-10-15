@@ -186,10 +186,17 @@ export default function Chat() {
           <h2 className="text-sm font-extrabold text-ink mb-1">Conectar o WhatsApp</h2>
           <p className="text-sm text-ink-soft mb-3 max-w-3xl">
             Clique em "Gerar QR Code" e, no celular, abra o WhatsApp → Aparelhos conectados → Conectar um aparelho e
-            leia o código. Funciona como o WhatsApp Web, e o conector precisa estar ligado (veja chat-conector/LEIA-ME.md).
+            leia o código. Funciona como o WhatsApp Web. O conector precisa estar ligado no computador e conectado ao banco (veja chat-conector/LEIA-ME.md). Para um teste rápido sem banco, o QR aparece no terminal do conector.
           </p>
           <button
-            onClick={() => void solicitarConexaoWhatsapp(empresaId)}
+            onClick={() => {
+              setErro('');
+              solicitarConexaoWhatsapp(empresaId).catch((e) =>
+                setErro(
+                  `Não foi possível pedir o QR Code (${e instanceof Error ? e.message : 'erro'}). Se o banco estiver bloqueado pela cota diária, tente depois das 4h da manhã.`
+                )
+              );
+            }}
             className="rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-4 py-2.5 hover:opacity-90"
           >
             Gerar QR Code
