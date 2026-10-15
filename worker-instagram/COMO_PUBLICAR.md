@@ -15,7 +15,8 @@ Servidor gratuito que recebe cada comentário da live (enviado pela Meta) e grav
    - `VERIFY_TOKEN` (texto inventado, ex.: fluxa-live-2026)
    - `APP_SECRET` (secret): chave secreta do app do Instagram
    - `EMPRESAS_JSON`: `{"<id do Instagram da Divinissima>":"<id da empresa Divinissima>","<id do Instagram da Carla>":"<id da empresa Carla>"}` — um servidor atende as duas empresas, cada @ vai só para a sua.
-   - `FIREBASE_PROJECT_ID`: fluxa-crm
+   - `FIREBASE_PROJECT_ID`: fluxa-crm (só as lives)
+   - `CHAT_PROJECT_ID`: fluxa-chat-a052d (conversas e fila do Fluxa Chat)
    - `SERVICE_ACCOUNT_JSON` (secret): conteúdo inteiro do .json do passo 1.1
 
 ## 3. Meta (app Divinissima → API do Instagram com login do Instagram)

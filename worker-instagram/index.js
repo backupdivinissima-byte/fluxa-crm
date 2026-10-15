@@ -117,10 +117,11 @@ async function guardarComentario(env, c) {
 
 // ===== Mensagens diretas: Instagram Direct e Messenger =====
 // Variáveis extras:
+//   CHAT_PROJECT_ID  projeto do Fluxa Chat (fluxa-chat-a052d): conversas e fila. FIREBASE_PROJECT_ID (fluxa-crm) fica só para as lives.
 //   TOKENS_JSON  {"<idDaEmpresa>:instagram": "<token>", "<idDaEmpresa>:facebook": "<token da Página>"}
 //                (usados para responder e para buscar o nome do contato)
 
-const DOCS = (env) => `projects/${env.FIREBASE_PROJECT_ID}/databases/(default)/documents`;
+const DOCS = (env) => `projects/${env.CHAT_PROJECT_ID || env.FIREBASE_PROJECT_ID}/databases/(default)/documents`;
 
 async function commitFirestore(env, writes) {
   const token = await tokenGoogle(env);
@@ -170,6 +171,7 @@ async function guardarMensagemDireta(env, canal, empresaId, evento) {
     headers: { Authorization: `Bearer ${token}` },
   });
   let nome = '';
+  const conversaNova = atual.status === 404;
   if (atual.status === 404 || !(await atual.json().catch(() => ({}))).fields?.nome) {
     nome = (await nomeDoContato(env, empresaId, canal, contato)) || contato;
   }
@@ -185,9 +187,10 @@ async function guardarMensagemDireta(env, canal, empresaId, evento) {
           ultimaMensagem: { stringValue: texto },
           ultimaEm: { stringValue: quando },
           ultimaDe: { stringValue: 'cliente' },
+          ...(conversaNova ? { primeiroContato: { booleanValue: true } } : {}),
         },
       },
-      updateMask: { fieldPaths: ['canal', 'contato', ...(nome ? ['nome'] : []), 'ultimaMensagem', 'ultimaEm', 'ultimaDe'] },
+      updateMask: { fieldPaths: ['canal', 'contato', ...(nome ? ['nome'] : []), 'ultimaMensagem', 'ultimaEm', 'ultimaDe', ...(conversaNova ? ['primeiroContato'] : [])] },
       updateTransforms: [{ fieldPath: 'naoLidas', increment: { integerValue: '1' } }],
     },
     {
