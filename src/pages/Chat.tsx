@@ -155,6 +155,7 @@ function MidiaPartes({ empresaId, conversaId, msg }: { empresaId: string; conver
 export default function Chat() {
   // Altura dos painéis = o que sobra da tela abaixo do topo deles (sem rolar a página).
   const gradeRef = useRef<HTMLDivElement>(null);
+  const [forcarQr, setForcarQr] = useState(false);
   const [alturaPainel, setAlturaPainel] = useState(560);
   useEffect(() => {
     const medir = () => {
@@ -597,6 +598,11 @@ export default function Chat() {
           >
             WhatsApp: {conexao.status === 'conectado' ? `conectado${conexao.telefone ? ` (${conexao.telefone})` : ''}` : conexao.status === 'aguardando_qr' ? 'aguardando leitura do QR' : conexao.status === 'solicitado' ? 'gerando QR…' : 'desconectado'}
           </span>
+          {souAdmin && (
+            <button onClick={() => setForcarQr((v) => !v)} className="rounded-full px-3 py-1 font-bold border border-line text-ink hover:bg-surface">
+              {forcarQr ? 'Fechar conexão' : 'Reconectar WhatsApp'}
+            </button>
+          )}
           <span className="rounded-full px-3 py-1 bg-surface text-ink-soft border border-line">Instagram Direct: pelo servidor (Cloudflare)</span>
           <span className="rounded-full px-3 py-1 bg-surface text-ink-soft border border-line">Messenger: pelo servidor (Cloudflare)</span>
         </div>
@@ -704,7 +710,7 @@ export default function Chat() {
         </div>
       )}
 
-      {souAdmin && conexao.status !== 'conectado' && (
+      {souAdmin && (conexao.status !== 'conectado' || forcarQr) && (
         <div className="bg-white border border-line rounded-2xl p-6">
           <h2 className="text-sm font-extrabold text-ink mb-1">Conectar o WhatsApp</h2>
           <p className="text-sm text-ink-soft mb-3 max-w-3xl">

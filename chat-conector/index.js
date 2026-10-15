@@ -492,4 +492,7 @@ if (!MODO_TESTE) {
 }
 
 if (MODO_TESTE || fs.existsSync(PASTA_SESSAO)) void iniciar();
-else console.log('Sem sessão salva. No Fluxa, abra Chat e clique em "Gerar QR Code".');
+else {
+  console.log('Sem sessão salva. No Fluxa, abra Chat e clique em "Gerar QR Code".');
+  refConexao.set({ status: 'desconectado', qr: '', atualizadoEm: agora() }, { merge: true }).catch(() => {});
+}
