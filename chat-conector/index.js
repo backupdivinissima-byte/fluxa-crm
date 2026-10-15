@@ -537,16 +537,22 @@ async function enviarSaida(d) {
       enviada = await sock.sendMessage(destino, { text: dado.texto });
     }
     if (enviada?.key?.id) enviadasPorNos.add(enviada.key.id);
-    // Diagnóstico: baixa de volta o que acabamos de enviar para ter certeza de que o WhatsApp guardou o arquivo.
+    // Diagnóstico: confere se o WhatsApp guardou o arquivo que acabamos de enviar.
     if (dado.tipo === 'audio' || dado.tipo === 'midia') {
-      try {
-        const volta = await downloadMediaMessage(enviada, 'buffer', {}, { logger: log, reuploadRequest: sock.updateMediaMessage });
-        const m = enviada.message ?? {};
-        const alvo = m.audioMessage ?? m.imageMessage ?? m.videoMessage ?? m.documentMessage ?? {};
-        console.log(`Verificação do envio: baixou de volta ${volta.length} bytes (url ${alvo.url ? 'ok' : 'SEM URL'}, directPath ${alvo.directPath ? 'ok' : 'SEM'}).`);
-      } catch (e) {
-        console.error('Verificação do envio FALHOU (o WhatsApp não guardou o arquivo):', e.message);
-      }
+      const m = enviada?.message ?? {};
+      const alvo = m.audioMessage ?? m.imageMessage ?? m.videoMessage ?? m.documentMessage ?? {};
+      console.log(`Envio feito (node ${process.version}): url ${alvo.url ? 'ok' : 'SEM URL'}, directPath ${alvo.directPath ? 'ok' : 'SEM'}, tamanho ${alvo.fileLength ?? '?'}.`);
+      void (async () => {
+        try {
+          const volta = await Promise.race([
+            downloadMediaMessage(enviada, 'buffer', {}, { logger: log, reuploadRequest: sock.updateMediaMessage }),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('demorou mais de 20 s')), 20000)),
+          ]);
+          console.log(`Verificação do envio: baixou de volta ${volta.length} bytes. OK.`);
+        } catch (e) {
+          console.error('Verificação do envio FALHOU (o WhatsApp não guardou o arquivo):', e.message);
+        }
+      })();
     }
     await d.ref.update({ enviada: true, enviadaEm: agora() });
     if (dado.jaRegistrada === false) {
