@@ -8,9 +8,7 @@ import {
   definirTagsConversa,
   excluirTag,
   ouvirTags,
-  ouvirLigacoesHoje,
   registrarLigacao,
-  type LigacaoChat,
   salvarTag,
   salvarContatoChat,
   editarContatoChat,
@@ -264,7 +262,6 @@ export default function Chat() {
   const [quando, setQuando] = useState(''); // datetime-local
   const campoRef = useRef<HTMLInputElement>(null);
   const [tags, setTags] = useState<TagChat[]>([]);
-  const [ligacoes, setLigacoes] = useState<LigacaoChat[]>([]);
   const [gerenciarTags, setGerenciarTags] = useState(false);
   const [novaTag, setNovaTag] = useState('');
   const [telParear, setTelParear] = useState('');
@@ -296,7 +293,6 @@ export default function Chat() {
     const u4 = ouvirEmpresa(empresaId, (e) => setColunas(e?.crmColunas ?? []));
     const u5 = ouvirConexaoWhatsapp(empresaId, setConexao);
     const u6 = ouvirTags(empresaId, setTags);
-    const u7 = ouvirLigacoesHoje(empresaId, setLigacoes);
     return () => {
       u1();
       u2();
@@ -304,7 +300,6 @@ export default function Chat() {
       u4();
       u5();
       u6();
-      u7();
     };
   }, [empresaId]);
 
@@ -352,18 +347,6 @@ export default function Chat() {
     total: visiveis.filter((c) => origemDe(c) === k).length,
   }));
   const porTag = tags.map((t) => ({ ...t, total: visiveis.filter((c) => c.tags?.includes(t.id)).length }));
-
-  // Admin vê todas as ligações; vendedor, só as dele.
-  const minhasLig = souAdmin ? ligacoes : ligacoes.filter((l) => l.vendedorLogin === meuLogin);
-  const ligPorUsuario = Object.values(
-    ligacoes.reduce<Record<string, { nome: string; feitas: number; recebidas: number }>>((acc, l) => {
-      const nome = l.vendedorNome || 'Sem vendedor';
-      acc[nome] ??= { nome, feitas: 0, recebidas: 0 };
-      if (l.tipo === 'feita') acc[nome].feitas++;
-      else acc[nome].recebidas++;
-      return acc;
-    }, {})
-  );
 
   // Ao abrir outra conversa, o campo de nome começa com o nome que chegou pronto.
   useEffect(() => {
@@ -813,7 +796,7 @@ export default function Chat() {
       {erro && <p className="text-xs text-red-500">{erro}</p>}
 
 
-      <div ref={gradeRef} style={{ ["--ph" as string]: `${alturaPainel}px` }} className="grid grid-cols-1 lg:grid-cols-[minmax(300px,380px)_minmax(0,680px)_minmax(190px,240px)_minmax(190px,240px)_minmax(220px,300px)] lg:justify-start gap-4 items-stretch">
+      <div ref={gradeRef} style={{ ["--ph" as string]: `${alturaPainel}px` }} className="grid grid-cols-1 lg:grid-cols-[minmax(320px,440px)_minmax(0,1fr)_minmax(200px,260px)_minmax(200px,260px)] gap-4 items-stretch">
         <div className="bg-white border border-line rounded-2xl overflow-hidden flex flex-col lg:h-[var(--ph)] lg:min-h-[320px]">
           <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-line">
             <span className="text-xs font-bold text-ink flex items-center gap-1.5"><IconeWhatsApp />Conversas</span>
@@ -1239,30 +1222,6 @@ export default function Chat() {
 
         <PainelCanal titulo="Instagram Direct" icone={<IconeInstagram />} itens={visiveis.filter((c) => c.canal === 'instagram')} abertaId={abertaId} aoAbrir={setAbertaId} vazio="Nenhuma mensagem do Instagram Direct ainda." />
         <PainelCanal titulo="Messenger" icone={<IconeMessenger />} itens={visiveis.filter((c) => c.canal === 'facebook')} abertaId={abertaId} aoAbrir={setAbertaId} vazio="Nenhuma mensagem do Messenger ainda." />
-        <div className="bg-white border border-line rounded-2xl p-3 flex flex-col lg:h-[var(--ph)] lg:min-h-[320px] min-h-[200px]">
-          <div className="text-[10px] font-bold text-ink-soft uppercase tracking-wide mb-2 flex items-center gap-1.5"><IconeWhatsApp />Ligações pelo WhatsApp — hoje</div>
-          <div className="grid grid-cols-2 gap-2 mb-3">
-            <div className="rounded-lg bg-surface px-3 py-2 flex flex-col justify-center">
-              <div className="text-[10px] text-ink-soft font-bold">Feitas</div>
-              <div className="text-3xl font-extrabold text-ink tabular-nums">{minhasLig.filter((l) => l.tipo === 'feita').length}</div>
-            </div>
-            <div className="rounded-lg bg-surface px-3 py-2 flex flex-col justify-center">
-              <div className="text-[10px] text-ink-soft font-bold">Recebidas</div>
-              <div className="text-3xl font-extrabold text-ink tabular-nums">{minhasLig.filter((l) => l.tipo === 'recebida').length}</div>
-            </div>
-          </div>
-          {souAdmin && (
-            <ul className="space-y-1 flex-1 min-h-0 overflow-y-auto">
-              {ligPorUsuario.length === 0 && <li className="text-[11px] text-ink-soft">Nenhuma ligação hoje.</li>}
-              {ligPorUsuario.map((u) => (
-                <li key={u.nome} className="flex justify-between text-[11px] text-ink">
-                  <span className="truncate">{u.nome}</span>
-                  <span className="tabular-nums shrink-0">{u.feitas} feitas · {u.recebidas} recebidas</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
       </div>
       {novoContato && (
         <div className="fixed inset-0 z-50 bg-ink/40 flex items-center justify-center p-4" onClick={() => setNovoContato(null)}>
