@@ -28,19 +28,18 @@ services:
       - ./segredos/conta-servico.json:/segredos/conta-servico.json:ro
       - divinissima-dados:/dados
 
-  # Quando a Carla Fidelis tiver a conta criada, tire o "#" das linhas abaixo e troque o id da empresa dela.
-  # carlafidelis:
-  #   <<: *conector
-  #   container_name: fluxa-chat-carlafidelis
-  #   environment:
-  #     <<: *env-base
-  #     EMPRESA_ID: Kb5nOo3SK0dAi3SsHk20Y0Oa1aE3
-  #     PASTA_SESSAO: /dados/sessao
-  #     ARQ_LID: /dados/lid-mapa.json
-  #   volumes:
-  #     - ./segredos/conta-servico.json:/segredos/conta-servico.json:ro
-  #     - carlafidelis-dados:/dados
+  carlafidelis:
+    <<: *conector
+    container_name: fluxa-chat-carlafidelis
+    environment:
+      <<: *env-base
+      EMPRESA_ID: Kb5nOo3SK0dAi3SsHk20Y0Oa1aE3
+      PASTA_SESSAO: /dados/sessao
+      ARQ_LID: /dados/lid-mapa.json
+    volumes:
+      - ./segredos/conta-servico.json:/segredos/conta-servico.json:ro
+      - carlafidelis-dados:/dados
 
 volumes:
   divinissima-dados:
-  # carlafidelis-dados:
+  carlafidelis-dados:
