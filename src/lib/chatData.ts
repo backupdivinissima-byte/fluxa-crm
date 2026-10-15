@@ -10,6 +10,8 @@ import {
   query,
   setDoc,
   updateDoc,
+  deleteDoc,
+  where,
   type Unsubscribe,
 } from 'firebase/firestore';
 import { db } from './firebase';
@@ -67,28 +69,61 @@ export async function liberarConversa(empresaId: string, conversaId: string) {
   });
 }
 
-/** Registra a mensagem da equipe e coloca na fila de envio do canal. */
-export async function enviarMensagemChat(empresaId: string, conversa: ConversaChat, texto: string, autor: string) {
+/** Envia a mensagem agora, ou a deixa agendada (agendarPara = ISO) na fila.
+ * Mensagem agendada só entra na conversa quando o conector a envia. */
+export async function enviarMensagemChat(
+  empresaId: string,
+  conversa: ConversaChat,
+  texto: string,
+  autor: string,
+  agendarPara?: string
+) {
   const agora = new Date().toISOString();
-  await addDoc(collection(db, 'empresas', empresaId, 'conversas', conversa.id, 'mensagens'), {
-    de: 'equipe',
-    texto,
-    em: agora,
-    autor,
-  });
-  await updateDoc(doc(db, 'empresas', empresaId, 'conversas', conversa.id), {
-    ultimaMensagem: texto,
-    ultimaEm: agora,
-    ultimaDe: 'equipe',
-  });
+  if (!agendarPara) {
+    await addDoc(collection(db, 'empresas', empresaId, 'conversas', conversa.id, 'mensagens'), {
+      de: 'equipe',
+      texto,
+      em: agora,
+      autor,
+    });
+    await updateDoc(doc(db, 'empresas', empresaId, 'conversas', conversa.id), {
+      ultimaMensagem: texto,
+      ultimaEm: agora,
+      ultimaDe: 'equipe',
+    });
+  }
   await addDoc(collection(db, 'empresas', empresaId, 'chatSaida'), {
     conversaId: conversa.id,
     canal: conversa.canal,
     para: conversa.contato,
     texto,
+    autor,
     criadoEm: agora,
     enviada: false,
+    jaRegistrada: !agendarPara, // imediata: o app já gravou a mensagem na conversa
+    ...(agendarPara ? { agendadaPara: agendarPara } : {}),
   });
+}
+
+export interface MensagemAgendada {
+  id: string;
+  texto: string;
+  agendadaPara: string;
+}
+
+export function ouvirAgendadas(empresaId: string, conversaId: string, cb: (m: MensagemAgendada[]) => void): Unsubscribe {
+  const q = query(collection(db, 'empresas', empresaId, 'chatSaida'), where('conversaId', '==', conversaId), where('enviada', '==', false));
+  return onSnapshot(q, (snap) => {
+    const itens = snap.docs
+      .map((d) => ({ id: d.id, ...(d.data() as { texto: string; agendadaPara?: string }) }))
+      .filter((x): x is MensagemAgendada => !!x.agendadaPara)
+      .sort((a, b) => a.agendadaPara.localeCompare(b.agendadaPara));
+    cb(itens);
+  });
+}
+
+export async function cancelarAgendada(empresaId: string, id: string) {
+  await deleteDoc(doc(db, 'empresas', empresaId, 'chatSaida', id));
 }
 
 /** Encontra o cliente do CRM pelo telefone da conversa. */

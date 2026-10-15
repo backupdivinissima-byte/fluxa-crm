@@ -233,6 +233,8 @@ async function enviarFila(env) {
       const f = doc.fields ?? {};
       const canal = f.canal?.stringValue;
       if (canal !== 'instagram' && canal !== 'facebook') continue; // WhatsApp é do conector
+      const agendada = f.agendadaPara?.stringValue;
+      if (agendada && new Date(agendada).getTime() > Date.now()) continue; // stand-by
       let erro = '';
       const t = tokenDoCanal(env, empresaId, canal);
       if (!t) erro = `sem token de ${canal} no servidor`;
@@ -258,6 +260,25 @@ async function enviarFila(env) {
           updateMask: { fieldPaths: ['enviada', erro ? 'erro' : 'enviadaEm'] },
         },
       ]);
+      if (!erro && f.jaRegistrada?.booleanValue === false && f.conversaId?.stringValue) {
+        const em = new Date().toISOString();
+        const base = `${DOCS(env)}/empresas/${empresaId}/conversas/${f.conversaId.stringValue}`;
+        await commitFirestore(env, [
+          {
+            update: {
+              name: `${base}/mensagens/ag_${doc.name.split('/').pop()}`,
+              fields: { de: { stringValue: 'equipe' }, texto: { stringValue: f.texto?.stringValue ?? '' }, em: { stringValue: em }, autor: { stringValue: f.autor?.stringValue ?? '' } },
+            },
+          },
+          {
+            update: {
+              name: base,
+              fields: { ultimaMensagem: { stringValue: f.texto?.stringValue ?? '' }, ultimaEm: { stringValue: em }, ultimaDe: { stringValue: 'equipe' } },
+            },
+            updateMask: { fieldPaths: ['ultimaMensagem', 'ultimaEm', 'ultimaDe'] },
+          },
+        ]);
+      }
     }
   }
 }

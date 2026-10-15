@@ -5,6 +5,9 @@ import { acaoDaColuna } from '../lib/crmLogic';
 import {
   acharClientePorTelefone,
   assumirConversa,
+  cancelarAgendada,
+  ouvirAgendadas,
+  type MensagemAgendada,
   chaveTelefone,
   enviarMensagemChat,
   liberarConversa,
@@ -14,6 +17,8 @@ import {
   solicitarConexaoWhatsapp,
 } from '../lib/chatData';
 import type { Cliente, ColunaCrm, ConexaoChat, ConversaChat, MensagemChat } from '../types';
+
+const EMOJIS = ['😀','😁','😂','🤣','😊','😍','😘','😉','🙂','😎','🤩','🥰','😇','🤗','🤔','😅','😢','😭','😡','🙏','👍','👏','🙌','💪','👌','✌️','🤝','🎉','🎁','❤️','💖','💕','🔥','✨','⭐','🌟','💎','💍','👑','🛍️','💰','✅','❌','📦','🚚','📞','📅','⏰','🌹','🌸','☀️','🙋‍♀️','😴','🥳','😋','🤭'];
 
 const NOME_CANAL = { whatsapp: 'WhatsApp', instagram: 'Instagram', facebook: 'Messenger' } as const;
 
@@ -54,6 +59,11 @@ export default function Chat() {
   const [abertaId, setAbertaId] = useState<string | null>(null);
   const [mensagens, setMensagens] = useState<MensagemChat[]>([]);
   const [texto, setTexto] = useState('');
+  const [agendadas, setAgendadas] = useState<MensagemAgendada[]>([]);
+  const [mostrarEmojis, setMostrarEmojis] = useState(false);
+  const [mostrarRelogio, setMostrarRelogio] = useState(false);
+  const [quando, setQuando] = useState(''); // datetime-local
+  const campoRef = useRef<HTMLInputElement>(null);
   const [erro, setErro] = useState('');
   const fimRef = useRef<HTMLDivElement>(null);
 
@@ -74,6 +84,11 @@ export default function Chat() {
   useEffect(() => {
     if (!empresaId || !abertaId) return;
     return ouvirMensagens(empresaId, abertaId, setMensagens);
+  }, [empresaId, abertaId]);
+
+  useEffect(() => {
+    if (!empresaId || !abertaId) return;
+    return ouvirAgendadas(empresaId, abertaId, setAgendadas);
   }, [empresaId, abertaId]);
 
   useEffect(() => {
@@ -145,9 +160,21 @@ export default function Chat() {
     if (!empresaId || !aberta || !texto.trim()) return;
     setErro('');
     const t = texto.trim();
+    let agendarPara: string | undefined;
+    if (mostrarRelogio && quando) {
+      const d = new Date(quando);
+      if (Number.isNaN(d.getTime()) || d.getTime() < Date.now() + 30_000) {
+        setErro('Escolha uma data e hora no futuro para agendar.');
+        return;
+      }
+      agendarPara = d.toISOString();
+    }
     setTexto('');
+    setMostrarRelogio(false);
+    setQuando('');
+    setMostrarEmojis(false);
     try {
-      await enviarMensagemChat(empresaId, aberta, t, meuNome);
+      await enviarMensagemChat(empresaId, aberta, t, meuNome, agendarPara);
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Não foi possível enviar.');
     }
@@ -312,21 +339,91 @@ export default function Chat() {
                 ) : donaDoAtendimento && !souAdmin ? (
                   <p className="text-xs text-ink-soft">Este atendimento é de {donaDoAtendimento}.</p>
                 ) : (
-                  <div className="flex gap-2">
-                    <input
-                      value={texto}
-                      onChange={(e) => setTexto(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && void enviar()}
-                      placeholder="Escreva sua resposta…"
-                      className="flex-1 rounded-lg border border-line px-3 py-2 text-sm"
-                    />
-                    <button
-                      onClick={() => void enviar()}
-                      disabled={!texto.trim()}
-                      className="rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-4 disabled:opacity-60"
-                    >
-                      Enviar
-                    </button>
+                  <div className="space-y-2">
+                    {agendadas.length > 0 && (
+                      <ul className="space-y-1">
+                        {agendadas.map((a) => (
+                          <li key={a.id} className="flex items-center justify-between gap-2 text-[11px] bg-surface rounded-lg px-3 py-1.5">
+                            <span className="truncate">
+                              <b>Agendada para {new Date(a.agendadaPara).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}:</b> {a.texto}
+                            </span>
+                            <button
+                              onClick={() => void cancelarAgendada(empresaId, a.id)}
+                              className="text-red-500 font-bold shrink-0"
+                              title="Cancelar o envio agendado"
+                            >
+                              Cancelar
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {mostrarEmojis && (
+                      <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto border border-line rounded-lg p-2 bg-white">
+                        {EMOJIS.map((e) => (
+                          <button
+                            key={e}
+                            type="button"
+                            onClick={() => {
+                              setTexto((t) => t + e);
+                              campoRef.current?.focus();
+                            }}
+                            className="text-xl w-8 h-8 rounded hover:bg-surface"
+                          >
+                            {e}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {mostrarRelogio && (
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-ink-soft">
+                        <span className="font-bold text-ink">Enviar em:</span>
+                        <input
+                          type="datetime-local"
+                          value={quando}
+                          onChange={(e) => setQuando(e.target.value)}
+                          className="rounded-lg border border-line px-2 py-1.5 text-sm"
+                        />
+                        <span>{quando ? 'Clique no avião para agendar.' : 'Escolha a data e a hora.'}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setMostrarEmojis((v) => !v)}
+                        title="Emojis"
+                        className={`w-9 h-9 rounded-lg text-xl hover:bg-surface ${mostrarEmojis ? 'bg-surface' : ''}`}
+                      >
+                        😊
+                      </button>
+                      <input
+                        ref={campoRef}
+                        value={texto}
+                        onChange={(e) => setTexto(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && void enviar()}
+                        placeholder={mostrarRelogio ? 'Mensagem a agendar…' : 'Escreva sua resposta…'}
+                        className="flex-1 rounded-lg border border-line px-3 py-2 text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setMostrarRelogio((v) => !v)}
+                        title="Agendar mensagem"
+                        className={`w-9 h-9 rounded-lg hover:bg-surface text-lg ${mostrarRelogio ? 'bg-teal-500/10 text-teal-500' : 'text-ink-soft'}`}
+                      >
+                        🕒
+                      </button>
+                      <button
+                        onClick={() => void enviar()}
+                        disabled={!texto.trim() || (mostrarRelogio && !quando)}
+                        title={mostrarRelogio ? 'Agendar envio' : 'Enviar'}
+                        className="rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white w-11 h-9 flex items-center justify-center disabled:opacity-60"
+                      >
+                        <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M22 2 11 13" />
+                          <path d="M22 2 15 22l-4-9-9-4 20-7Z" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

@@ -173,31 +173,46 @@ refConexao.onSnapshot(async (snap) => {
   }
 });
 
-// Fila de envio: respostas escritas pelos vendedores no Fluxa.
-if (!MODO_TESTE) base
-  .collection('chatSaida')
-  .where('enviada', '==', false)
-  .onSnapshot((snap) => {
-    for (const mudanca of snap.docChanges()) {
-      if (mudanca.type !== 'added') continue;
-      const d = mudanca.doc;
-      const dado = d.data();
-      if (dado.canal !== 'whatsapp' || processando.has(d.id)) continue;
-      processando.add(d.id);
-      (async () => {
-        try {
-          if (!aberto || !sock) throw new Error('WhatsApp desconectado');
-          const enviada = await sock.sendMessage(`${dado.para}@s.whatsapp.net`, { text: dado.texto });
-          if (enviada?.key?.id) enviadasPorNos.add(enviada.key.id);
-          await d.ref.update({ enviada: true, enviadaEm: agora() });
-        } catch (e) {
-          await d.ref.update({ enviada: true, erro: e.message });
-        } finally {
-          processando.delete(d.id);
-        }
-      })();
+// Fila de envio: respostas escritas pelos vendedores no Fluxa (imediatas ou agendadas).
+async function enviarSaida(d) {
+  const dado = d.data();
+  if (dado.canal !== 'whatsapp' || processando.has(d.id)) return;
+  if (dado.agendadaPara && new Date(dado.agendadaPara).getTime() > Date.now()) return; // stand-by
+  processando.add(d.id);
+  try {
+    if (!aberto || !sock) throw new Error('WhatsApp desconectado');
+    const enviada = await sock.sendMessage(`${dado.para}@s.whatsapp.net`, { text: dado.texto });
+    if (enviada?.key?.id) enviadasPorNos.add(enviada.key.id);
+    await d.ref.update({ enviada: true, enviadaEm: agora() });
+    if (dado.jaRegistrada === false) {
+      const em = new Date().toISOString();
+      await base.collection('conversas').doc(dado.conversaId).collection('mensagens').add({ de: 'equipe', texto: dado.texto, em, autor: dado.autor ?? '' });
+      await base.collection('conversas').doc(dado.conversaId).set({ ultimaMensagem: dado.texto, ultimaEm: em, ultimaDe: 'equipe' }, { merge: true });
     }
-  });
+  } catch (e) {
+    await d.ref.update({ enviada: true, erro: e.message });
+  } finally {
+    processando.delete(d.id);
+  }
+}
+
+if (!MODO_TESTE) {
+  base
+    .collection('chatSaida')
+    .where('enviada', '==', false)
+    .onSnapshot((snap) => {
+      for (const mudanca of snap.docChanges()) if (mudanca.type === 'added') void enviarSaida(mudanca.doc);
+    });
+  // Mensagens agendadas: confere a cada 30 s se já chegou a hora.
+  setInterval(async () => {
+    try {
+      const snap = await base.collection('chatSaida').where('enviada', '==', false).get();
+      for (const d of snap.docs) if (d.data().agendadaPara) void enviarSaida(d);
+    } catch (e) {
+      console.error('Agendadas:', e.message);
+    }
+  }, 30000);
+}
 
 if (MODO_TESTE || fs.existsSync(PASTA_SESSAO)) void iniciar();
 else console.log('Sem sessão salva. No Fluxa, abra Chat e clique em "Gerar QR Code".');
