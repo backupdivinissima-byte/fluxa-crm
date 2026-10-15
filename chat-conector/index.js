@@ -484,19 +484,51 @@ function paraOggOpus(buf) {
   return new Promise((resolve, reject) => {
     const base = path.join(os.tmpdir(), `fluxa-audio-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     fs.writeFileSync(`${base}.in`, buf);
-    execFile(ffmpegPath, ['-y', '-i', `${base}.in`, '-vn', '-map_metadata', '-1', '-c:a', 'libopus', '-application', 'voip', '-b:a', '32k', '-ar', '48000', '-ac', '1', '-f', 'ogg', `${base}.ogg`], (err, _o, stderr) => {
-      try {
-        if (err) return reject(new Error('Falha ao converter o áudio: ' + err.message));
-        const out = fs.readFileSync(`${base}.ogg`);
-        if (out.length < 200 || out.slice(0, 4).toString() !== 'OggS') return reject(new Error('Áudio convertido inválido.'));
-        // duração real (a última linha "time=" do ffmpeg) — o WhatsApp precisa dela para reproduzir
-        const t = [...String(stderr).matchAll(/time=(\d+):(\d+):(\d+(?:\.\d+)?)/g)].pop();
-        const seconds = t ? Math.max(1, Math.round(+t[1] * 3600 + +t[2] * 60 + +t[3])) : 1;
-        resolve({ buf: out, seconds });
-      } finally {
-        for (const e of ['.in', '.ogg']) fs.rmSync(base + e, { force: true });
+    const limpar = () => {
+      for (const e of ['.in', '.ogg', '.pcm']) fs.rmSync(base + e, { force: true });
+    };
+    // Mesmo formato da mensagem de voz do próprio WhatsApp: Opus, mono, 16 kHz, dentro de Ogg.
+    execFile(
+      ffmpegPath,
+      ['-y', '-i', `${base}.in`, '-vn', '-map_metadata', '-1', '-avoid_negative_ts', 'make_zero', '-c:a', 'libopus', '-application', 'voip', '-b:a', '24k', '-ar', '16000', '-ac', '1', '-f', 'ogg', `${base}.ogg`],
+      (err, _o, stderr) => {
+        try {
+          if (err) return reject(new Error('Falha ao converter o áudio: ' + err.message));
+          const out = fs.readFileSync(`${base}.ogg`);
+          if (out.length < 200 || out.slice(0, 4).toString() !== 'OggS') return reject(new Error('Áudio convertido inválido.'));
+          const t = [...String(stderr).matchAll(/time=(\d+):(\d+):(\d+(?:\.\d+)?)/g)].pop();
+          const seconds = t ? Math.max(1, Math.round(+t[1] * 3600 + +t[2] * 60 + +t[3])) : 1;
+          // Onda do áudio (64 barras de 0 a 100), como o WhatsApp mostra na mensagem de voz.
+          execFile(ffmpegPath, ['-y', '-i', `${base}.ogg`, '-f', 's16le', '-ac', '1', '-ar', '8000', `${base}.pcm`], (e2) => {
+            let waveform;
+            try {
+              if (!e2) {
+                const pcm = fs.readFileSync(`${base}.pcm`);
+                const n = Math.floor(pcm.length / 2);
+                const barras = 64;
+                const picos = [];
+                for (let i = 0; i < barras; i++) {
+                  const ini = Math.floor((i * n) / barras);
+                  const fim = Math.max(ini + 1, Math.floor(((i + 1) * n) / barras));
+                  let pico = 0;
+                  for (let j = ini; j < fim && j < n; j++) pico = Math.max(pico, Math.abs(pcm.readInt16LE(j * 2)));
+                  picos.push(pico);
+                }
+                const max = Math.max(...picos, 1);
+                waveform = new Uint8Array(picos.map((p) => Math.round((p / max) * 100)));
+              }
+            } catch {
+              waveform = undefined;
+            }
+            limpar();
+            resolve({ buf: out, seconds, waveform });
+          });
+        } catch (e) {
+          limpar();
+          reject(e);
+        }
       }
-    });
+    );
   });
 }
 
@@ -526,7 +558,7 @@ async function enviarSaida(d) {
       const bruto = Buffer.from(String(dado.audioUrl).split(',')[1] ?? '', 'base64');
       const ogg = await paraOggOpus(bruto);
       console.log(`Enviando áudio de voz: ${ogg.buf.length} bytes, ${ogg.seconds}s`);
-      enviada = await sock.sendMessage(destino, { audio: ogg.buf, mimetype: 'audio/ogg; codecs=opus', ptt: true, seconds: ogg.seconds });
+      enviada = await sock.sendMessage(destino, { audio: ogg.buf, mimetype: 'audio/ogg; codecs=opus', ptt: true, seconds: ogg.seconds, ...(ogg.waveform ? { waveform: ogg.waveform } : {}) });
     } else if (dado.tipo === 'midia') {
       const buf = await lerAnexo(dado);
       const legenda = dado.legenda || undefined;
