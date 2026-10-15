@@ -701,7 +701,7 @@ export default function Chat() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-base font-extrabold text-ink mb-1">Fluxa Chat</h1>
-          <p className="text-sm text-ink-soft">Atendimento de WhatsApp, Instagram Direct e Messenger em um só lugar.</p>
+          <p className="text-sm text-ink-soft">Atendimento de WhatsApp, Instagram Direct e Messenger em um só lugar — cada conversa traz a etiqueta do canal.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span
@@ -856,7 +856,7 @@ export default function Chat() {
       {erro && <p className="text-xs text-red-500">{erro}</p>}
 
 
-      <div ref={gradeRef} style={{ ["--ph" as string]: `${alturaPainel}px` }} className="grid grid-cols-1 lg:grid-cols-[minmax(320px,440px)_minmax(0,1fr)_minmax(200px,260px)_minmax(200px,260px)] gap-4 items-stretch">
+      <div ref={gradeRef} style={{ ["--ph" as string]: `${alturaPainel}px` }} className="grid grid-cols-1 lg:grid-cols-[minmax(360px,520px)_minmax(0,1fr)] gap-4 items-stretch">
         <div className="bg-white border border-line rounded-2xl overflow-hidden flex flex-col lg:h-[var(--ph)] lg:min-h-[320px]">
           <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-line">
             <span className="text-xs font-bold text-ink flex items-center gap-1.5"><IconeWhatsApp />Conversas</span>
@@ -1280,8 +1280,6 @@ export default function Chat() {
           )}
         </div>
 
-        <PainelCanal titulo="Instagram Direct" icone={<IconeInstagram />} itens={visiveis.filter((c) => c.canal === 'instagram')} abertaId={abertaId} aoAbrir={setAbertaId} vazio="Nenhuma mensagem do Instagram Direct ainda." />
-        <PainelCanal titulo="Messenger" icone={<IconeMessenger />} itens={visiveis.filter((c) => c.canal === 'facebook')} abertaId={abertaId} aoAbrir={setAbertaId} vazio="Nenhuma mensagem do Messenger ainda." />
       </div>
       {novoContato && (
         <div className="fixed inset-0 z-50 bg-ink/40 flex items-center justify-center p-4" onClick={() => setNovoContato(null)}>
