@@ -60,9 +60,9 @@ function hora(iso: string) {
 
 function Cartao({ titulo, valor, dica }: { titulo: string; valor: number; dica: string }) {
   return (
-    <div className="bg-white border border-line rounded-xl px-3 py-2.5" title={dica}>
+    <div className="bg-white border border-line rounded-xl px-3 py-2" title={dica}>
       <div className="text-[10px] font-bold text-ink-soft uppercase tracking-wide truncate">{titulo}</div>
-      <div className="text-2xl font-extrabold text-ink mt-0.5 tabular-nums">{valor}</div>
+      <div className="text-xl font-extrabold text-ink tabular-nums">{valor}</div>
     </div>
   );
 }
@@ -295,7 +295,7 @@ export default function Chat() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_300px] gap-3 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-3 items-stretch">
         <div className="space-y-2">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         <Cartao titulo="Aguardando atendimento" valor={aguardando} dica="Clientes sem vendedor esperando resposta" />
@@ -313,16 +313,16 @@ export default function Chat() {
         ))}
       </div>
         </div>
-        <div className="bg-white border border-line rounded-xl p-3">
+        <div className="bg-white border border-line rounded-xl p-3 flex flex-col">
           <div className="text-[10px] font-bold text-ink-soft uppercase tracking-wide mb-2">Ligações pelo WhatsApp — hoje</div>
-          <div className="grid grid-cols-2 gap-2 mb-2">
-            <div className="rounded-lg bg-surface px-3 py-2">
+          <div className="grid grid-cols-2 gap-2 mb-2 flex-1">
+            <div className="rounded-lg bg-surface px-3 py-2 flex flex-col justify-center">
               <div className="text-[10px] text-ink-soft font-bold">Feitas</div>
-              <div className="text-2xl font-extrabold text-ink tabular-nums">{minhasLig.filter((l) => l.tipo === 'feita').length}</div>
+              <div className="text-3xl font-extrabold text-ink tabular-nums">{minhasLig.filter((l) => l.tipo === 'feita').length}</div>
             </div>
-            <div className="rounded-lg bg-surface px-3 py-2">
+            <div className="rounded-lg bg-surface px-3 py-2 flex flex-col justify-center">
               <div className="text-[10px] text-ink-soft font-bold">Recebidas</div>
-              <div className="text-2xl font-extrabold text-ink tabular-nums">{minhasLig.filter((l) => l.tipo === 'recebida').length}</div>
+              <div className="text-3xl font-extrabold text-ink tabular-nums">{minhasLig.filter((l) => l.tipo === 'recebida').length}</div>
             </div>
           </div>
           {souAdmin && (
