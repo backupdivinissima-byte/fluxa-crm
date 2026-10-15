@@ -34,7 +34,7 @@ services:
   #   container_name: fluxa-chat-carlafidelis
   #   environment:
   #     <<: *env-base
-  #     EMPRESA_ID: COLOQUE_AQUI_O_ID_DA_EMPRESA_DA_CARLA
+  #     EMPRESA_ID: Kb5nOo3SK0dAi3SsHk20Y0Oa1aE3
   #     PASTA_SESSAO: /dados/sessao
   #     ARQ_LID: /dados/lid-mapa.json
   #   volumes:
