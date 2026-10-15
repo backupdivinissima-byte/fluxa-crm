@@ -958,6 +958,13 @@ export default function Chat() {
                     placeholder="Nome do contato"
                     className="rounded-lg border border-line px-2 py-1.5 text-sm bg-white"
                   />
+                  <button
+                    onClick={() => void salvarContato()}
+                    disabled={!nomeContato.trim() && !codigoCliente.trim()}
+                    className="rounded-lg bg-gradient-to-br from-teal-500 to-blue-600 text-white font-bold px-3 py-1.5 disabled:opacity-60"
+                  >
+                    {editando ? 'Salvar alterações' : 'Salvar contato'}
+                  </button>
                   {editando && (
                     <input
                       value={telContato}
@@ -972,13 +979,6 @@ export default function Chat() {
                       usar “{aberta.nomeSugerido}”
                     </button>
                   )}
-                  <button
-                    onClick={() => void salvarContato()}
-                    disabled={!nomeContato.trim() && !codigoCliente.trim()}
-                    className="rounded-lg bg-gradient-to-br from-teal-500 to-blue-600 text-white font-bold px-3 py-1.5 disabled:opacity-60"
-                  >
-                    {editando ? 'Salvar alterações' : 'Salvar contato'}
-                  </button>
                   {editando && (
                     <button onClick={() => setEditando(false)} className="text-ink-soft underline">
                       Cancelar
