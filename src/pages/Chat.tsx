@@ -153,6 +153,24 @@ function MidiaPartes({ empresaId, conversaId, msg }: { empresaId: string; conver
 }
 
 export default function Chat() {
+  // Altura dos painéis = o que sobra da tela abaixo do topo deles (sem rolar a página).
+  const gradeRef = useRef<HTMLDivElement>(null);
+  const [alturaPainel, setAlturaPainel] = useState(560);
+  useEffect(() => {
+    const medir = () => {
+      const el = gradeRef.current;
+      if (!el) return;
+      const topo = el.getBoundingClientRect().top + window.scrollY;
+      setAlturaPainel(Math.max(320, Math.floor(window.innerHeight - topo - 16)));
+    };
+    medir();
+    window.addEventListener('resize', medir);
+    const t = window.setInterval(medir, 1500);
+    return () => {
+      window.removeEventListener('resize', medir);
+      window.clearInterval(t);
+    };
+  }, []);
   const { empresa, papel, sessaoVendedor, perfil } = useAuth();
   const empresaId = empresa?.id;
   const souAdmin = papel === 'admin';
@@ -741,8 +759,8 @@ export default function Chat() {
       {erro && <p className="text-xs text-red-500">{erro}</p>}
 
 
-      <div className="grid grid-cols-1 lg:grid-cols-[340px_minmax(0,600px)] lg:justify-start gap-4 items-stretch">
-        <div className="bg-white border border-line rounded-2xl overflow-hidden flex flex-col lg:h-[calc(100dvh-310px)] lg:min-h-[380px]">
+      <div ref={gradeRef} style={{ ["--ph" as string]: `${alturaPainel}px` }} className="grid grid-cols-1 lg:grid-cols-[340px_minmax(0,600px)] lg:justify-start gap-4 items-stretch">
+        <div className="bg-white border border-line rounded-2xl overflow-hidden flex flex-col lg:h-[var(--ph)] lg:min-h-[320px]">
           <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-line">
             <span className="text-xs font-bold text-ink">Conversas</span>
             <button
@@ -799,7 +817,7 @@ export default function Chat() {
           </ul>
         </div>
 
-        <div className="bg-white border border-line rounded-2xl flex flex-col min-h-[420px] lg:h-[calc(100dvh-310px)] lg:min-h-[380px]">
+        <div className="bg-white border border-line rounded-2xl flex flex-col min-h-[420px] lg:h-[var(--ph)] lg:min-h-[320px]">
           {!aberta ? (
             <div className="m-auto text-sm text-ink-soft p-6">Escolha uma conversa na lista.</div>
           ) : (
