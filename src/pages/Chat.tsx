@@ -74,11 +74,53 @@ function Cartao({ titulo, valor, dica, cor }: { titulo: string; valor: number; d
   );
 }
 
-function PainelCanal({ titulo, itens, abertaId, aoAbrir, vazio }: { titulo: string; itens: ConversaChat[]; abertaId: string | null; aoAbrir: (id: string) => void; vazio: string }) {
+function IconeWhatsApp() {
+  return (
+    <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0" aria-hidden="true">
+      <circle cx="12" cy="12" r="12" fill="#25D366" />
+      <path fill="#fff" d="M12 4.6a7.4 7.4 0 0 0-6.4 11.1L4.6 19.4l3.8-1a7.4 7.4 0 1 0 3.6-13.8Zm0 13.5a6.1 6.1 0 0 1-3.1-.9l-.2-.1-2.2.6.6-2.1-.1-.2A6.1 6.1 0 1 1 12 18.1Zm3.4-4.5c-.2-.1-1.1-.5-1.3-.6s-.3-.1-.4.1l-.6.7c-.1.1-.2.1-.4 0a5 5 0 0 1-2.5-2.2c-.2-.3.2-.3.5-1 .1-.1 0-.2 0-.3l-.6-1.4c-.1-.4-.3-.3-.4-.3h-.4a.7.7 0 0 0-.5.2 2.100 2.100 0 0 0-.7 1.600c0 .9.7 1.900.8 2a7.900 7.900 0 0 0 3 2.600c1.100.5 1.600.5 2.200.4.600-.1 1.300-.5 1.500-1 .2-.5.2-.9.1-1l-.4-.2Z" />
+    </svg>
+  );
+}
+function IconeInstagram() {
+  return (
+    <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0" aria-hidden="true">
+      <defs>
+        <linearGradient id="igGrad" x1="0" y1="1" x2="1" y2="0">
+          <stop offset="0" stopColor="#FEDA75" />
+          <stop offset="0.35" stopColor="#FA7E1E" />
+          <stop offset="0.6" stopColor="#D62976" />
+          <stop offset="0.8" stopColor="#962FBF" />
+          <stop offset="1" stopColor="#4F5BD5" />
+        </linearGradient>
+      </defs>
+      <rect width="24" height="24" rx="6.5" fill="url(#igGrad)" />
+      <rect x="5" y="5" width="14" height="14" rx="4.2" fill="none" stroke="#fff" strokeWidth="1.6" />
+      <circle cx="12" cy="12" r="3.3" fill="none" stroke="#fff" strokeWidth="1.6" />
+      <circle cx="16.3" cy="7.7" r="1" fill="#fff" />
+    </svg>
+  );
+}
+function IconeMessenger() {
+  return (
+    <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0" aria-hidden="true">
+      <defs>
+        <linearGradient id="msGrad" x1="0" y1="1" x2="1" y2="0">
+          <stop offset="0" stopColor="#0099FF" />
+          <stop offset="1" stopColor="#A033FF" />
+        </linearGradient>
+      </defs>
+      <path fill="url(#msGrad)" d="M12 1C5.9 1 1 5.6 1 11.3c0 3.2 1.600 6 4 7.900V23l3.700-2c1 .3 2.100.4 3.300.4 6.100 0 11-4.600 11-10.300S18.100 1 12 1Z" />
+      <path fill="#fff" d="m5.500 14.200 3.600-5.700a1.800 1.800 0 0 1 2.600-.5l2.800 2.100c.5.400 1.200.4 1.700 0l3.800-2.900c.5-.4 1.100.2.700.8l-3.600 5.700a1.800 1.800 0 0 1-2.600.5L12 11.100a1.400 1.400 0 0 0-1.700 0l-3.800 2.900c-.5.400-1.100-.200-.700-.800Z" />
+    </svg>
+  );
+}
+
+function PainelCanal({ titulo, icone, itens, abertaId, aoAbrir, vazio }: { titulo: string; icone: React.ReactNode; itens: ConversaChat[]; abertaId: string | null; aoAbrir: (id: string) => void; vazio: string }) {
   return (
     <div className="bg-white border border-line rounded-2xl overflow-hidden flex flex-col lg:h-[var(--ph)] lg:min-h-[320px] min-h-[200px]">
       <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-line">
-        <span className="text-xs font-bold text-ink">{titulo}</span>
+        <span className="text-xs font-bold text-ink flex items-center gap-1.5">{icone}{titulo}</span>
         <span className="text-[11px] font-bold text-ink-soft">{itens.length}</span>
       </div>
       <ul className="flex-1 min-h-0 overflow-y-auto divide-y divide-line">
@@ -774,7 +816,7 @@ export default function Chat() {
       <div ref={gradeRef} style={{ ["--ph" as string]: `${alturaPainel}px` }} className="grid grid-cols-1 lg:grid-cols-[minmax(300px,380px)_minmax(0,680px)_minmax(190px,240px)_minmax(190px,240px)_minmax(220px,300px)] lg:justify-start gap-4 items-stretch">
         <div className="bg-white border border-line rounded-2xl overflow-hidden flex flex-col lg:h-[var(--ph)] lg:min-h-[320px]">
           <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-line">
-            <span className="text-xs font-bold text-ink">Conversas</span>
+            <span className="text-xs font-bold text-ink flex items-center gap-1.5"><IconeWhatsApp />Conversas</span>
             <button
               onClick={() => setNovoContato({ nome: '', telefone: '' })}
               title="Cadastrar um cliente novo que ainda não chamou no WhatsApp"
@@ -1195,8 +1237,8 @@ export default function Chat() {
           )}
         </div>
 
-        <PainelCanal titulo="Instagram Direct" itens={visiveis.filter((c) => c.canal === 'instagram')} abertaId={abertaId} aoAbrir={setAbertaId} vazio="Nenhuma mensagem do Instagram Direct ainda." />
-        <PainelCanal titulo="Messenger" itens={visiveis.filter((c) => c.canal === 'facebook')} abertaId={abertaId} aoAbrir={setAbertaId} vazio="Nenhuma mensagem do Messenger ainda." />
+        <PainelCanal titulo="Instagram Direct" icone={<IconeInstagram />} itens={visiveis.filter((c) => c.canal === 'instagram')} abertaId={abertaId} aoAbrir={setAbertaId} vazio="Nenhuma mensagem do Instagram Direct ainda." />
+        <PainelCanal titulo="Messenger" icone={<IconeMessenger />} itens={visiveis.filter((c) => c.canal === 'facebook')} abertaId={abertaId} aoAbrir={setAbertaId} vazio="Nenhuma mensagem do Messenger ainda." />
         <div className="bg-white border border-line rounded-2xl p-3 flex flex-col lg:h-[var(--ph)] lg:min-h-[320px] min-h-[200px]">
           <div className="text-[10px] font-bold text-ink-soft uppercase tracking-wide mb-2">Ligações pelo WhatsApp — hoje</div>
           <div className="grid grid-cols-2 gap-2 mb-3">
