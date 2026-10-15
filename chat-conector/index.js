@@ -393,10 +393,15 @@ function paraOggOpus(buf) {
   return new Promise((resolve, reject) => {
     const base = path.join(os.tmpdir(), `fluxa-audio-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     fs.writeFileSync(`${base}.in`, buf);
-    execFile(ffmpegPath, ['-y', '-i', `${base}.in`, '-vn', '-c:a', 'libopus', '-b:a', '32k', '-ar', '48000', '-ac', '1', '-f', 'ogg', `${base}.ogg`], (err) => {
+    execFile(ffmpegPath, ['-y', '-i', `${base}.in`, '-vn', '-map_metadata', '-1', '-c:a', 'libopus', '-application', 'voip', '-b:a', '32k', '-ar', '48000', '-ac', '1', '-f', 'ogg', `${base}.ogg`], (err, _o, stderr) => {
       try {
         if (err) return reject(new Error('Falha ao converter o áudio: ' + err.message));
-        resolve(fs.readFileSync(`${base}.ogg`));
+        const out = fs.readFileSync(`${base}.ogg`);
+        if (out.length < 200 || out.slice(0, 4).toString() !== 'OggS') return reject(new Error('Áudio convertido inválido.'));
+        // duração real (a última linha "time=" do ffmpeg) — o WhatsApp precisa dela para reproduzir
+        const t = [...String(stderr).matchAll(/time=(\d+):(\d+):(\d+(?:\.\d+)?)/g)].pop();
+        const seconds = t ? Math.max(1, Math.round(+t[1] * 3600 + +t[2] * 60 + +t[3])) : 1;
+        resolve({ buf: out, seconds });
       } finally {
         for (const e of ['.in', '.ogg']) fs.rmSync(base + e, { force: true });
       }
@@ -429,7 +434,8 @@ async function enviarSaida(d) {
     if (dado.tipo === 'audio') {
       const bruto = Buffer.from(String(dado.audioUrl).split(',')[1] ?? '', 'base64');
       const ogg = await paraOggOpus(bruto);
-      enviada = await sock.sendMessage(destino, { audio: ogg, mimetype: 'audio/ogg; codecs=opus', ptt: true });
+      console.log(`Enviando áudio de voz: ${ogg.buf.length} bytes, ${ogg.seconds}s`);
+      enviada = await sock.sendMessage(destino, { audio: ogg.buf, mimetype: 'audio/ogg; codecs=opus', ptt: true, seconds: ogg.seconds });
     } else if (dado.tipo === 'midia') {
       const buf = await lerAnexo(dado);
       const legenda = dado.legenda || undefined;
