@@ -514,10 +514,10 @@ export default function Chat() {
                     {aberta.nome || aberta.telefone || aberta.contato}
                     {aberta.salvoNaAgenda && <span className="ml-2 text-[10px] font-bold text-emerald-600">📒 Salvo na agenda do celular</span>}
                   </div>
+                  {aberta.telefone && <div className="text-[11px] text-ink-soft">{aberta.telefone}</div>}
                   <div className="text-[11px] text-ink-soft">
                     {NOME_CANAL[aberta.canal]}
-                    {aberta.telefone ? ` · ${aberta.telefone}` : ''}
-                    {aberta.vendedorNome ? ` · atendimento de ${aberta.vendedorNome}` : ' · livre'}
+                    {aberta.vendedorNome ? ` · em atendimento por ${aberta.vendedorNome}` : ' · livre'}
                   </div>
                 </div>
                 {aberta.canal === 'whatsapp' && aberta.telefone && (
