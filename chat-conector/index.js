@@ -16,14 +16,22 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import QRCode from 'qrcode';
 import pino from 'pino';
 
-const EMPRESA_ID = process.env.EMPRESA_ID;
-if (!EMPRESA_ID) throw new Error('Defina EMPRESA_ID.');
+// MODO TESTE: sem banco. Mostra o QR Code no terminal e escreve as mensagens
+// recebidas na tela. Ativa com MODO_TESTE=1 ou quando não há credenciais.
+const MODO_TESTE = process.env.MODO_TESTE === '1' || !process.env.GOOGLE_APPLICATION_CREDENTIALS;
+const EMPRESA_ID = process.env.EMPRESA_ID || 'teste';
+if (!MODO_TESTE && !process.env.EMPRESA_ID) throw new Error('Defina EMPRESA_ID.');
 const PASTA_SESSAO = `./sessao-${EMPRESA_ID}`;
 
-initializeApp({ credential: applicationDefault() });
-const db = getFirestore();
-const base = db.collection('empresas').doc(EMPRESA_ID);
-const refConexao = base.collection('chatConexoes').doc('whatsapp');
+let base = null;
+let refConexao = { set: async () => {}, onSnapshot: () => {} };
+if (!MODO_TESTE) {
+  initializeApp({ credential: applicationDefault() });
+  base = getFirestore().collection('empresas').doc(EMPRESA_ID);
+  refConexao = base.collection('chatConexoes').doc('whatsapp');
+} else {
+  console.log('>>> MODO TESTE: sem banco de dados. As mensagens só aparecem aqui no terminal.');
+}
 const log = pino({ level: 'warn' });
 
 let sock = null;
@@ -54,6 +62,10 @@ async function guardarMensagem(msg) {
   const texto = textoDe(msg);
   const quando = new Date(Number(msg.messageTimestamp ?? Date.now() / 1000) * 1000).toISOString();
   const deCliente = !msg.key.fromMe;
+  if (MODO_TESTE) {
+    console.log(`[${deCliente ? 'RECEBIDA' : 'ENVIADA'}] ${msg.pushName || numero} (${numero}): ${texto}`);
+    return;
+  }
   const conversaRef = base.collection('conversas').doc(`whatsapp_${numero}`);
   await conversaRef.set(
     {
@@ -84,6 +96,10 @@ async function iniciar() {
 
     sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
       if (qr) {
+        if (MODO_TESTE) {
+          console.log('\nLeia este QR Code no celular: WhatsApp > Aparelhos conectados > Conectar um aparelho\n');
+          console.log(await QRCode.toString(qr, { type: 'terminal', small: true }));
+        }
         const imagem = await QRCode.toDataURL(qr, { width: 320, margin: 1 });
         await refConexao.set({ status: 'aguardando_qr', qr: imagem, atualizadoEm: agora() }, { merge: true });
       }
@@ -136,7 +152,7 @@ refConexao.onSnapshot(async (snap) => {
 });
 
 // Fila de envio: respostas escritas pelos vendedores no Fluxa.
-base
+if (!MODO_TESTE) base
   .collection('chatSaida')
   .where('enviada', '==', false)
   .onSnapshot((snap) => {
@@ -161,5 +177,5 @@ base
     }
   });
 
-if (fs.existsSync(PASTA_SESSAO)) void iniciar();
+if (MODO_TESTE || fs.existsSync(PASTA_SESSAO)) void iniciar();
 else console.log('Sem sessão salva. No Fluxa, abra Chat e clique em "Gerar QR Code".');

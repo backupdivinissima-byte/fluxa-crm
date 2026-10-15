@@ -51,3 +51,11 @@ Alternativa ao e-mail, sem senha de app: salva um CSV por dia numa pasta "Fluxa 
 3. No PowerShell (nesta pasta), com `EMPRESA_ID`, `GOOGLE_APPLICATION_CREDENTIALS`, `DRIVE_CLIENT_ID` e `DRIVE_CLIENT_SECRET` definidos:
    `npm run backup-drive -- --autorizar` (faz o login uma vez) e depois `npm run backup-drive` todo dia (Agendador de Tarefas).
 Não guarde `drive-token.json` nem a chave secreta no repositório.
+
+## Teste rápido do WhatsApp (sem banco de dados)
+Só para ver se o QR Code conecta e se as mensagens chegam. No PowerShell, nesta pasta, **sem** definir `GOOGLE_APPLICATION_CREDENTIALS`:
+```
+npm install
+npm start
+```
+O QR Code aparece no próprio terminal. Leia no celular (WhatsApp → Aparelhos conectados → Conectar um aparelho) e mande uma mensagem de outro número: ela aparece no terminal como `[RECEBIDA]`. Para sair, Ctrl+C. A sessão fica salva na pasta `sessao-teste`.
