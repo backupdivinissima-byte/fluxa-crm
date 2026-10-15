@@ -662,7 +662,7 @@ export default function Chat() {
                     {aberta.salvoNaAgenda && <span className="ml-2 text-[10px] font-bold text-emerald-600">📒 Salvo na agenda do celular</span>}
                   </div>
                   {nomeAgenda && clienteCrm && <div className="text-[11px] text-ink-soft">Agenda: {nomeAgenda}</div>}
-                  {aberta.telefone && <div className="text-[11px] text-ink-soft">{aberta.telefone}</div>}
+                  {(aberta.telefone || clienteCrm?.telefone) && <div className="text-[11px] text-ink-soft">{aberta.telefone || clienteCrm?.telefone}</div>}
                   <div className="text-[11px] text-ink-soft">
                     {NOME_CANAL[aberta.canal]}
                     {aberta.vendedorNome ? ` · em atendimento por ${aberta.vendedorNome}` : ' · livre'}
