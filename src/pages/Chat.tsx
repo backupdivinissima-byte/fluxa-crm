@@ -223,6 +223,43 @@ function MidiaPartes({ empresaId, conversaId, msg }: { empresaId: string; conver
   );
 }
 
+let ctxAudio: AudioContext | null = null;
+function destravarAudio() {
+  try {
+    ctxAudio ??= new AudioContext();
+    if (ctxAudio.state === 'suspended') void ctxAudio.resume();
+  } catch {
+    /* sem áudio */
+  }
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('pointerdown', destravarAudio);
+  window.addEventListener('keydown', destravarAudio);
+}
+/** Toca uma campainha curta (dois tons) — o navegador só libera o som depois do primeiro clique na página. */
+function tocarCampainha() {
+  try {
+    destravarAudio();
+    const ctx = ctxAudio;
+    if (!ctx || ctx.state !== 'running') return;
+    [880, 1318].forEach((freq, i) => {
+      const t0 = ctx.currentTime + i * 0.18;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.35, t0 + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.6);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.65);
+    });
+  } catch {
+    /* sem áudio */
+  }
+}
+
 export default function Chat() {
   // Altura dos painéis = o que sobra da tela abaixo do topo deles (sem rolar a página).
   const gradeRef = useRef<HTMLDivElement>(null);
@@ -336,6 +373,26 @@ export default function Chat() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [visiveis, filtro, meuLogin, clientes]
   );
+
+  // Campainha: toca quando chega mensagem de um NOVO contato (conversa nova ou
+  // nova mensagem de quem ainda é "novo contato"). A primeira carga da lista
+  // só memoriza o que já existia, sem tocar.
+  const novosVistosRef = useRef<Map<string, string> | null>(null);
+  useEffect(() => {
+    const atual = new Map<string, string>();
+    for (const c of visiveis) if (ehNovo(c)) atual.set(c.id, c.ultimaEm);
+    const antes = novosVistosRef.current;
+    novosVistosRef.current = atual;
+    if (antes === null || conversas.length === 0) return;
+    for (const [id, em] of atual) {
+      const c = visiveis.find((x) => x.id === id);
+      if (c?.ultimaDe === 'cliente' && antes.get(id) !== em) {
+        tocarCampainha();
+        break;
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visiveis, clientes]);
 
   const aguardando = visiveis.filter((c) => !c.vendedorLogin && c.ultimaDe === 'cliente').length;
   const emAtendimento = visiveis.filter((c) => !!c.vendedorLogin).length;
