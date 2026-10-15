@@ -201,6 +201,7 @@ async function importarHistorico(lista) {
           contatoJid: jidsHist.get(numero),
           ...(agenda.has(numero) ? { nome: agenda.get(numero), nomeSugerido: agenda.get(numero), salvoNaAgenda: true } : !atual.nome ? { nome: nomePush || numero, ...(nomePush ? { nomeSugerido: nomePush } : {}) } : {}),
           ...(novoUlt ? { ultimaMensagem: textoDe(mais), ultimaEm: quandoUlt, ultimaDe: mais.key.fromMe ? 'equipe' : 'cliente' } : {}),
+          ...(msgs.some((m) => m.key.fromMe) ? { teveResposta: true } : {}),
         },
         { merge: true }
       );
@@ -240,6 +241,7 @@ async function guardarMensagem(msg) {
       ultimaMensagem: texto,
       ultimaEm: quando,
       ultimaDe: deCliente ? 'cliente' : 'equipe',
+      ...(deCliente ? {} : { teveResposta: true }),
       ...(deCliente ? { naoLidas: FieldValue.increment(1) } : {}),
     },
     { merge: true }
@@ -438,7 +440,7 @@ async function enviarSaida(d) {
     if (dado.jaRegistrada === false) {
       const em = new Date().toISOString();
       await base.collection('conversas').doc(dado.conversaId).collection('mensagens').add({ de: 'equipe', texto: dado.texto, em, autor: dado.autor ?? '' });
-      await base.collection('conversas').doc(dado.conversaId).set({ ultimaMensagem: dado.texto, ultimaEm: em, ultimaDe: 'equipe' }, { merge: true });
+      await base.collection('conversas').doc(dado.conversaId).set({ ultimaMensagem: dado.texto, ultimaEm: em, ultimaDe: 'equipe', teveResposta: true }, { merge: true });
     }
   } catch (e) {
     console.error('Falha ao enviar:', e.message);

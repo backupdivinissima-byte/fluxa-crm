@@ -23,6 +23,7 @@ import {
   carregarMidiaPartes,
   enviarAnexoChat,
   transferirConversa,
+  criarContatoChat,
   liberarConversa,
   ouvirConexaoWhatsapp,
   ouvirConversas,
@@ -181,6 +182,7 @@ export default function Chat() {
   const [editando, setEditando] = useState(false);
   const [vendedoresCrm, setVendedoresCrm] = useState<Vendedor[]>([]);
   const [transferindo, setTransferindo] = useState(false);
+  const [novoContato, setNovoContato] = useState<{ nome: string; telefone: string } | null>(null);
   const [anexo, setAnexo] = useState<{ arquivo: File | Blob; nome: string; previa?: string } | null>(null);
   const [enviandoAnexo, setEnviandoAnexo] = useState(false);
   const arquivoRef = useRef<HTMLInputElement>(null);
@@ -235,7 +237,10 @@ export default function Chat() {
     [conversas, souAdmin, meuLogin]
   );
   // Novos = primeiro contato: ninguém assumiu e o telefone ainda não existe no CRM.
-  const ehNovo = (c: ConversaChat) => !c.vendedorLogin && !c.clienteId && !acharClientePorTelefone(clientes, c.telefone);
+  // Novo contato = cliente que chamou pela primeira vez (passivo): ninguém atende, nunca foi
+  // respondido, não está salvo e não tem cadastro no CRM.
+  const ehNovo = (c: ConversaChat) =>
+    !c.vendedorLogin && !c.clienteId && !c.salvo && !c.teveResposta && !acharClientePorTelefone(clientes, c.telefone);
   const lista = useMemo(
     () =>
       visiveis.filter((c) =>
@@ -500,6 +505,26 @@ export default function Chat() {
     }
   }
 
+  async function cadastrarContato() {
+    if (!empresaId || !novoContato) return;
+    const nome = novoContato.nome.trim();
+    if (!nome) {
+      setErro('Informe o nome do contato.');
+      return;
+    }
+    setErro('');
+    try {
+      const conversa = await criarContatoChat(empresaId, nome, novoContato.telefone);
+      // Fica com quem cadastrou: assume o atendimento e (vendedor) entra no CRM em atendimento.
+      if (!conversa.vendedorLogin) await assumir(conversa);
+      setNovoContato(null);
+      setFiltro('minhas');
+      setAbertaId(conversa.id);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Não foi possível cadastrar o contato.');
+    }
+  }
+
   async function transferir(v: Vendedor) {
     if (!empresaId || !aberta) return;
     setErro('');
@@ -718,6 +743,16 @@ export default function Chat() {
 
       <div className="grid grid-cols-1 lg:grid-cols-[340px_minmax(0,600px)] lg:justify-start gap-4 items-stretch">
         <div className="bg-white border border-line rounded-2xl overflow-hidden flex flex-col lg:h-[calc(100vh-240px)] lg:min-h-[560px]">
+          <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-line">
+            <span className="text-xs font-bold text-ink">Conversas</span>
+            <button
+              onClick={() => setNovoContato({ nome: '', telefone: '' })}
+              title="Cadastrar um cliente novo que ainda não chamou no WhatsApp"
+              className="rounded-lg bg-gradient-to-br from-teal-500 to-blue-600 text-white text-xs font-bold px-3 py-1.5"
+            >
+              ➕ Novo contato
+            </button>
+          </div>
           <div className="flex border-b border-line text-xs font-bold">
             {(['todas', 'novos', 'minhas'] as const).map((f) => (
               <button
@@ -1118,6 +1153,44 @@ export default function Chat() {
         </div>
 
       </div>
+      {novoContato && (
+        <div className="fixed inset-0 z-50 bg-ink/40 flex items-center justify-center p-4" onClick={() => setNovoContato(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-base font-extrabold text-ink">Novo contato</h3>
+            <p className="text-xs text-ink-soft mt-1 mb-3">
+              Cadastre um cliente que ainda não chamou. Ele entra na agenda do Fluxa Chat e fica no seu nome.
+            </p>
+            <label className="block text-[11px] font-bold uppercase tracking-wide text-ink-soft mb-1">Nome</label>
+            <input
+              autoFocus
+              value={novoContato.nome}
+              onChange={(e) => setNovoContato({ ...novoContato, nome: e.target.value })}
+              placeholder="Nome do cliente"
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm mb-3"
+            />
+            <label className="block text-[11px] font-bold uppercase tracking-wide text-ink-soft mb-1">Telefone (WhatsApp)</label>
+            <input
+              value={novoContato.telefone}
+              onChange={(e) => setNovoContato({ ...novoContato, telefone: e.target.value })}
+              onKeyDown={(e) => e.key === 'Enter' && void cadastrarContato()}
+              placeholder="DDD + número"
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+            />
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => setNovoContato(null)} className="flex-1 rounded-xl border border-line text-sm font-bold py-2 hover:bg-surface">
+                Cancelar
+              </button>
+              <button
+                onClick={() => void cadastrarContato()}
+                disabled={!novoContato.nome.trim() || novoContato.telefone.replace(/\D/g, '').length < 10}
+                className="flex-1 rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold py-2 disabled:opacity-60"
+              >
+                Cadastrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {transferindo && aberta && (
         <div className="fixed inset-0 z-50 bg-ink/40 flex items-center justify-center p-4" onClick={() => setTransferindo(false)}>
           <div className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>

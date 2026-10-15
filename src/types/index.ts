@@ -358,6 +358,7 @@ export interface ConversaChat {
   tags?: string[]; // ids das tags cadastradas (chatTags)
   nomeSugerido?: string; // nome que chegou pronto (agenda do celular ou perfil)
   salvo?: boolean; // a equipe confirmou o nome na agenda do Fluxa Chat
+  teveResposta?: boolean; // a equipe (ou o celular) já respondeu: deixa de ser "novo contato"
   salvoNaAgenda?: boolean; // o nome veio da agenda do celular
 }
 

@@ -100,6 +100,7 @@ export async function enviarMensagemChat(
       ultimaMensagem: texto,
       ultimaEm: agora,
       ultimaDe: 'equipe',
+      teveResposta: true,
     });
   }
   await addDoc(collection(db, 'empresas', empresaId, 'chatSaida'), {
@@ -134,6 +135,7 @@ export async function enviarAudioChat(empresaId: string, conversa: ConversaChat,
     ultimaMensagem: '🎤 Áudio',
     ultimaEm: agora,
     ultimaDe: 'equipe',
+      teveResposta: true,
   });
   await addDoc(collection(db, 'empresas', empresaId, 'chatSaida'), {
     conversaId: conversa.id,
@@ -216,6 +218,7 @@ export async function enviarAnexoChat(empresaId: string, conversa: ConversaChat,
     ultimaMensagem: legenda || (tipo === 'imagem' ? '📷 Foto' : tipo === 'video' ? '🎥 Vídeo' : `📎 ${nomeArq}`),
     ultimaEm: agora,
     ultimaDe: 'equipe',
+      teveResposta: true,
   });
   await addDoc(collection(db, 'empresas', empresaId, 'chatSaida'), {
     conversaId: conversa.id,
@@ -264,6 +267,36 @@ export async function transferirConversa(
       console.error('Transferência no CRM:', e);
     }
   }
+}
+
+/** Cria (ou reabre) um contato dentro do Fluxa Chat, já salvo na agenda e no nome de quem cadastrou. */
+export async function criarContatoChat(empresaId: string, nome: string, telefone: string): Promise<ConversaChat> {
+  await chatPronto;
+  let d = telefone.replace(/\D/g, '');
+  if (d.length === 10 || d.length === 11) d = `55${d}`; // DDD + número → inclui o país
+  if (d.length < 12) throw new Error('Telefone inválido. Informe DDD + número.');
+  const id = `whatsapp_${d}`;
+  const ref = doc(db, 'empresas', empresaId, 'conversas', id);
+  const atual = await getDoc(ref);
+  const agora = new Date().toISOString();
+  if (atual.exists()) {
+    await updateDoc(ref, { nome, salvo: true });
+    return { id, ...(atual.data() as Omit<ConversaChat, 'id'>), nome, salvo: true };
+  }
+  const nova = {
+    canal: 'whatsapp' as const,
+    contato: d,
+    telefone: d,
+    contatoJid: `${d}@s.whatsapp.net`,
+    nome,
+    salvo: true,
+    ultimaMensagem: '',
+    ultimaEm: agora,
+    ultimaDe: 'equipe' as const,
+    teveResposta: true,
+  };
+  await setDoc(ref, nova);
+  return { id, ...nova };
 }
 
 export interface MensagemAgendada {
