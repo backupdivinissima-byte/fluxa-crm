@@ -480,26 +480,33 @@ refConexao.onSnapshot(async (snap) => {
 // Fila de envio: respostas escritas pelos vendedores no Fluxa (imediatas ou agendadas).
 // Converte o áudio gravado no navegador (webm/opus, mp4...) para ogg/opus,
 // o formato das mensagens de voz do WhatsApp.
+// AUDIO_FORMATO=ogg volta ao formato Opus; o padrão (m4a/AAC) abre também no WhatsApp do iPhone.
+const FORMATO_AUDIO = (process.env.AUDIO_FORMATO || 'm4a').toLowerCase();
 function paraOggOpus(buf) {
   return new Promise((resolve, reject) => {
     const base = path.join(os.tmpdir(), `fluxa-audio-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     fs.writeFileSync(`${base}.in`, buf);
     const limpar = () => {
-      for (const e of ['.in', '.ogg', '.pcm']) fs.rmSync(base + e, { force: true });
+      for (const e of ['.in', '.ogg', '.m4a', '.pcm']) fs.rmSync(base + e, { force: true });
     };
+    const saida = FORMATO_AUDIO === 'ogg' ? `${base}.ogg` : `${base}.m4a`;
+    const argsFmt =
+      FORMATO_AUDIO === 'ogg'
+        ? ['-c:a', 'libopus', '-application', 'voip', '-b:a', '24k', '-ar', '16000', '-ac', '1', '-f', 'ogg']
+        : ['-c:a', 'aac', '-b:a', '48k', '-ar', '44100', '-ac', '1', '-movflags', '+faststart', '-f', 'ipod'];
     // Mesmo formato da mensagem de voz do próprio WhatsApp: Opus, mono, 16 kHz, dentro de Ogg.
     execFile(
       ffmpegPath,
-      ['-y', '-i', `${base}.in`, '-vn', '-map_metadata', '-1', '-avoid_negative_ts', 'make_zero', '-c:a', 'libopus', '-application', 'voip', '-b:a', '24k', '-ar', '16000', '-ac', '1', '-f', 'ogg', `${base}.ogg`],
+      ['-y', '-i', `${base}.in`, '-vn', '-map_metadata', '-1', '-avoid_negative_ts', 'make_zero', ...argsFmt, saida],
       (err, _o, stderr) => {
         try {
           if (err) return reject(new Error('Falha ao converter o áudio: ' + err.message));
-          const out = fs.readFileSync(`${base}.ogg`);
-          if (out.length < 200 || out.slice(0, 4).toString() !== 'OggS') return reject(new Error('Áudio convertido inválido.'));
+          const out = fs.readFileSync(saida);
+          if (out.length < 200 || (FORMATO_AUDIO === 'ogg' && out.slice(0, 4).toString() !== 'OggS')) return reject(new Error('Áudio convertido inválido.'));
           const t = [...String(stderr).matchAll(/time=(\d+):(\d+):(\d+(?:\.\d+)?)/g)].pop();
           const seconds = t ? Math.max(1, Math.round(+t[1] * 3600 + +t[2] * 60 + +t[3])) : 1;
           // Onda do áudio (64 barras de 0 a 100), como o WhatsApp mostra na mensagem de voz.
-          execFile(ffmpegPath, ['-y', '-i', `${base}.ogg`, '-f', 's16le', '-ac', '1', '-ar', '8000', `${base}.pcm`], (e2) => {
+          execFile(ffmpegPath, ['-y', '-i', saida, '-f', 's16le', '-ac', '1', '-ar', '8000', `${base}.pcm`], (e2) => {
             let waveform;
             try {
               if (!e2) {
@@ -558,7 +565,7 @@ async function enviarSaida(d) {
       const bruto = Buffer.from(String(dado.audioUrl).split(',')[1] ?? '', 'base64');
       const ogg = await paraOggOpus(bruto);
       console.log(`Enviando áudio de voz: ${ogg.buf.length} bytes, ${ogg.seconds}s`);
-      enviada = await sock.sendMessage(destino, { audio: ogg.buf, mimetype: 'audio/ogg; codecs=opus', ptt: true, seconds: ogg.seconds, ...(ogg.waveform ? { waveform: ogg.waveform } : {}) });
+      enviada = await sock.sendMessage(destino, { audio: ogg.buf, mimetype: FORMATO_AUDIO === 'ogg' ? 'audio/ogg; codecs=opus' : 'audio/mp4', ptt: true, seconds: ogg.seconds, ...(ogg.waveform ? { waveform: ogg.waveform } : {}) });
     } else if (dado.tipo === 'midia') {
       const buf = await lerAnexo(dado);
       const legenda = dado.legenda || undefined;
