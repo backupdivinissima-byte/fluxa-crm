@@ -161,7 +161,7 @@ async function iniciar() {
           console.log('\nLeia este QR Code no celular: WhatsApp > Aparelhos conectados > Conectar um aparelho\n');
           console.log(await QRCode.toString(qr, { type: 'terminal', small: true }));
         }
-        const imagem = await QRCode.toDataURL(qr, { width: 320, margin: 1 });
+        const imagem = await QRCode.toDataURL(qr, { width: 640, margin: 4, errorCorrectionLevel: 'M' });
         await refConexao.set({ status: 'aguardando_qr', qr: imagem, atualizadoEm: agora() }, { merge: true });
       }
       if (connection === 'open') {

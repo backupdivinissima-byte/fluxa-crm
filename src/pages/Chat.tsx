@@ -417,7 +417,7 @@ export default function Chat() {
           >
             Gerar QR Code
           </button>
-          {conexao.qr ? <img src={conexao.qr} alt="QR Code do WhatsApp" className="mt-4 w-56 h-56 border border-line rounded-lg" /> : null}
+          {conexao.qr ? <img src={conexao.qr} alt="QR Code do WhatsApp" className="mt-4 w-80 h-80 bg-white border border-line rounded-lg" /> : null}
         </div>
       )}
 
