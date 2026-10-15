@@ -355,6 +355,8 @@ export interface ConversaChat {
   atendimentoEm?: string; // ISO — quando o vendedor pegou
   origem?: 'trafego'; // veio da landing page (senão a origem é o próprio canal)
   tags?: string[]; // ids das tags cadastradas (chatTags)
+  nomeSugerido?: string; // nome que chegou pronto (agenda do celular ou perfil)
+  salvo?: boolean; // a equipe confirmou o nome na agenda do Fluxa Chat
   salvoNaAgenda?: boolean; // o nome veio da agenda do celular
 }
 

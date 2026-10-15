@@ -99,7 +99,9 @@ function lembrarContatos(lista) {
     if (MODO_TESTE || !base) continue;
     // Se já existe conversa com esse número, atualiza o nome para o da agenda.
     base.collection('conversas').doc(`whatsapp_${numero}`).get().then((snap) => {
-      if (snap.exists) return snap.ref.set({ nome: c.name, salvoNaAgenda: true }, { merge: true });
+      if (!snap.exists) return;
+      // Contato já salvo pela equipe no Fluxa: só atualiza a sugestão, nunca o nome.
+      return snap.ref.set(snap.data()?.salvo ? { nomeSugerido: c.name } : { nome: c.name, nomeSugerido: c.name, salvoNaAgenda: true }, { merge: true });
     }).catch(() => {});
   }
 }
@@ -118,12 +120,16 @@ async function guardarMensagem(msg) {
   }
   const midia = await midiaDe(msg, numero);
   const conversaRef = base.collection('conversas').doc(`whatsapp_${numero}`);
+  const jaSalvo = !!(await conversaRef.get()).data()?.salvo; // nome confirmado pela equipe
+  const sugestao = agenda.get(numero) ?? (deCliente ? msg.pushName : undefined);
   await conversaRef.set(
     {
       canal: 'whatsapp',
       contato: numero,
       telefone: numero,
-      ...(agenda.has(numero) ? { nome: agenda.get(numero), salvoNaAgenda: true } : deCliente && msg.pushName ? { nome: msg.pushName } : {}),
+      ...(sugestao ? { nomeSugerido: sugestao } : {}),
+      ...(!jaSalvo && sugestao ? { nome: sugestao } : {}),
+      ...(agenda.has(numero) ? { salvoNaAgenda: true } : {}),
       ultimaMensagem: texto,
       ultimaEm: quando,
       ultimaDe: deCliente ? 'cliente' : 'equipe',

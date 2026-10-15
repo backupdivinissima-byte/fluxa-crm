@@ -12,6 +12,7 @@ import {
   registrarLigacao,
   type LigacaoChat,
   salvarTag,
+  salvarContatoChat,
   cancelarAgendada,
   ouvirAgendadas,
   type MensagemAgendada,
@@ -93,6 +94,7 @@ export default function Chat() {
   const [ligacoes, setLigacoes] = useState<LigacaoChat[]>([]);
   const [gerenciarTags, setGerenciarTags] = useState(false);
   const [novaTag, setNovaTag] = useState('');
+  const [nomeContato, setNomeContato] = useState('');
   const [novaCor, setNovaCor] = useState(PALETA[5]);
   const [erro, setErro] = useState('');
   const fimRef = useRef<HTMLDivElement>(null);
@@ -167,6 +169,22 @@ export default function Chat() {
       return acc;
     }, {})
   );
+
+  // Ao abrir outra conversa, o campo de nome começa com o nome que chegou pronto.
+  useEffect(() => {
+    setNomeContato(aberta?.nome ?? aberta?.nomeSugerido ?? '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abertaId]);
+
+  async function salvarContato() {
+    if (!empresaId || !aberta || !nomeContato.trim()) return;
+    setErro('');
+    try {
+      await salvarContatoChat(empresaId, aberta.id, nomeContato.trim());
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Não foi possível salvar o contato.');
+    }
+  }
 
   async function criarTag() {
     const nome = novaTag.trim();
@@ -501,6 +519,30 @@ export default function Chat() {
                   </button>
                 )}
               </div>
+              {!aberta.salvo && (
+                <div className="flex flex-wrap items-center gap-2 px-4 py-2 border-b border-line bg-amber-50 text-xs">
+                  <span className="font-bold text-ink">Pré-cadastro — salvar contato:</span>
+                  <input
+                    value={nomeContato}
+                    onChange={(e) => setNomeContato(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && void salvarContato()}
+                    placeholder="Nome do contato"
+                    className="rounded-lg border border-line px-2 py-1.5 text-sm bg-white"
+                  />
+                  {aberta.nomeSugerido && nomeContato.trim() !== aberta.nomeSugerido && (
+                    <button onClick={() => setNomeContato(aberta.nomeSugerido ?? '')} className="text-ink-soft underline">
+                      usar “{aberta.nomeSugerido}”
+                    </button>
+                  )}
+                  <button
+                    onClick={() => void salvarContato()}
+                    disabled={!nomeContato.trim()}
+                    className="rounded-lg bg-gradient-to-br from-teal-500 to-blue-600 text-white font-bold px-3 py-1.5 disabled:opacity-60"
+                  >
+                    Salvar contato
+                  </button>
+                </div>
+              )}
               <div className="flex flex-wrap items-center gap-1.5 px-4 py-2 border-b border-line">
                 <Etiqueta nome={ORIGENS[origemDe(aberta)].nome} cor={ORIGENS[origemDe(aberta)].cor} />
                 <span className="text-[11px] text-ink-soft mx-1">Tags:</span>

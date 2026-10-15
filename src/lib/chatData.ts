@@ -171,3 +171,8 @@ export function ouvirLigacoesHoje(empresaId: string, cb: (l: LigacaoChat[]) => v
   const q = query(collection(db, 'empresas', empresaId, 'chatLigacoes'), where('em', '>=', inicio.toISOString()));
   return onSnapshot(q, (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<LigacaoChat, 'id'>) }))));
 }
+
+/** Salva o contato na agenda do Fluxa Chat com o nome escolhido (o da agenda do celular ou outro). */
+export async function salvarContatoChat(empresaId: string, conversaId: string, nome: string) {
+  await updateDoc(doc(db, 'empresas', empresaId, 'conversas', conversaId), { nome, salvo: true });
+}
