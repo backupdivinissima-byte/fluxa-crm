@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { initializeAuth, browserSessionPersistence, getAuth, signInAnonymously } from 'firebase/auth';
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
+import { initializeFirestore, memoryLocalCache, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 
 // Projeto Firebase próprio do Fluxa CRM (fluxa-crm) — os dados foram
 // migrados do projeto antigo (divinissima-crm), que segue existindo
@@ -28,13 +28,16 @@ export const auth = initializeAuth(app, { persistence: browserSessionPersistence
 // Firestore rejeita a escrita inteira com "Unsupported field value:
 // undefined" em vez de simplesmente ignorar esses campos.
 //
-// Cache local (IndexedDB, compartilhado entre abas): ao trocar de tela ou
-// recarregar, o Firestore só lê do servidor o que MUDOU desde a última vez,
-// em vez de reler a base de clientes inteira. Isso corta quase todo o
-// consumo de leituras da cota diária.
+// Cache em memória, SEM compartilhar entre abas. Antes o cache era o do
+// navegador (IndexedDB) com várias abas ligadas a uma "aba principal": nesse
+// modo as consultas de todas as abas saem pela conexão da aba principal, com
+// o login DELA — então abrir a Divinissima e a Carla Fidelis (ou administrador
+// e vendedor) em abas diferentes fazia uma atrapalhar a outra. Com o cache em
+// memória cada aba tem a própria conexão e o próprio login. O custo é reler os
+// dados ao recarregar a página (o plano Blaze cobre isso com folga).
 export const db = initializeFirestore(app, {
   ignoreUndefinedProperties: true,
-  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+  localCache: memoryLocalCache(),
 });
 
 // ---------------------------------------------------------------------------
