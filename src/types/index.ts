@@ -354,6 +354,7 @@ export interface ConversaChat {
   clienteId?: string; // cliente do CRM vinculado
   atendimentoEm?: string; // ISO — quando o vendedor pegou
   origem?: 'trafego'; // veio da landing page (senão a origem é o próprio canal)
+  contatoJid?: string; // id interno do WhatsApp (usado no envio)
   tags?: string[]; // ids das tags cadastradas (chatTags)
   nomeSugerido?: string; // nome que chegou pronto (agenda do celular ou perfil)
   salvo?: boolean; // a equipe confirmou o nome na agenda do Fluxa Chat

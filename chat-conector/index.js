@@ -47,6 +47,15 @@ const processando = new Set();
 const agora = () => new Date().toISOString();
 const soDigitos = (jid) => String(jid).split('@')[0].split(':')[0];
 
+// O WhatsApp novo identifica contatos por @lid; quando traz o número (Alt), usamos ele.
+function jidDe(msg) {
+  const k = msg.key ?? {};
+  const j = k.remoteJid ?? '';
+  if (j.endsWith('@s.whatsapp.net')) return j;
+  if (j.endsWith('@lid')) return k.remoteJidAlt?.endsWith('@s.whatsapp.net') ? k.remoteJidAlt : j;
+  return null; // grupo, status, lista de transmissão...
+}
+
 function textoDe(msg) {
   const m = msg.message ?? {};
   return (
@@ -115,15 +124,17 @@ async function importarHistorico(lista) {
   if (MODO_TESTE || !base || !lista?.length) return;
   const corte = Date.now() / 1000 - DIAS_HISTORICO * 86400;
   const porConversa = new Map();
+  const jidsHist = new Map();
   let total = 0;
   for (const msg of lista) {
-    const jid = msg.key?.remoteJid;
+    const jid = jidDe(msg);
     const ts = Number(msg.messageTimestamp ?? 0);
-    if (!jid || !jid.endsWith('@s.whatsapp.net') || ts < corte || !msg.message) continue;
+    if (!jid || ts < corte || !msg.message) continue;
     if (total >= MAX_HISTORICO) break;
     const numero = soDigitos(jid);
     if (!porConversa.has(numero)) porConversa.set(numero, []);
     porConversa.get(numero).push(msg);
+    jidsHist.set(numero, jid);
     total++;
   }
   console.log(`Importando histórico: ${total} mensagens de ${porConversa.size} conversas…`);
@@ -152,7 +163,8 @@ async function importarHistorico(lista) {
         {
           canal: 'whatsapp',
           contato: numero,
-          telefone: numero,
+          ...(jidsHist.get(numero)?.endsWith('@lid') ? {} : { telefone: numero }),
+          contatoJid: jidsHist.get(numero),
           ...(agenda.has(numero) ? { nome: agenda.get(numero), nomeSugerido: agenda.get(numero), salvoNaAgenda: true } : !atual.nome ? { nome: nomePush || numero, ...(nomePush ? { nomeSugerido: nomePush } : {}) } : {}),
           ...(novoUlt ? { ultimaMensagem: textoDe(mais), ultimaEm: quandoUlt, ultimaDe: mais.key.fromMe ? 'equipe' : 'cliente' } : {}),
         },
@@ -166,8 +178,8 @@ async function importarHistorico(lista) {
 }
 
 async function guardarMensagem(msg) {
-  const jid = msg.key.remoteJid;
-  if (!jid || !jid.endsWith('@s.whatsapp.net')) return; // ignora grupos, status e listas
+  const jid = jidDe(msg);
+  if (!jid) return; // ignora grupos, status e listas
   if (msg.key.fromMe && enviadasPorNos.has(msg.key.id)) return;
   const numero = soDigitos(jid);
   const texto = textoDe(msg);
@@ -185,7 +197,8 @@ async function guardarMensagem(msg) {
     {
       canal: 'whatsapp',
       contato: numero,
-      telefone: numero,
+      ...(jid.endsWith('@lid') ? {} : { telefone: numero }),
+      contatoJid: jid,
       ...(sugestao ? { nomeSugerido: sugestao } : {}),
       ...(!jaSalvo && sugestao ? { nome: sugestao } : {}),
       ...(agenda.has(numero) ? { salvoNaAgenda: true } : {}),
@@ -293,8 +306,10 @@ async function iniciar() {
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
       // 'notify' = mensagens novas; 'append' também traz o que foi enviado pelo celular
       // (aparelhos vinculados). Só aceita o que for recente, para não reimportar histórico.
+      console.log(`[upsert ${type}] ${messages.length} mensagem(ns)`);
       if (type !== 'notify' && type !== 'append') return;
       for (const msg of messages) {
+        console.log(`  de ${msg.key?.remoteJid} (alt ${msg.key?.remoteJidAlt ?? '-'}) fromMe=${!!msg.key?.fromMe}`);
         if (Date.now() / 1000 - Number(msg.messageTimestamp ?? 0) > 600) continue;
         try {
           await guardarMensagem(msg);
@@ -330,7 +345,7 @@ async function enviarSaida(d) {
   processando.add(d.id);
   try {
     if (!aberto || !sock) throw new Error('WhatsApp desconectado');
-    const enviada = await sock.sendMessage(`${dado.para}@s.whatsapp.net`, { text: dado.texto });
+    const enviada = await sock.sendMessage(dado.paraJid || `${dado.para}@s.whatsapp.net`, { text: dado.texto });
     if (enviada?.key?.id) enviadasPorNos.add(enviada.key.id);
     await d.ref.update({ enviada: true, enviadaEm: agora() });
     if (dado.jaRegistrada === false) {

@@ -99,6 +99,7 @@ export async function enviarMensagemChat(
     conversaId: conversa.id,
     canal: conversa.canal,
     para: conversa.contato,
+    ...(conversa.contatoJid ? { paraJid: conversa.contatoJid } : {}),
     texto,
     autor,
     criadoEm: agora,
