@@ -28,6 +28,7 @@ import {
   ouvirMensagens,
   solicitarConexaoWhatsapp,
 } from '../lib/chatData';
+import { CRM_COLUNAS_PADRAO } from '../types';
 import type { Cliente, ColunaCrm, Vendedor, ConexaoChat, ConversaChat, MensagemChat, TagChat } from '../types';
 
 const EMOJIS = ['😀','😁','😂','🤣','😊','😍','😘','😉','🙂','😎','🤩','🥰','😇','🤗','🤔','😅','😢','😭','😡','🙏','👍','👏','🙌','💪','👌','✌️','🤝','🎉','🎁','❤️','💖','💕','🔥','✨','⭐','🌟','💎','💍','👑','🛍️','💰','✅','❌','📦','🚚','📞','📅','⏰','🌹','🌸','☀️','🙋‍♀️','😴','🥳','😋','🤭'];
@@ -290,7 +291,7 @@ export default function Chat() {
     const u1 = ouvirConversas(empresaId, setConversas);
     const u2 = ouvirClientes(empresaId, setClientes);
     const uV = ouvirVendedores(empresaId, setVendedoresCrm);
-    const u4 = ouvirEmpresa(empresaId, (e) => setColunas(e?.crmColunas ?? []));
+    const u4 = ouvirEmpresa(empresaId, (e) => setColunas(e?.crmColunas && e.crmColunas.length > 0 ? e.crmColunas : CRM_COLUNAS_PADRAO));
     const u5 = ouvirConexaoWhatsapp(empresaId, setConexao);
     const u6 = ouvirTags(empresaId, setTags);
     return () => {

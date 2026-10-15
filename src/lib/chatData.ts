@@ -20,6 +20,7 @@ import {
 import { db as dbCrm, dbChat as db, chatPronto, aposChatPronto } from './firebase';
 import { acaoDaColuna } from './crmLogic';
 import { atualizarCampoCliente } from './crmData';
+import { CRM_COLUNAS_PADRAO } from '../types';
 import type { Cliente, ColunaCrm, ConexaoChat, ConversaChat, MensagemChat, TagChat } from '../types';
 
 const conversasCol = (e: string) => collection(db, 'empresas', e, 'conversas');
@@ -405,7 +406,8 @@ export async function vincularPorTelefone(
   // Atendimento de outro vendedor não é tomado.
   if (dados.vendedorLogin && dados.vendedorLogin !== vendedor.login) return false;
   const emp = await getDoc(doc(dbCrm, 'empresas', empresaId));
-  const colunas = (emp.data()?.crmColunas ?? []) as ColunaCrm[];
+  const salvas = (emp.data()?.crmColunas ?? []) as ColunaCrm[];
+  const colunas = salvas.length > 0 ? salvas : CRM_COLUNAS_PADRAO; // empresa nova usa o funil padrão
   const colAtend = colunas.find((c) => acaoDaColuna(c) === 'atendimento');
   if (!colAtend) return false;
   const agora = new Date().toISOString();
