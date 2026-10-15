@@ -294,6 +294,11 @@ export default function Chat() {
   }
 
   const aberta = conversas.find((c) => c.id === abertaId) ?? null;
+  // Nome no cadastro do CRM (cliente ligado à conversa ou com o mesmo telefone) e nome salvo na agenda.
+  const clienteCrm = aberta
+    ? clientes.find((c) => c.id === aberta.clienteId) ?? (aberta.telefone ? acharClientePorTelefone(clientes, aberta.telefone) : undefined)
+    : undefined;
+  const nomeAgenda = aberta ? aberta.nomeSugerido || aberta.nome || '' : '';
   const donaDoAtendimento = aberta?.vendedorLogin && aberta.vendedorLogin !== meuLogin ? aberta.vendedorNome : '';
 
   async function assumir(c: ConversaChat) {
@@ -653,9 +658,10 @@ export default function Chat() {
               <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-line">
                 <div>
                   <div className="font-bold text-sm text-ink">
-                    {aberta.nome || aberta.telefone || aberta.contato}
+                    {clienteCrm ? clienteCrm.razao ?? clienteCrm.nome : aberta.nome || aberta.telefone || aberta.contato}
                     {aberta.salvoNaAgenda && <span className="ml-2 text-[10px] font-bold text-emerald-600">📒 Salvo na agenda do celular</span>}
                   </div>
+                  {nomeAgenda && clienteCrm && <div className="text-[11px] text-ink-soft">Agenda: {nomeAgenda}</div>}
                   {aberta.telefone && <div className="text-[11px] text-ink-soft">{aberta.telefone}</div>}
                   <div className="text-[11px] text-ink-soft">
                     {NOME_CANAL[aberta.canal]}
