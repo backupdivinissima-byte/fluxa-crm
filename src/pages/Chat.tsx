@@ -597,8 +597,8 @@ export default function Chat() {
       {erro && <p className="text-xs text-red-500">{erro}</p>}
 
 
-      <div className="grid grid-cols-1 lg:grid-cols-[340px_minmax(0,600px)] lg:justify-start gap-4 items-start">
-        <div className="bg-white border border-line rounded-2xl overflow-hidden">
+      <div className="grid grid-cols-1 lg:grid-cols-[340px_minmax(0,600px)] lg:justify-start gap-4 items-stretch">
+        <div className="bg-white border border-line rounded-2xl overflow-hidden flex flex-col lg:h-[calc(100vh-240px)] lg:min-h-[560px]">
           <div className="flex border-b border-line text-xs font-bold">
             {(['todas', 'novos', 'minhas'] as const).map((f) => (
               <button
@@ -610,7 +610,7 @@ export default function Chat() {
               </button>
             ))}
           </div>
-          <ul className="max-h-[560px] overflow-y-auto divide-y divide-line">
+          <ul className="flex-1 min-h-0 overflow-y-auto divide-y divide-line">
             {lista.length === 0 && <li className="p-6 text-sm text-ink-soft text-center">Nenhuma conversa por aqui.</li>}
             {lista.map((c) => (
               <li key={c.id}>
@@ -645,7 +645,7 @@ export default function Chat() {
           </ul>
         </div>
 
-        <div className="bg-white border border-line rounded-2xl flex flex-col min-h-[420px]">
+        <div className="bg-white border border-line rounded-2xl flex flex-col min-h-[420px] lg:h-[calc(100vh-240px)] lg:min-h-[560px]">
           {!aberta ? (
             <div className="m-auto text-sm text-ink-soft p-6">Escolha uma conversa na lista.</div>
           ) : (
@@ -743,7 +743,7 @@ export default function Chat() {
                   );
                 })}
               </div>
-              <div className="flex-1 overflow-y-auto p-4 space-y-2 max-h-[420px]">
+              <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-2">
                 {mensagens.map((m) => (
                   <div key={m.id} className={`flex ${m.de === 'equipe' ? 'justify-end' : 'justify-start'}`}>
                     <div
