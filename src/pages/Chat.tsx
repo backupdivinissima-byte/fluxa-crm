@@ -244,7 +244,7 @@ export default function Chat() {
                 onClick={() => setFiltro(f)}
                 className={`flex-1 py-2.5 ${filtro === f ? 'text-teal-500 border-b-2 border-teal-500' : 'text-ink-soft'}`}
               >
-                {f === 'todas' ? 'Todas' : f === 'novos' ? `Novos clientes${novos ? ` (${novos})` : ''}` : 'Minhas'}
+                {f === 'todas' ? 'Todas' : f === 'novos' ? `Novas${novos ? ` (${novos})` : ''}` : 'Minhas'}
               </button>
             ))}
           </div>
