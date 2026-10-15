@@ -10,7 +10,7 @@
 //   EMPRESA_ID                       id da empresa no Fluxa
 //   GOOGLE_APPLICATION_CREDENTIALS   caminho do .json da conta de serviço do Firebase
 import fs from 'node:fs';
-import makeWASocket, { DisconnectReason, useMultiFileAuthState, fetchLatestBaileysVersion, downloadMediaMessage } from '@whiskeysockets/baileys';
+import makeWASocket, { DisconnectReason, useMultiFileAuthState, fetchLatestBaileysVersion, downloadMediaMessage, normalizeMessageContent } from '@whiskeysockets/baileys';
 import { initializeApp, applicationDefault } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import QRCode from 'qrcode';
@@ -56,15 +56,39 @@ function jidDe(msg) {
   return null; // grupo, status, lista de transmissão...
 }
 
+// Desembrulha mensagens temporárias, "ver uma vez", editadas etc.
+function conteudoDe(msg) {
+  try {
+    return normalizeMessageContent(msg.message) ?? {};
+  } catch {
+    return msg.message ?? {};
+  }
+}
+
+// Devolve o texto, ou null quando a mensagem não é conteúdo de conversa
+// (protocolo, reação, chave de criptografia, falha de decifragem...). Essas
+// mensagens NÃO devem aparecer no Chat.
 function textoDe(msg) {
-  const m = msg.message ?? {};
-  return (
-    m.conversation ??
-    m.extendedTextMessage?.text ??
-    m.imageMessage?.caption ??
-    m.videoMessage?.caption ??
-    (m.imageMessage ? '[imagem]' : m.audioMessage ? '[áudio]' : m.videoMessage ? '[vídeo]' : m.documentMessage ? '[documento]' : m.stickerMessage ? '[figurinha]' : '[mensagem]')
-  );
+  const m = conteudoDe(msg);
+  const t =
+    m.conversation ||
+    m.extendedTextMessage?.text ||
+    m.imageMessage?.caption ||
+    m.videoMessage?.caption ||
+    m.documentMessage?.caption ||
+    m.buttonsResponseMessage?.selectedDisplayText ||
+    m.listResponseMessage?.title ||
+    m.templateButtonReplyMessage?.selectedDisplayText ||
+    '';
+  if (t) return t;
+  if (m.imageMessage) return '[imagem]';
+  if (m.audioMessage) return '[áudio]';
+  if (m.videoMessage) return '[vídeo]';
+  if (m.documentMessage) return '[documento]';
+  if (m.stickerMessage) return '[figurinha]';
+  if (m.contactMessage || m.contactsArrayMessage) return '[contato]';
+  if (m.locationMessage || m.liveLocationMessage) return '[localização]';
+  return null;
 }
 
 // Mídia: foto até ~600 KB vai dentro da própria mensagem; qualquer foto, vídeo,
@@ -72,7 +96,7 @@ function textoDe(msg) {
 // e a conversa mostra o link. Sem Drive, vídeo fica só com a miniatura.
 const EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'video/mp4': 'mp4', 'audio/ogg; codecs=opus': 'ogg', 'audio/mpeg': 'mp3', 'application/pdf': 'pdf' };
 async function midiaDe(msg, numero) {
-  const m = msg.message ?? {};
+  const m = conteudoDe(msg);
   const img = m.imageMessage;
   const vid = m.videoMessage;
   const aud = m.audioMessage;
@@ -123,7 +147,7 @@ async function importarHistorico(lista) {
   for (const msg of lista) {
     const jid = jidDe(msg);
     const ts = Number(msg.messageTimestamp ?? 0);
-    if (!jid || ts < corte || !msg.message) continue;
+    if (!jid || ts < corte || !msg.message || textoDe(msg) === null) continue;
     if (total >= MAX_HISTORICO) break;
     const numero = soDigitos(jid);
     if (!porConversa.has(numero)) porConversa.set(numero, []);
@@ -177,6 +201,7 @@ async function guardarMensagem(msg) {
   if (msg.key.fromMe && enviadasPorNos.has(msg.key.id)) return;
   const numero = soDigitos(jid);
   const texto = textoDe(msg);
+  if (texto === null) return; // não é mensagem de conversa
   const quando = new Date(Number(msg.messageTimestamp ?? Date.now() / 1000) * 1000).toISOString();
   const deCliente = !msg.key.fromMe;
   if (MODO_TESTE) {
