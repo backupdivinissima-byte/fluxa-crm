@@ -24,6 +24,8 @@ interface Props {
   // Falso quando o vínculo do funil com o vendedor já venceu (cliente ficou
   // sem venda no prazo): aí o vendedor do funil não é mais mostrado.
   vinculoVigente?: boolean;
+  // Telefone já preenchido (ex.: o do contato do Chat que está sendo cadastrado).
+  telefoneInicial?: string;
   onClose: () => void;
 }
 
@@ -52,11 +54,12 @@ export default function ClienteDetalheModal({
   ehAdmin,
   diasInatividade = DIAS_INATIVIDADE_PADRAO,
   vinculoVigente = true,
+  telefoneInicial,
   onClose,
 }: Props) {
   const { papel, sessaoVendedor } = useAuth();
   const [cnpj, setCnpj] = useState(cliente.cnpj ?? '');
-  const [telefone, setTelefone] = useState(cliente.telefone ?? '');
+  const [telefone, setTelefone] = useState(telefoneInicial || cliente.telefone || '');
   const [cidadeUf, setCidadeUf] = useState(juntarCidadeUf(cliente.cidade, cliente.uf));
   const [codVendedor, setCodVendedor] = useState(cliente.cod_vendedor ?? '');
   const [salvando, setSalvando] = useState(false);

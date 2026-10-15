@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { ouvirClientes, ouvirEmpresa, atualizarCampoCliente, salvarCliente } from '../lib/crmData';
+import ClienteDetalheModal from '../components/ClienteDetalheModal';
+import { ouvirClientes, ouvirEmpresa, ouvirVendedores, atualizarCampoCliente, salvarCliente } from '../lib/crmData';
 import { acaoDaColuna } from '../lib/crmLogic';
 import {
   acharClientePorTelefone,
@@ -24,7 +25,7 @@ import {
   ouvirMensagens,
   solicitarConexaoWhatsapp,
 } from '../lib/chatData';
-import type { Cliente, ColunaCrm, ConexaoChat, ConversaChat, MensagemChat, TagChat } from '../types';
+import type { Cliente, ColunaCrm, Vendedor, ConexaoChat, ConversaChat, MensagemChat, TagChat } from '../types';
 
 const EMOJIS = ['😀','😁','😂','🤣','😊','😍','😘','😉','🙂','😎','🤩','🥰','😇','🤗','🤔','😅','😢','😭','😡','🙏','👍','👏','🙌','💪','👌','✌️','🤝','🎉','🎁','❤️','💖','💕','🔥','✨','⭐','🌟','💎','💍','👑','🛍️','💰','✅','❌','📦','🚚','📞','📅','⏰','🌹','🌸','☀️','🙋‍♀️','😴','🥳','😋','🤭'];
 
@@ -96,6 +97,10 @@ export default function Chat() {
   const [novaTag, setNovaTag] = useState('');
   const [telParear, setTelParear] = useState('');
   const [nomeContato, setNomeContato] = useState('');
+  const [vendedoresCrm, setVendedoresCrm] = useState<Vendedor[]>([]);
+  const [codigoCliente, setCodigoCliente] = useState('');
+  const [clienteAberto, setClienteAberto] = useState<Cliente | null>(null);
+  const codAbertoRef = useRef('');
   const [novaCor, setNovaCor] = useState(PALETA[5]);
   const [erro, setErro] = useState('');
   const fimRef = useRef<HTMLDivElement>(null);
@@ -104,6 +109,7 @@ export default function Chat() {
     if (!empresaId) return;
     const u1 = ouvirConversas(empresaId, setConversas);
     const u2 = ouvirClientes(empresaId, setClientes);
+    const uV = ouvirVendedores(empresaId, setVendedoresCrm);
     const u4 = ouvirEmpresa(empresaId, (e) => setColunas(e?.crmColunas ?? []));
     const u5 = ouvirConexaoWhatsapp(empresaId, setConexao);
     const u6 = ouvirTags(empresaId, setTags);
@@ -111,6 +117,7 @@ export default function Chat() {
     return () => {
       u1();
       u2();
+      uV();
       u4();
       u5();
       u6();
@@ -176,6 +183,23 @@ export default function Chat() {
   useEffect(() => {
     setNomeContato(aberta?.nome ?? aberta?.nomeSugerido ?? '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abertaId]);
+
+  // Digitou o código do cliente: abre o cadastro dele automaticamente, já com o
+  // telefone desta conversa. Ao salvar, o cliente cai em "Em atendimento" no CRM.
+  useEffect(() => {
+    const cod = codigoCliente.trim().toLowerCase();
+    if (!cod || clienteAberto || codAbertoRef.current === cod) return;
+    const achado = clientes.find((c) => String(c.cod ?? '').trim().toLowerCase() === cod);
+    if (achado) {
+      codAbertoRef.current = cod;
+      setClienteAberto(achado);
+    }
+  }, [codigoCliente, clientes, clienteAberto]);
+  useEffect(() => {
+    setCodigoCliente('');
+    codAbertoRef.current = '';
+    setClienteAberto(null);
   }, [abertaId]);
 
   async function salvarContato() {
@@ -456,6 +480,17 @@ export default function Chat() {
 
       {erro && <p className="text-xs text-red-500">{erro}</p>}
 
+      {clienteAberto && aberta && (
+        <ClienteDetalheModal
+          empresaId={empresaId}
+          cliente={clienteAberto}
+          vendedores={vendedoresCrm}
+          ehAdmin={souAdmin}
+          telefoneInicial={aberta.telefone}
+          onClose={() => setClienteAberto(null)}
+        />
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-[340px_minmax(0,600px)] lg:justify-start gap-4 items-start">
         <div className="bg-white border border-line rounded-2xl overflow-hidden">
           <div className="flex border-b border-line text-xs font-bold">
@@ -552,8 +587,26 @@ export default function Chat() {
                   </button>
                 )}
               </div>
-              {!aberta.salvo && (
+              {(!aberta.salvo || !aberta.clienteId) && (
                 <div className="flex flex-wrap items-center gap-2 px-4 py-2 border-b border-line bg-amber-50 text-xs">
+                  <input
+                    value={codigoCliente}
+                    onChange={(e) => {
+                      setCodigoCliente(e.target.value);
+                      codAbertoRef.current = '';
+                      setClienteAberto(null);
+                    }}
+                    placeholder="Código do cliente"
+                    title="Digite o código: o cadastro do cliente abre sozinho, já com o telefone desta conversa"
+                    className="w-36 rounded-lg border border-line px-2 py-1.5 text-sm bg-white"
+                  />
+                  {codigoCliente.trim() && !clienteAberto && (
+                    <span className="text-ink-soft">
+                      {clientes.some((c) => String(c.cod ?? '').trim().toLowerCase() === codigoCliente.trim().toLowerCase())
+                        ? ''
+                        : 'Código não encontrado'}
+                    </span>
+                  )}
                   <span className="font-bold text-ink">Pré-cadastro — salvar contato:</span>
                   <input
                     value={nomeContato}
