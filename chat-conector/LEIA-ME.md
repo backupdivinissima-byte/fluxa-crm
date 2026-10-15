@@ -9,7 +9,7 @@ Programa que fica ligado e faz a ponte entre o WhatsApp (QR Code) e o Fluxa. **N
 ## Como rodar (Windows)
 1. Instale o Node.js 20 ou mais novo (nodejs.org).
 2. Abra o terminal nesta pasta (`chat-conector`) e rode `npm install`.
-3. Coloque o arquivo `.json` da conta de serviço do Firebase em um lugar seguro (nunca no repositório).
+3. Coloque o arquivo `.json` da conta de serviço do projeto Firebase **fluxa-chat** (fluxa-chat-a052d, usado só pelo Chat) em um lugar seguro (nunca no repositório).
 4. No terminal (PowerShell):
    ```
    $env:EMPRESA_ID="<id da empresa no Fluxa>"

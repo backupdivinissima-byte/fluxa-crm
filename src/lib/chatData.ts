@@ -16,7 +16,7 @@ import {
   where,
   type Unsubscribe,
 } from 'firebase/firestore';
-import { db } from './firebase';
+import { db as dbCrm, dbChat as db, chatPronto, aposChatPronto } from './firebase';
 import { acaoDaColuna } from './crmLogic';
 import type { Cliente, ColunaCrm, ConexaoChat, ConversaChat, MensagemChat, TagChat } from '../types';
 
@@ -30,22 +30,23 @@ export function chaveTelefone(t?: string): string {
 
 export function ouvirConversas(empresaId: string, cb: (c: ConversaChat[]) => void): Unsubscribe {
   const q = query(conversasCol(empresaId), orderBy('ultimaEm', 'desc'), limit(300));
-  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ConversaChat)));
+  return aposChatPronto(() => onSnapshot(q, (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ConversaChat))));
 }
 
 export function ouvirMensagens(empresaId: string, conversaId: string, cb: (m: MensagemChat[]) => void): Unsubscribe {
   const q = query(collection(db, 'empresas', empresaId, 'conversas', conversaId, 'mensagens'), orderBy('em', 'asc'), limit(300));
-  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as MensagemChat)));
+  return aposChatPronto(() => onSnapshot(q, (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as MensagemChat))));
 }
 
 export function ouvirConexaoWhatsapp(empresaId: string, cb: (c: ConexaoChat) => void): Unsubscribe {
-  return onSnapshot(doc(db, 'empresas', empresaId, 'chatConexoes', 'whatsapp'), (snap) => {
+  return aposChatPronto(() => onSnapshot(doc(db, 'empresas', empresaId, 'chatConexoes', 'whatsapp'), (snap) => {
     cb(snap.exists() ? (snap.data() as ConexaoChat) : { status: 'desconectado' });
-  });
+  }));
 }
 
 /** Pede ao conector que gere um QR Code novo. */
 export async function solicitarConexaoWhatsapp(empresaId: string, telefoneParear = '') {
+  await chatPronto;
   await setDoc(
     doc(db, 'empresas', empresaId, 'chatConexoes', 'whatsapp'),
     { status: 'solicitado', qr: '', codigoPareamento: '', erro: '', telefoneParear, atualizadoEm: new Date().toISOString() },
@@ -55,6 +56,7 @@ export async function solicitarConexaoWhatsapp(empresaId: string, telefoneParear
 
 /** Pega o atendimento da conversa para o vendedor. */
 export async function assumirConversa(empresaId: string, conversaId: string, login: string, nome: string, clienteId?: string) {
+  await chatPronto;
   await updateDoc(doc(db, 'empresas', empresaId, 'conversas', conversaId), {
     vendedorLogin: login,
     vendedorNome: nome,
@@ -65,6 +67,7 @@ export async function assumirConversa(empresaId: string, conversaId: string, log
 }
 
 export async function liberarConversa(empresaId: string, conversaId: string) {
+  await chatPronto;
   await updateDoc(doc(db, 'empresas', empresaId, 'conversas', conversaId), {
     vendedorLogin: null,
     vendedorNome: null,
@@ -117,16 +120,17 @@ export interface MensagemAgendada {
 
 export function ouvirAgendadas(empresaId: string, conversaId: string, cb: (m: MensagemAgendada[]) => void): Unsubscribe {
   const q = query(collection(db, 'empresas', empresaId, 'chatSaida'), where('conversaId', '==', conversaId), where('enviada', '==', false));
-  return onSnapshot(q, (snap) => {
+  return aposChatPronto(() => onSnapshot(q, (snap) => {
     const itens = snap.docs
       .map((d) => ({ id: d.id, ...(d.data() as { texto: string; agendadaPara?: string }) }))
       .filter((x): x is MensagemAgendada => !!x.agendadaPara)
       .sort((a, b) => a.agendadaPara.localeCompare(b.agendadaPara));
     cb(itens);
-  });
+  }));
 }
 
 export async function cancelarAgendada(empresaId: string, id: string) {
+  await chatPronto;
   await deleteDoc(doc(db, 'empresas', empresaId, 'chatSaida', id));
 }
 
@@ -138,20 +142,23 @@ export function acharClientePorTelefone(clientes: Cliente[], telefone?: string):
 }
 
 export function ouvirTags(empresaId: string, cb: (t: TagChat[]) => void): Unsubscribe {
-  return onSnapshot(collection(db, 'empresas', empresaId, 'chatTags'), (snap) => {
+  return aposChatPronto(() => onSnapshot(collection(db, 'empresas', empresaId, 'chatTags'), (snap) => {
     cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<TagChat, 'id'>) })).sort((a, b) => a.nome.localeCompare(b.nome)));
-  });
+  }));
 }
 
 export async function salvarTag(empresaId: string, nome: string, cor: string) {
+  await chatPronto;
   await addDoc(collection(db, 'empresas', empresaId, 'chatTags'), { nome, cor });
 }
 
 export async function excluirTag(empresaId: string, id: string) {
+  await chatPronto;
   await deleteDoc(doc(db, 'empresas', empresaId, 'chatTags', id));
 }
 
 export async function definirTagsConversa(empresaId: string, conversaId: string, tags: string[]) {
+  await chatPronto;
   await updateDoc(doc(db, 'empresas', empresaId, 'conversas', conversaId), { tags });
 }
 
@@ -165,6 +172,7 @@ export interface LigacaoChat {
 }
 
 export async function registrarLigacao(empresaId: string, l: Omit<LigacaoChat, 'id' | 'em'>) {
+  await chatPronto;
   await addDoc(collection(db, 'empresas', empresaId, 'chatLigacoes'), { ...l, em: new Date().toISOString() });
 }
 
@@ -173,11 +181,12 @@ export function ouvirLigacoesHoje(empresaId: string, cb: (l: LigacaoChat[]) => v
   const inicio = new Date();
   inicio.setHours(0, 0, 0, 0);
   const q = query(collection(db, 'empresas', empresaId, 'chatLigacoes'), where('em', '>=', inicio.toISOString()));
-  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<LigacaoChat, 'id'>) }))));
+  return aposChatPronto(() => onSnapshot(q, (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<LigacaoChat, 'id'>) })))));
 }
 
 /** Salva o contato na agenda do Fluxa Chat com o nome escolhido (o da agenda do celular ou outro). */
 export async function salvarContatoChat(empresaId: string, conversaId: string, nome: string) {
+  await chatPronto;
   await updateDoc(doc(db, 'empresas', empresaId, 'conversas', conversaId), { nome, salvo: true });
 }
 
@@ -198,12 +207,12 @@ export async function vincularPorTelefone(
   const dados = conversa.data() as ConversaChat;
   // Atendimento de outro vendedor não é tomado.
   if (dados.vendedorLogin && dados.vendedorLogin !== vendedor.login) return false;
-  const emp = await getDoc(doc(db, 'empresas', empresaId));
+  const emp = await getDoc(doc(dbCrm, 'empresas', empresaId));
   const colunas = (emp.data()?.crmColunas ?? []) as ColunaCrm[];
   const colAtend = colunas.find((c) => acaoDaColuna(c) === 'atendimento');
   if (!colAtend) return false;
   const agora = new Date().toISOString();
-  await updateDoc(doc(db, 'empresas', empresaId, 'clientes', clienteId), {
+  await updateDoc(doc(dbCrm, 'empresas', empresaId, 'clientes', clienteId), {
     crmColunaId: colAtend.id,
     crmVendedorLogin: vendedor.login,
     crmColunaChangedAt: agora,
