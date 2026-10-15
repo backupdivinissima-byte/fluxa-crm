@@ -4,6 +4,8 @@ import {
   addDoc,
   collection,
   doc,
+  getDoc,
+  getDocs,
   limit,
   onSnapshot,
   orderBy,
@@ -15,7 +17,8 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Cliente, ConexaoChat, ConversaChat, MensagemChat, TagChat } from '../types';
+import { acaoDaColuna } from './crmLogic';
+import type { Cliente, ColunaCrm, ConexaoChat, ConversaChat, MensagemChat, TagChat } from '../types';
 
 const conversasCol = (e: string) => collection(db, 'empresas', e, 'conversas');
 
@@ -175,4 +178,35 @@ export function ouvirLigacoesHoje(empresaId: string, cb: (l: LigacaoChat[]) => v
 /** Salva o contato na agenda do Fluxa Chat com o nome escolhido (o da agenda do celular ou outro). */
 export async function salvarContatoChat(empresaId: string, conversaId: string, nome: string) {
   await updateDoc(doc(db, 'empresas', empresaId, 'conversas', conversaId), { nome, salvo: true });
+}
+
+/** Quando o telefone salvo no cadastro do cliente bate com uma conversa do Chat,
+ * o cliente vai para a coluna "em atendimento" do CRM com o vendedor e a conversa
+ * fica vinculada a ele. Devolve true se vinculou. */
+export async function vincularPorTelefone(
+  empresaId: string,
+  clienteId: string,
+  telefone: string,
+  vendedor: { login: string; nome: string }
+): Promise<boolean> {
+  const k = chaveTelefone(telefone);
+  if (k.length < 10) return false;
+  const snap = await getDocs(query(conversasCol(empresaId), orderBy('ultimaEm', 'desc'), limit(300)));
+  const conversa = snap.docs.find((d) => chaveTelefone((d.data() as ConversaChat).telefone) === k);
+  if (!conversa) return false;
+  const dados = conversa.data() as ConversaChat;
+  // Atendimento de outro vendedor não é tomado.
+  if (dados.vendedorLogin && dados.vendedorLogin !== vendedor.login) return false;
+  const emp = await getDoc(doc(db, 'empresas', empresaId));
+  const colunas = (emp.data()?.crmColunas ?? []) as ColunaCrm[];
+  const colAtend = colunas.find((c) => acaoDaColuna(c) === 'atendimento');
+  if (!colAtend) return false;
+  const agora = new Date().toISOString();
+  await updateDoc(doc(db, 'empresas', empresaId, 'clientes', clienteId), {
+    crmColunaId: colAtend.id,
+    crmVendedorLogin: vendedor.login,
+    crmColunaChangedAt: agora,
+  });
+  await assumirConversa(empresaId, conversa.id, vendedor.login, vendedor.nome, clienteId);
+  return true;
 }

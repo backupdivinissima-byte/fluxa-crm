@@ -9,6 +9,8 @@ import {
   ultimasCompras,
 } from '../lib/crmLogic';
 import { atualizarCampoCliente, removerCliente } from '../lib/crmData';
+import { useAuth } from '../contexts/AuthContext';
+import { chaveTelefone, vincularPorTelefone } from '../lib/chatData';
 
 interface Props {
   empresaId: string;
@@ -52,6 +54,7 @@ export default function ClienteDetalheModal({
   vinculoVigente = true,
   onClose,
 }: Props) {
+  const { papel, sessaoVendedor } = useAuth();
   const [cnpj, setCnpj] = useState(cliente.cnpj ?? '');
   const [telefone, setTelefone] = useState(cliente.telefone ?? '');
   const [cidadeUf, setCidadeUf] = useState(juntarCidadeUf(cliente.cidade, cliente.uf));
@@ -95,6 +98,22 @@ export default function ClienteDetalheModal({
         patch.cod_vendedor = codVendedor || undefined;
       }
       await atualizarCampoCliente(empresaId, cliente.id, patch);
+      // Telefone novo que bate com uma conversa do Chat: cliente vai para "em atendimento".
+      if (chaveTelefone(telefone) !== chaveTelefone(cliente.telefone) && chaveTelefone(telefone).length >= 10) {
+        const vend =
+          papel === 'admin'
+            ? vendedores.find((v) => v.login === cliente.crmVendedorLogin)
+            : sessaoVendedor?.vendedor;
+        if (vend) {
+          try {
+            if (await vincularPorTelefone(empresaId, cliente.id, telefone, { login: vend.login, nome: vend.nome })) {
+              alert('Esse telefone tem conversa no Fluxa Chat: o cliente foi para "Em atendimento" no CRM.');
+            }
+          } catch (e) {
+            console.error('Vínculo com o Chat:', e);
+          }
+        }
+      }
       onClose();
     } finally {
       setSalvando(false);
