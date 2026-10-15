@@ -123,6 +123,28 @@ async function iniciar() {
       }
     });
 
+    // Chamadas de voz: o conector NÃO atende nem faz ligações (a biblioteca não
+    // transmite áudio); só registra a chamada na conversa.
+    sock.ev.on('call', async (chamadas) => {
+      for (const c of chamadas) {
+        if (c.status !== 'offer') continue;
+        const numero = soDigitos(c.from);
+        const texto = c.isVideo ? '📞 Videochamada recebida (atenda pelo celular)' : '📞 Chamada de voz recebida (atenda pelo celular)';
+        if (MODO_TESTE) {
+          console.log(`[CHAMADA] ${numero}: ${texto}`);
+          continue;
+        }
+        try {
+          const quando = agora();
+          const ref = base.collection('conversas').doc(`whatsapp_${numero}`);
+          await ref.set({ canal: 'whatsapp', contato: numero, telefone: numero, ultimaMensagem: texto, ultimaEm: quando, ultimaDe: 'cliente' }, { merge: true });
+          await ref.collection('mensagens').doc(`call-${c.id}`).set({ de: 'cliente', texto, em: quando });
+        } catch (e) {
+          console.error('Erro ao registrar chamada:', e.message);
+        }
+      }
+    });
+
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
       if (type !== 'notify') return;
       for (const msg of messages) {

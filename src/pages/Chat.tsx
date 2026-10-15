@@ -260,6 +260,17 @@ export default function Chat() {
                     {aberta.vendedorNome ? ` · atendimento de ${aberta.vendedorNome}` : ' · livre'}
                   </div>
                 </div>
+                {aberta.canal === 'whatsapp' && aberta.telefone && (
+                  <a
+                    href={`https://wa.me/${aberta.telefone.replace(/\D/g, '')}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    title="Abre o WhatsApp (celular ou WhatsApp Desktop) para ligar por voz"
+                    className="rounded-xl border border-line text-ink text-xs font-bold px-3 py-2 hover:bg-surface"
+                  >
+                    Ligar pelo WhatsApp
+                  </a>
+                )}
                 {!aberta.vendedorLogin && !souAdmin && (
                   <button
                     onClick={() => void assumir(aberta)}
