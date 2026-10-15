@@ -14,10 +14,12 @@ import {
   updateDoc,
   deleteDoc,
   where,
+  Bytes,
   type Unsubscribe,
 } from 'firebase/firestore';
 import { db as dbCrm, dbChat as db, chatPronto, aposChatPronto } from './firebase';
 import { acaoDaColuna } from './crmLogic';
+import { atualizarCampoCliente } from './crmData';
 import type { Cliente, ColunaCrm, ConexaoChat, ConversaChat, MensagemChat, TagChat } from '../types';
 
 const conversasCol = (e: string) => collection(db, 'empresas', e, 'conversas');
@@ -85,13 +87,15 @@ export async function enviarMensagemChat(
   agendarPara?: string
 ) {
   const agora = new Date().toISOString();
+  let msgId: string | undefined;
   if (!agendarPara) {
-    await addDoc(collection(db, 'empresas', empresaId, 'conversas', conversa.id, 'mensagens'), {
+    const ref = await addDoc(collection(db, 'empresas', empresaId, 'conversas', conversa.id, 'mensagens'), {
       de: 'equipe',
       texto,
       em: agora,
       autor,
     });
+    msgId = ref.id;
     await updateDoc(doc(db, 'empresas', empresaId, 'conversas', conversa.id), {
       ultimaMensagem: texto,
       ultimaEm: agora,
@@ -108,6 +112,7 @@ export async function enviarMensagemChat(
     criadoEm: agora,
     enviada: false,
     jaRegistrada: !agendarPara, // imediata: o app já gravou a mensagem na conversa
+    ...(msgId ? { msgId } : {}),
     ...(agendarPara ? { agendadaPara: agendarPara } : {}),
   });
 }
@@ -117,7 +122,7 @@ export async function enviarMensagemChat(
 export async function enviarAudioChat(empresaId: string, conversa: ConversaChat, audioUrl: string, autor: string) {
   await chatPronto;
   const agora = new Date().toISOString();
-  await addDoc(collection(db, 'empresas', empresaId, 'conversas', conversa.id, 'mensagens'), {
+  const ref = await addDoc(collection(db, 'empresas', empresaId, 'conversas', conversa.id, 'mensagens'), {
     de: 'equipe',
     texto: '[áudio]',
     em: agora,
@@ -136,6 +141,7 @@ export async function enviarAudioChat(empresaId: string, conversa: ConversaChat,
     para: conversa.contato,
     ...(conversa.contatoJid ? { paraJid: conversa.contatoJid } : {}),
     tipo: 'audio',
+    msgId: ref.id,
     audioUrl,
     texto: '[áudio]',
     autor,
@@ -143,6 +149,121 @@ export async function enviarAudioChat(empresaId: string, conversa: ConversaChat,
     enviada: false,
     jaRegistrada: true,
   });
+}
+
+const MAX_INLINE = 700_000; // cabe dentro do documento da mensagem
+const TAM_PARTE = 800_000;
+const MAX_ANEXO = 20_000_000;
+
+function lerDataUrl(blob: Blob): Promise<string> {
+  return new Promise((ok, erro) => {
+    const r = new FileReader();
+    r.onload = () => ok(String(r.result));
+    r.onerror = () => erro(new Error('Não consegui ler o arquivo.'));
+    r.readAsDataURL(blob);
+  });
+}
+
+/** Reduz foto/print (JPEG, até 1600 px) para caber na mensagem. */
+async function comprimirImagem(blob: Blob): Promise<Blob> {
+  const bmp = await createImageBitmap(blob);
+  const escala = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas');
+  c.width = Math.round(bmp.width * escala);
+  c.height = Math.round(bmp.height * escala);
+  c.getContext('2d')!.drawImage(bmp, 0, 0, c.width, c.height);
+  let q = 0.85;
+  let out: Blob | null = null;
+  while (q >= 0.4) {
+    out = await new Promise<Blob | null>((ok) => c.toBlob(ok, 'image/jpeg', q));
+    if (out && out.size <= MAX_INLINE) return out;
+    q -= 0.15;
+  }
+  if (!out) throw new Error('Não consegui preparar a imagem.');
+  return out;
+}
+
+/** Anexa foto, vídeo ou documento (ou print colado) e envia pelo WhatsApp. */
+export async function enviarAnexoChat(empresaId: string, conversa: ConversaChat, arquivo: File | Blob, nomeArq: string, legenda: string, autor: string) {
+  await chatPronto;
+  let blob: Blob = arquivo;
+  let mime = arquivo.type || 'application/octet-stream';
+  const tipo: 'imagem' | 'video' | 'documento' = mime.startsWith('image/') ? 'imagem' : mime.startsWith('video/') ? 'video' : 'documento';
+  if (tipo === 'imagem') {
+    blob = await comprimirImagem(blob);
+    mime = 'image/jpeg';
+  }
+  if (blob.size > MAX_ANEXO) throw new Error('Arquivo grande demais (limite de 20 MB).');
+  const agora = new Date().toISOString();
+  const rotulo = tipo === 'imagem' ? '[imagem]' : tipo === 'video' ? '[vídeo]' : '[documento]';
+  const msgCol = collection(db, 'empresas', empresaId, 'conversas', conversa.id, 'mensagens');
+  const base = { de: 'equipe', texto: legenda || rotulo, em: agora, autor, midiaTipo: tipo, midiaNome: nomeArq, midiaMime: mime };
+  let ref;
+  if (blob.size <= MAX_INLINE && tipo === 'imagem') {
+    ref = await addDoc(msgCol, { ...base, midiaUrl: await lerDataUrl(blob) });
+  } else {
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    const n = Math.ceil(bytes.length / TAM_PARTE);
+    ref = await addDoc(msgCol, { ...base, midiaPartes: n });
+    for (let i = 0; i < n; i++) {
+      await setDoc(doc(db, 'empresas', empresaId, 'conversas', conversa.id, 'mensagens', ref.id, 'partes', String(i).padStart(4, '0')), {
+        n: i,
+        dados: Bytes.fromUint8Array(bytes.subarray(i * TAM_PARTE, (i + 1) * TAM_PARTE)),
+      });
+    }
+  }
+  await updateDoc(doc(db, 'empresas', empresaId, 'conversas', conversa.id), {
+    ultimaMensagem: legenda || (tipo === 'imagem' ? '📷 Foto' : tipo === 'video' ? '🎥 Vídeo' : `📎 ${nomeArq}`),
+    ultimaEm: agora,
+    ultimaDe: 'equipe',
+  });
+  await addDoc(collection(db, 'empresas', empresaId, 'chatSaida'), {
+    conversaId: conversa.id,
+    canal: conversa.canal,
+    para: conversa.contato,
+    ...(conversa.contatoJid ? { paraJid: conversa.contatoJid } : {}),
+    tipo: 'midia',
+    msgId: ref.id,
+    midiaTipo: tipo,
+    mime,
+    nomeArquivo: nomeArq,
+    legenda,
+    texto: legenda || rotulo,
+    autor,
+    criadoEm: agora,
+    enviada: false,
+    jaRegistrada: true,
+  });
+}
+
+/** Passa o atendimento para outro vendedor (e o cliente do CRM vinculado, se houver). */
+export async function transferirConversa(
+  empresaId: string,
+  conversa: ConversaChat,
+  de: string,
+  para: { login: string; nome: string }
+) {
+  await chatPronto;
+  const agora = new Date().toISOString();
+  await updateDoc(doc(db, 'empresas', empresaId, 'conversas', conversa.id), {
+    vendedorLogin: para.login,
+    vendedorNome: para.nome,
+    atendimentoEm: agora,
+  });
+  await addDoc(collection(db, 'empresas', empresaId, 'conversas', conversa.id, 'mensagens'), {
+    de: 'equipe',
+    texto: `🔁 Atendimento transferido de ${de} para ${para.nome}`,
+    em: agora,
+    autor: 'Sistema',
+    interna: true,
+  });
+  if (conversa.clienteId) {
+    try {
+      await atualizarCampoCliente(empresaId, conversa.clienteId, { crmVendedorLogin: para.login });
+    } catch (e) {
+      console.error('Transferência no CRM:', e);
+    }
+  }
 }
 
 export interface MensagemAgendada {

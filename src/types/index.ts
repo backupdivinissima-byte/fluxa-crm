@@ -372,6 +372,8 @@ export interface MensagemChat {
   midiaUrl?: string; // data URL (imagem ou miniatura do vídeo)
   midiaPartes?: number; // vídeo/áudio longo guardado em partes no banco
   midiaMime?: string;
+  midiaNome?: string; // nome do arquivo (documentos)
+  erroEnvio?: string; // o conector não conseguiu entregar ao cliente
 }
 
 export interface ConexaoChat {

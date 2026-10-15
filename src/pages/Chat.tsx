@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { ouvirClientes, ouvirEmpresa, atualizarCampoCliente, salvarCliente } from '../lib/crmData';
+import { ouvirClientes, ouvirEmpresa, ouvirVendedores, atualizarCampoCliente, salvarCliente } from '../lib/crmData';
 import { acaoDaColuna } from '../lib/crmLogic';
 import {
   acharClientePorTelefone,
@@ -21,13 +21,15 @@ import {
   enviarMensagemChat,
   enviarAudioChat,
   carregarMidiaPartes,
+  enviarAnexoChat,
+  transferirConversa,
   liberarConversa,
   ouvirConexaoWhatsapp,
   ouvirConversas,
   ouvirMensagens,
   solicitarConexaoWhatsapp,
 } from '../lib/chatData';
-import type { Cliente, ColunaCrm, ConexaoChat, ConversaChat, MensagemChat, TagChat } from '../types';
+import type { Cliente, ColunaCrm, Vendedor, ConexaoChat, ConversaChat, MensagemChat, TagChat } from '../types';
 
 const EMOJIS = ['😀','😁','😂','🤣','😊','😍','😘','😉','🙂','😎','🤩','🥰','😇','🤗','🤔','😅','😢','😭','😡','🙏','👍','👏','🙌','💪','👌','✌️','🤝','🎉','🎁','❤️','💖','💕','🔥','✨','⭐','🌟','💎','💍','👑','🛍️','💰','✅','❌','📦','🚚','📞','📅','⏰','🌹','🌸','☀️','🙋‍♀️','😴','🥳','😋','🤭'];
 
@@ -73,34 +75,79 @@ function Cartao({ titulo, valor, dica }: { titulo: string; valor: number; dica: 
 /** Fluxa Chat: caixa única de atendimento (WhatsApp por QR Code; Instagram
  * Direct e Messenger entram na fase seguinte). O vendedor que abre a conversa
  * e clica em "Assumir" fica responsável por ela e pelo cliente no CRM. */
-/** Vídeo/áudio longo: só baixa as partes quando a pessoa clica em reproduzir. */
+function baixar(url: string, nome: string) {
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nome;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+const EXT_MIME: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'video/mp4': 'mp4', 'audio/ogg': 'ogg', 'application/pdf': 'pdf' };
+function nomeDoArquivo(m: MensagemChat): string {
+  if (m.midiaNome) return m.midiaNome;
+  const ext = EXT_MIME[m.midiaMime ?? ''] ?? (m.midiaTipo === 'imagem' ? 'jpg' : m.midiaTipo === 'video' ? 'mp4' : m.midiaTipo === 'audio' ? 'ogg' : 'bin');
+  return `${m.midiaTipo ?? 'arquivo'}-${m.id.slice(0, 8)}.${ext}`;
+}
+
+/** Vídeo, documento ou áudio longo: só baixa as partes quando a pessoa clica. */
 function MidiaPartes({ empresaId, conversaId, msg }: { empresaId: string; conversaId: string; msg: MensagemChat }) {
   const [url, setUrl] = useState('');
   const [carregando, setCarregando] = useState(false);
   const [falha, setFalha] = useState('');
   const ehVideo = msg.midiaTipo === 'video';
-  async function carregar() {
+  const ehDoc = msg.midiaTipo === 'documento';
+  async function carregar(baixarDepois = false) {
     setCarregando(true);
     setFalha('');
     try {
-      setUrl(await carregarMidiaPartes(empresaId, conversaId, msg.id, msg.midiaMime || (ehVideo ? 'video/mp4' : 'audio/ogg')));
+      const u = url || (await carregarMidiaPartes(empresaId, conversaId, msg.id, msg.midiaMime || (ehVideo ? 'video/mp4' : ehDoc ? 'application/octet-stream' : 'audio/ogg')));
+      setUrl(u);
+      if (baixarDepois) baixar(u, nomeDoArquivo(msg));
     } catch (e) {
       setFalha(e instanceof Error ? e.message : 'Não foi possível carregar.');
     } finally {
       setCarregando(false);
     }
   }
-  if (url) return ehVideo ? <video controls autoPlay src={url} className="rounded-lg mb-1 max-h-72 max-w-full" /> : <audio controls autoPlay src={url} className="max-w-full mb-1" />;
-  return (
-    <button type="button" onClick={() => void carregar()} className="relative block mb-1 text-left">
-      {msg.midiaUrl && ehVideo && <img src={msg.midiaUrl} alt="Miniatura do vídeo" className="rounded-lg max-h-64 max-w-full" />}
-      <span className={`${msg.midiaUrl && ehVideo ? 'absolute inset-0 flex items-center justify-center' : 'inline-flex'}`}>
-        <span className="rounded-full bg-black/60 text-white text-xs font-bold px-3 py-2">
-          {carregando ? 'Carregando…' : ehVideo ? '▶ Reproduzir vídeo' : '▶ Ouvir áudio'}
-        </span>
-      </span>
-      {falha && <span className="block text-[11px] text-red-500 mt-1">{falha}</span>}
+  const botaoBaixar = (
+    <button type="button" onClick={() => void carregar(true)} className="text-[11px] font-bold underline mt-0.5">
+      {carregando ? 'Carregando…' : '⬇ Baixar'}
     </button>
+  );
+  if (ehDoc) {
+    return (
+      <div className="mb-1">
+        <div className="text-sm">📄 {nomeDoArquivo(msg)}</div>
+        {botaoBaixar}
+        {falha && <span className="block text-[11px] text-red-500">{falha}</span>}
+      </div>
+    );
+  }
+  if (url) {
+    return (
+      <div className="mb-1">
+        {ehVideo ? <video controls autoPlay src={url} className="rounded-lg max-h-72 max-w-full" /> : <audio controls autoPlay src={url} className="max-w-full" />}
+        <button type="button" onClick={() => baixar(url, nomeDoArquivo(msg))} className="block text-[11px] font-bold underline mt-0.5">
+          ⬇ Baixar
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="mb-1">
+      <button type="button" onClick={() => void carregar()} className="relative block text-left">
+        {msg.midiaUrl && ehVideo && <img src={msg.midiaUrl} alt="Miniatura do vídeo" className="rounded-lg max-h-64 max-w-full" />}
+        <span className={`${msg.midiaUrl && ehVideo ? 'absolute inset-0 flex items-center justify-center' : 'inline-flex'}`}>
+          <span className="rounded-full bg-black/60 text-white text-xs font-bold px-3 py-2">
+            {carregando ? 'Carregando…' : ehVideo ? '▶ Reproduzir vídeo' : '▶ Ouvir áudio'}
+          </span>
+        </span>
+      </button>
+      {botaoBaixar}
+      {falha && <span className="block text-[11px] text-red-500 mt-1">{falha}</span>}
+    </div>
   );
 }
 
@@ -132,6 +179,11 @@ export default function Chat() {
   const [nomeContato, setNomeContato] = useState('');
   const [codigoCliente, setCodigoCliente] = useState('');
   const [editando, setEditando] = useState(false);
+  const [vendedoresCrm, setVendedoresCrm] = useState<Vendedor[]>([]);
+  const [transferindo, setTransferindo] = useState(false);
+  const [anexo, setAnexo] = useState<{ arquivo: File | Blob; nome: string; previa?: string } | null>(null);
+  const [enviandoAnexo, setEnviandoAnexo] = useState(false);
+  const arquivoRef = useRef<HTMLInputElement>(null);
   const [telContato, setTelContato] = useState('');
   const [novaCor, setNovaCor] = useState(PALETA[5]);
   const [erro, setErro] = useState('');
@@ -147,6 +199,7 @@ export default function Chat() {
     if (!empresaId) return;
     const u1 = ouvirConversas(empresaId, setConversas);
     const u2 = ouvirClientes(empresaId, setClientes);
+    const uV = ouvirVendedores(empresaId, setVendedoresCrm);
     const u4 = ouvirEmpresa(empresaId, (e) => setColunas(e?.crmColunas ?? []));
     const u5 = ouvirConexaoWhatsapp(empresaId, setConexao);
     const u6 = ouvirTags(empresaId, setTags);
@@ -154,6 +207,7 @@ export default function Chat() {
     return () => {
       u1();
       u2();
+      uV();
       u4();
       u5();
       u6();
@@ -220,6 +274,8 @@ export default function Chat() {
     setNomeContato(aberta?.nome ?? aberta?.nomeSugerido ?? '');
     setTelContato(aberta?.telefone ?? '');
     setEditando(false);
+    setAnexo(null);
+    setTransferindo(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [abertaId]);
 
@@ -410,7 +466,54 @@ export default function Chat() {
     gravadorRef.current = null;
   }
 
+  function escolherAnexo(arquivo: File | Blob, nome: string) {
+    setErro('');
+    if (arquivo.size > 20_000_000) {
+      setErro('Arquivo grande demais (limite de 20 MB).');
+      return;
+    }
+    setAnexo({ arquivo, nome, previa: arquivo.type.startsWith('image/') ? URL.createObjectURL(arquivo) : undefined });
+  }
+
+  // Print colado (Ctrl+V) ou imagem copiada: vira anexo para confirmar.
+  function aoColar(e: React.ClipboardEvent) {
+    const item = Array.from(e.clipboardData?.items ?? []).find((i) => i.kind === 'file');
+    const arq = item?.getAsFile();
+    if (arq && aberta && aberta.canal === 'whatsapp') {
+      e.preventDefault();
+      escolherAnexo(arq, arq.name && arq.name !== 'image.png' ? arq.name : `print-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.png`);
+    }
+  }
+
+  async function enviarComAnexo() {
+    if (!empresaId || !aberta || !anexo) return;
+    setErro('');
+    setEnviandoAnexo(true);
+    try {
+      await enviarAnexoChat(empresaId, aberta, anexo.arquivo, anexo.nome, texto.trim(), meuNome);
+      setAnexo(null);
+      setTexto('');
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Não foi possível enviar o anexo.');
+    } finally {
+      setEnviandoAnexo(false);
+    }
+  }
+
+  async function transferir(v: Vendedor) {
+    if (!empresaId || !aberta) return;
+    setErro('');
+    try {
+      await transferirConversa(empresaId, aberta, aberta.vendedorNome || meuNome, { login: v.login, nome: v.nome });
+      setTransferindo(false);
+      if (!souAdmin) setAbertaId(null); // deixou de ser dele
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Não foi possível transferir.');
+    }
+  }
+
   async function enviar() {
+    if (anexo) return void enviarComAnexo();
     if (!empresaId || !aberta || !texto.trim()) return;
     setErro('');
     const t = texto.trim();
@@ -701,6 +804,15 @@ export default function Chat() {
                     Assumir atendimento
                   </button>
                 )}
+                {aberta.vendedorLogin && (souAdmin || aberta.vendedorLogin === meuLogin) && (
+                  <button
+                    onClick={() => setTransferindo(true)}
+                    title="Passar este atendimento para outro vendedor"
+                    className="rounded-xl border border-line text-ink text-xs font-bold px-3 py-2 hover:bg-surface"
+                  >
+                    🔁 Transferir
+                  </button>
+                )}
                 {aberta.salvo && !editando && (
                   <button
                     onClick={() => {
@@ -810,6 +922,11 @@ export default function Chat() {
                           />
                         )
                       )}
+                      {!m.midiaPartes && m.midiaUrl && (m.midiaTipo === 'imagem' || m.midiaTipo === 'audio') && (
+                        <button type="button" onClick={() => baixar(m.midiaUrl as string, nomeDoArquivo(m))} className="block text-[11px] font-bold underline mb-1">
+                          ⬇ Baixar
+                        </button>
+                      )}
                       {m.midiaLink ? (
                         <a href={m.midiaLink} target="_blank" rel="noreferrer" className="block text-[11px] font-bold underline mb-1">
                           Abrir {m.midiaTipo === 'video' ? 'vídeo' : m.midiaTipo === 'audio' ? 'áudio' : m.midiaTipo === 'documento' ? 'documento' : 'foto'} completo no Drive
@@ -821,6 +938,7 @@ export default function Chat() {
                         <div className="text-[11px] font-bold text-teal-700 mb-0.5">{m.autor}</div>
                       )}
                       {(!m.midiaTipo || (m.texto && !m.texto.startsWith('['))) && <div className="whitespace-pre-wrap break-words">{m.texto}</div>}
+                      {m.erroEnvio && <div className="text-[11px] font-bold text-red-500 mt-1">⚠ Não chegou ao cliente: {m.erroEnvio}</div>}
                       <div className="text-[10px] text-ink-soft mt-1">
                         {m.autor ? `${m.autor} · ` : ''}
                         {hora(m.em)}
@@ -887,6 +1005,33 @@ export default function Chat() {
                         <span>{quando ? 'Clique no avião para agendar.' : 'Escolha a data e a hora.'}</span>
                       </div>
                     )}
+                    {anexo && (
+                      <div className="flex items-center gap-3 rounded-lg border border-line bg-surface px-3 py-2">
+                        {anexo.previa ? (
+                          <img src={anexo.previa} alt="Prévia" className="h-16 w-16 rounded object-cover" />
+                        ) : (
+                          <span className="text-2xl">📎</span>
+                        )}
+                        <div className="min-w-0 flex-1 text-xs">
+                          <div className="font-bold text-ink truncate">{anexo.nome}</div>
+                          <div className="text-ink-soft">Escreva uma legenda (opcional) e clique em enviar.</div>
+                        </div>
+                        <button type="button" onClick={() => setAnexo(null)} className="text-xs font-bold text-ink-soft hover:text-red-600">
+                          Remover
+                        </button>
+                      </div>
+                    )}
+                    <input
+                      ref={arquivoRef}
+                      type="file"
+                      accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) escolherAnexo(f, f.name);
+                        e.target.value = '';
+                      }}
+                    />
                     {gravando ? (
                       <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2">
                         <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
@@ -915,12 +1060,23 @@ export default function Chat() {
                       >
                         😊
                       </button>
+                      {aberta.canal === 'whatsapp' && (
+                        <button
+                          type="button"
+                          onClick={() => arquivoRef.current?.click()}
+                          title="Anexar foto, vídeo ou documento (ou cole um print com Ctrl+V)"
+                          className="w-9 h-9 rounded-lg text-xl hover:bg-surface"
+                        >
+                          📎
+                        </button>
+                      )}
                       <input
                         ref={campoRef}
                         value={texto}
                         onChange={(e) => setTexto(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && void enviar()}
-                        placeholder={mostrarRelogio ? 'Mensagem a agendar…' : 'Escreva sua resposta…'}
+                        onPaste={aoColar}
+                        placeholder={anexo ? 'Legenda (opcional)…' : mostrarRelogio ? 'Mensagem a agendar…' : 'Escreva sua resposta…'}
                         className="flex-1 rounded-lg border border-line px-3 py-2 text-sm"
                       />
                       <button
@@ -933,7 +1089,7 @@ export default function Chat() {
                       </button>
                       <button
                         onClick={() => void enviar()}
-                        disabled={!texto.trim() || (mostrarRelogio && !quando)}
+                        disabled={enviandoAnexo || (!anexo && !texto.trim()) || (mostrarRelogio && !quando)}
                         title={mostrarRelogio ? 'Agendar envio' : 'Enviar'}
                         className="rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white w-11 h-9 flex items-center justify-center disabled:opacity-60"
                       >
@@ -942,7 +1098,7 @@ export default function Chat() {
                           <path d="M22 2 15 22l-4-9-9-4 20-7Z" />
                         </svg>
                       </button>
-                      {aberta.canal === 'whatsapp' && !texto.trim() && (
+                      {aberta.canal === 'whatsapp' && !texto.trim() && !anexo && (
                         <button
                           type="button"
                           onClick={() => void iniciarGravacao()}
@@ -962,12 +1118,55 @@ export default function Chat() {
         </div>
 
       </div>
+      {transferindo && aberta && (
+        <div className="fixed inset-0 z-50 bg-ink/40 flex items-center justify-center p-4" onClick={() => setTransferindo(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-base font-extrabold text-ink">Transferir atendimento</h3>
+            <p className="text-xs text-ink-soft mt-1 mb-3">
+              Escolha quem vai continuar a conversa com {clienteCrm?.razao ?? clienteCrm?.nome ?? aberta.nome}.
+            </p>
+            <ul className="max-h-72 overflow-y-auto divide-y divide-line border border-line rounded-xl">
+              {vendedoresCrm
+                .filter((v) => v.ativo !== false && v.login !== aberta.vendedorLogin)
+                .sort((a, b) => a.nome.localeCompare(b.nome))
+                .map((v) => (
+                  <li key={v.id}>
+                    <button
+                      onClick={() => {
+                        if (confirm(`Transferir este atendimento para ${v.nome}?`)) void transferir(v);
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-sm font-bold text-ink hover:bg-surface"
+                    >
+                      {v.nome}
+                    </button>
+                  </li>
+                ))}
+              {vendedoresCrm.filter((v) => v.ativo !== false && v.login !== aberta.vendedorLogin).length === 0 && (
+                <li className="px-4 py-3 text-sm text-ink-soft">Nenhum outro vendedor cadastrado.</li>
+              )}
+            </ul>
+            <button onClick={() => setTransferindo(false)} className="mt-3 w-full rounded-xl border border-line text-sm font-bold py-2 hover:bg-surface">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
       {fotoGrande && (
         <div className="fixed inset-0 z-50 bg-black/85 flex flex-col items-center justify-center p-4" onClick={() => setFotoGrande(null)}>
           <button className="absolute top-4 right-5 text-white text-3xl leading-none" onClick={() => setFotoGrande(null)} title="Fechar">
             ×
           </button>
           <img src={fotoGrande.url} alt="Foto ampliada" className="max-h-[88vh] max-w-[94vw] rounded-lg object-contain" onClick={(e) => e.stopPropagation()} />
+          <button
+            type="button"
+            className="mt-3 rounded-lg bg-white/15 text-white text-xs font-bold px-3 py-1.5 hover:bg-white/25"
+            onClick={(e) => {
+              e.stopPropagation();
+              baixar(fotoGrande.url, `foto-${Date.now()}.jpg`);
+            }}
+          >
+            ⬇ Baixar foto
+          </button>
           {fotoGrande.link && (
             <a href={fotoGrande.link} target="_blank" rel="noreferrer" className="mt-3 text-xs font-bold text-white underline" onClick={(e) => e.stopPropagation()}>
               Abrir original no Drive

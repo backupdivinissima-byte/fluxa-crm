@@ -113,7 +113,7 @@ async function midiaDe(msg, numero) {
   const out = { midiaTipo: tipo };
   let buf = null;
   try {
-    if (img || aud || vid || driveLigado()) buf = await downloadMediaMessage(msg, 'buffer', {}, { logger: log, reuploadRequest: sock.updateMediaMessage });
+    if (img || aud || vid || doc || driveLigado()) buf = await downloadMediaMessage(msg, 'buffer', {}, { logger: log, reuploadRequest: sock.updateMediaMessage });
   } catch (e) {
     console.error('Mídia:', e.message);
   }
@@ -123,9 +123,10 @@ async function midiaDe(msg, numero) {
     if (aud && buf.length <= 600_000) out.midiaUrl = `data:${(aud.mimetype || 'audio/ogg').split(';')[0]};base64,${buf.toString('base64')}`;
     // Vídeo (e áudio longo): vai picado em partes de ~800 KB no próprio banco, para tocar no Chat
     // sem precisar de servidor. Limite de 20 MB por arquivo.
-    if ((vid || (aud && buf.length > 600_000)) && buf.length <= 20_000_000) {
+    if ((vid || doc || (aud && buf.length > 600_000)) && buf.length <= 20_000_000) {
       out.midiaPartes = Math.ceil(buf.length / TAM_PARTE);
-      out.midiaMime = (alvo.mimetype || (vid ? 'video/mp4' : 'audio/ogg')).split(';')[0];
+      out.midiaMime = (alvo.mimetype || (vid ? 'video/mp4' : doc ? 'application/octet-stream' : 'audio/ogg')).split(';')[0];
+      if (doc?.fileName) out.midiaNome = doc.fileName;
       partesPendentes.set(msg.key.id, buf);
     }
     const nome = doc?.fileName || `${tipo}-${msg.key.id}.${EXT[alvo.mimetype] ?? 'bin'}`;
@@ -397,6 +398,19 @@ function paraOggOpus(buf) {
   });
 }
 
+// Lê o anexo gravado pelo Fluxa: dentro da mensagem (foto pequena) ou em partes.
+async function lerAnexo(dado) {
+  const msgRef = base.collection('conversas').doc(dado.conversaId).collection('mensagens').doc(dado.msgId);
+  const m = (await msgRef.get()).data() ?? {};
+  if (m.midiaPartes) {
+    const ps = await msgRef.collection('partes').orderBy('n').get();
+    if (ps.size < m.midiaPartes) throw new Error('Anexo incompleto, tente enviar de novo.');
+    return Buffer.concat(ps.docs.map((x) => Buffer.from(x.data().dados)));
+  }
+  if (m.midiaUrl) return Buffer.from(String(m.midiaUrl).split(',')[1] ?? '', 'base64');
+  throw new Error('Anexo não encontrado.');
+}
+
 async function enviarSaida(d) {
   const dado = d.data();
   if (dado.canal !== 'whatsapp' || processando.has(d.id)) return;
@@ -410,6 +424,12 @@ async function enviarSaida(d) {
       const bruto = Buffer.from(String(dado.audioUrl).split(',')[1] ?? '', 'base64');
       const ogg = await paraOggOpus(bruto);
       enviada = await sock.sendMessage(destino, { audio: ogg, mimetype: 'audio/ogg; codecs=opus', ptt: true });
+    } else if (dado.tipo === 'midia') {
+      const buf = await lerAnexo(dado);
+      const legenda = dado.legenda || undefined;
+      if (dado.midiaTipo === 'imagem') enviada = await sock.sendMessage(destino, { image: buf, caption: legenda });
+      else if (dado.midiaTipo === 'video') enviada = await sock.sendMessage(destino, { video: buf, caption: legenda, mimetype: dado.mime || 'video/mp4' });
+      else enviada = await sock.sendMessage(destino, { document: buf, mimetype: dado.mime || 'application/octet-stream', fileName: dado.nomeArquivo || 'arquivo', caption: legenda });
     } else {
       enviada = await sock.sendMessage(destino, { text: dado.texto });
     }
@@ -421,7 +441,11 @@ async function enviarSaida(d) {
       await base.collection('conversas').doc(dado.conversaId).set({ ultimaMensagem: dado.texto, ultimaEm: em, ultimaDe: 'equipe' }, { merge: true });
     }
   } catch (e) {
+    console.error('Falha ao enviar:', e.message);
     await d.ref.update({ enviada: true, erro: e.message });
+    if (dado.msgId) {
+      await base.collection('conversas').doc(dado.conversaId).collection('mensagens').doc(dado.msgId).set({ erroEnvio: e.message }, { merge: true }).catch(() => {});
+    }
   } finally {
     processando.delete(d.id);
   }
