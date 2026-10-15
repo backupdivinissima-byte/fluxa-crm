@@ -374,6 +374,8 @@ export interface MensagemChat {
 export interface ConexaoChat {
   status: 'desconectado' | 'solicitado' | 'aguardando_qr' | 'conectado';
   qr?: string; // imagem (data URL) do QR Code
+  codigoPareamento?: string; // código de 8 letras (conexão por número)
+  erro?: string;
   telefone?: string;
   atualizadoEm?: string;
 }

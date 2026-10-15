@@ -38,6 +38,7 @@ const log = pino({ level: 'warn' });
 let sock = null;
 let aberto = false;
 let iniciando = false;
+let telefoneParear = ''; // se definido, conecta por código em vez de QR
 const enviadasPorNos = new Set();
 // Nomes da agenda do celular (contatos salvos), por número.
 const agenda = new Map();
@@ -156,6 +157,20 @@ async function iniciar() {
     sock.ev.on('messaging-history.set', ({ contacts }) => lembrarContatos(contacts));
 
     sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
+      if (qr && telefoneParear && !state.creds.registered) {
+        // Conexão por número: o WhatsApp mostra um código de 8 letras no celular.
+        const numero = telefoneParear;
+        telefoneParear = '';
+        try {
+          const codigo = await sock.requestPairingCode(numero);
+          console.log(`Código de pareamento: ${codigo}`);
+          await refConexao.set({ status: 'aguardando_qr', qr: '', codigoPareamento: codigo, atualizadoEm: agora() }, { merge: true });
+        } catch (e) {
+          console.error('Pareamento:', e.message);
+          await refConexao.set({ status: 'desconectado', erro: `Pareamento: ${e.message}`, atualizadoEm: agora() }, { merge: true });
+        }
+        return;
+      }
       if (qr) {
         if (MODO_TESTE) {
           console.log('\nLeia este QR Code no celular: WhatsApp > Aparelhos conectados > Conectar um aparelho\n');
@@ -166,7 +181,7 @@ async function iniciar() {
       }
       if (connection === 'open') {
         aberto = true;
-        await refConexao.set({ status: 'conectado', qr: '', telefone: soDigitos(sock.user?.id ?? ''), atualizadoEm: agora() }, { merge: true });
+        await refConexao.set({ status: 'conectado', qr: '', codigoPareamento: '', erro: '', telefone: soDigitos(sock.user?.id ?? ''), atualizadoEm: agora() }, { merge: true });
         console.log('WhatsApp conectado.');
       }
       if (connection === 'close') {
@@ -235,6 +250,7 @@ async function iniciar() {
 // O botão "Gerar QR Code" do Fluxa marca o status como "solicitado".
 refConexao.onSnapshot(async (snap) => {
   if (snap.data()?.status === 'solicitado' && !aberto && !iniciando) {
+    telefoneParear = String(snap.data()?.telefoneParear ?? '').replace(/\D/g, '');
     try {
       sock?.end?.(undefined);
     } catch {

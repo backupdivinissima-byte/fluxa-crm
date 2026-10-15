@@ -94,6 +94,7 @@ export default function Chat() {
   const [ligacoes, setLigacoes] = useState<LigacaoChat[]>([]);
   const [gerenciarTags, setGerenciarTags] = useState(false);
   const [novaTag, setNovaTag] = useState('');
+  const [telParear, setTelParear] = useState('');
   const [nomeContato, setNomeContato] = useState('');
   const [novaCor, setNovaCor] = useState(PALETA[5]);
   const [erro, setErro] = useState('');
@@ -417,6 +418,34 @@ export default function Chat() {
           >
             Gerar QR Code
           </button>
+          <div className="mt-5 pt-4 border-t border-line max-w-3xl">
+            <p className="text-sm text-ink-soft mb-2">
+              Não conseguiu ler o QR? Conecte pelo número: digite o número do WhatsApp com DDD, gere o código e, no celular, vá em Aparelhos conectados → Conectar um aparelho → <b>Conectar com número de telefone</b> e digite o código.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                value={telParear}
+                onChange={(e) => setTelParear(e.target.value)}
+                placeholder="DDD + número, ex.: 37 99999-9999"
+                className="rounded-lg border border-line px-3 py-2 text-sm"
+              />
+              <button
+                disabled={telParear.replace(/\D/g, '').length < 10}
+                onClick={() => {
+                  setErro('');
+                  const d = telParear.replace(/\D/g, '');
+                  solicitarConexaoWhatsapp(empresaId, d.startsWith('55') ? d : `55${d}`).catch((e) => setErro(e instanceof Error ? e.message : 'Erro ao pedir o código.'));
+                }}
+                className="rounded-xl border border-line text-ink text-sm font-bold px-4 py-2 hover:bg-surface disabled:opacity-60"
+              >
+                Gerar código
+              </button>
+            </div>
+            {conexao.codigoPareamento ? (
+              <div className="mt-3 text-3xl font-extrabold tracking-[0.3em] text-ink">{conexao.codigoPareamento}</div>
+            ) : null}
+            {conexao.erro ? <p className="mt-2 text-xs text-red-500">{conexao.erro}</p> : null}
+          </div>
           {conexao.qr ? <img src={conexao.qr} alt="QR Code do WhatsApp" className="mt-4 w-80 h-80 bg-white border border-line rounded-lg" /> : null}
         </div>
       )}

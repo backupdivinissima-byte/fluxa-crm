@@ -45,10 +45,10 @@ export function ouvirConexaoWhatsapp(empresaId: string, cb: (c: ConexaoChat) => 
 }
 
 /** Pede ao conector que gere um QR Code novo. */
-export async function solicitarConexaoWhatsapp(empresaId: string) {
+export async function solicitarConexaoWhatsapp(empresaId: string, telefoneParear = '') {
   await setDoc(
     doc(db, 'empresas', empresaId, 'chatConexoes', 'whatsapp'),
-    { status: 'solicitado', qr: '', atualizadoEm: new Date().toISOString() },
+    { status: 'solicitado', qr: '', codigoPareamento: '', erro: '', telefoneParear, atualizadoEm: new Date().toISOString() },
     { merge: true }
   );
 }
