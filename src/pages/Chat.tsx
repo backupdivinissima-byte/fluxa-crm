@@ -742,7 +742,7 @@ export default function Chat() {
 
 
       <div className="grid grid-cols-1 lg:grid-cols-[340px_minmax(0,600px)] lg:justify-start gap-4 items-stretch">
-        <div className="bg-white border border-line rounded-2xl overflow-hidden flex flex-col lg:h-[calc(100vh-240px)] lg:min-h-[560px]">
+        <div className="bg-white border border-line rounded-2xl overflow-hidden flex flex-col lg:h-[calc(100dvh-310px)] lg:min-h-[380px]">
           <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-line">
             <span className="text-xs font-bold text-ink">Conversas</span>
             <button
@@ -799,7 +799,7 @@ export default function Chat() {
           </ul>
         </div>
 
-        <div className="bg-white border border-line rounded-2xl flex flex-col min-h-[420px] lg:h-[calc(100vh-240px)] lg:min-h-[560px]">
+        <div className="bg-white border border-line rounded-2xl flex flex-col min-h-[420px] lg:h-[calc(100dvh-310px)] lg:min-h-[380px]">
           {!aberta ? (
             <div className="m-auto text-sm text-ink-soft p-6">Escolha uma conversa na lista.</div>
           ) : (
