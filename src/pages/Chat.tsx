@@ -456,7 +456,7 @@ export default function Chat() {
 
       {erro && <p className="text-xs text-red-500">{erro}</p>}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[340px_minmax(0,600px)] lg:justify-center gap-4 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-[340px_minmax(0,600px)] lg:justify-start gap-4 items-start">
         <div className="bg-white border border-line rounded-2xl overflow-hidden">
           <div className="flex border-b border-line text-xs font-bold">
             {(['todas', 'novos', 'minhas'] as const).map((f) => (
