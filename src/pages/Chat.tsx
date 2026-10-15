@@ -8,6 +8,9 @@ import {
   definirTagsConversa,
   excluirTag,
   ouvirTags,
+  ouvirLigacoesHoje,
+  registrarLigacao,
+  type LigacaoChat,
   salvarTag,
   cancelarAgendada,
   ouvirAgendadas,
@@ -56,10 +59,9 @@ function hora(iso: string) {
 
 function Cartao({ titulo, valor, dica }: { titulo: string; valor: number; dica: string }) {
   return (
-    <div className="bg-white border border-line rounded-2xl p-4">
-      <div className="text-[11px] font-bold text-ink-soft uppercase tracking-wide">{titulo}</div>
-      <div className="text-3xl font-extrabold text-ink mt-1 tabular-nums">{valor}</div>
-      <div className="text-[11px] text-ink-soft mt-1">{dica}</div>
+    <div className="bg-white border border-line rounded-xl px-3 py-2.5" title={dica}>
+      <div className="text-[10px] font-bold text-ink-soft uppercase tracking-wide truncate">{titulo}</div>
+      <div className="text-2xl font-extrabold text-ink mt-0.5 tabular-nums">{valor}</div>
     </div>
   );
 }
@@ -88,6 +90,7 @@ export default function Chat() {
   const [quando, setQuando] = useState(''); // datetime-local
   const campoRef = useRef<HTMLInputElement>(null);
   const [tags, setTags] = useState<TagChat[]>([]);
+  const [ligacoes, setLigacoes] = useState<LigacaoChat[]>([]);
   const [gerenciarTags, setGerenciarTags] = useState(false);
   const [novaTag, setNovaTag] = useState('');
   const [novaCor, setNovaCor] = useState(PALETA[5]);
@@ -101,12 +104,14 @@ export default function Chat() {
     const u4 = ouvirEmpresa(empresaId, (e) => setColunas(e?.crmColunas ?? []));
     const u5 = ouvirConexaoWhatsapp(empresaId, setConexao);
     const u6 = ouvirTags(empresaId, setTags);
+    const u7 = ouvirLigacoesHoje(empresaId, setLigacoes);
     return () => {
       u1();
       u2();
       u4();
       u5();
       u6();
+      u7();
     };
   }, [empresaId]);
 
@@ -150,6 +155,18 @@ export default function Chat() {
     total: visiveis.filter((c) => origemDe(c) === k).length,
   }));
   const porTag = tags.map((t) => ({ ...t, total: visiveis.filter((c) => c.tags?.includes(t.id)).length }));
+
+  // Admin vê todas as ligações; vendedor, só as dele.
+  const minhasLig = souAdmin ? ligacoes : ligacoes.filter((l) => l.vendedorLogin === meuLogin);
+  const ligPorUsuario = Object.values(
+    ligacoes.reduce<Record<string, { nome: string; feitas: number; recebidas: number }>>((acc, l) => {
+      const nome = l.vendedorNome || 'Sem vendedor';
+      acc[nome] ??= { nome, feitas: 0, recebidas: 0 };
+      if (l.tipo === 'feita') acc[nome].feitas++;
+      else acc[nome].recebidas++;
+      return acc;
+    }, {})
+  );
 
   async function criarTag() {
     const nome = novaTag.trim();
@@ -260,20 +277,48 @@ export default function Chat() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_300px] gap-3 items-start">
+        <div className="space-y-2">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         <Cartao titulo="Aguardando atendimento" valor={aguardando} dica="Clientes sem vendedor esperando resposta" />
         <Cartao titulo="Em atendimento" valor={emAtendimento} dica="Conversas com um vendedor responsável" />
         <Cartao titulo="Abertas sem resposta" valor={semResposta} dica="A última mensagem foi do cliente" />
         <Cartao titulo="Clientes novos" valor={novos} dica="Contatos sem cadastro no CRM" />
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         {porOrigem.map((o) => (
           <Cartao key={o.chave} titulo={`Tag ${o.nome}`} valor={o.total} dica="Clientes com esta origem" />
         ))}
         {porTag.map((t) => (
           <Cartao key={t.id} titulo={`Tag ${t.nome}`} valor={t.total} dica="Clientes com esta tag" />
         ))}
+      </div>
+        </div>
+        <div className="bg-white border border-line rounded-xl p-3">
+          <div className="text-[10px] font-bold text-ink-soft uppercase tracking-wide mb-2">Ligações pelo WhatsApp — hoje</div>
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            <div className="rounded-lg bg-surface px-3 py-2">
+              <div className="text-[10px] text-ink-soft font-bold">Feitas</div>
+              <div className="text-2xl font-extrabold text-ink tabular-nums">{minhasLig.filter((l) => l.tipo === 'feita').length}</div>
+            </div>
+            <div className="rounded-lg bg-surface px-3 py-2">
+              <div className="text-[10px] text-ink-soft font-bold">Recebidas</div>
+              <div className="text-2xl font-extrabold text-ink tabular-nums">{minhasLig.filter((l) => l.tipo === 'recebida').length}</div>
+            </div>
+          </div>
+          {souAdmin && (
+            <ul className="space-y-1 max-h-28 overflow-y-auto">
+              {ligPorUsuario.length === 0 && <li className="text-[11px] text-ink-soft">Nenhuma ligação hoje.</li>}
+              {ligPorUsuario.map((u) => (
+                <li key={u.nome} className="flex justify-between text-[11px] text-ink">
+                  <span className="truncate">{u.nome}</span>
+                  <span className="tabular-nums shrink-0">{u.feitas} feitas · {u.recebidas} recebidas</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
 
       {souAdmin && (
@@ -425,6 +470,9 @@ export default function Chat() {
                     target="_blank"
                     rel="noreferrer"
                     title="Abre o WhatsApp (celular ou WhatsApp Desktop) para ligar por voz"
+                    onClick={() =>
+                      void registrarLigacao(empresaId, { tipo: 'feita', conversaId: aberta.id, vendedorLogin: meuLogin, vendedorNome: meuNome }).catch(() => {})
+                    }
                     className="rounded-xl border border-line text-ink text-xs font-bold px-3 py-2 hover:bg-surface"
                   >
                     Ligar pelo WhatsApp

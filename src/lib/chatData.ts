@@ -150,3 +150,24 @@ export async function excluirTag(empresaId: string, id: string) {
 export async function definirTagsConversa(empresaId: string, conversaId: string, tags: string[]) {
   await updateDoc(doc(db, 'empresas', empresaId, 'conversas', conversaId), { tags });
 }
+
+export interface LigacaoChat {
+  id: string;
+  tipo: 'feita' | 'recebida';
+  em: string; // ISO
+  vendedorLogin: string;
+  vendedorNome: string;
+  conversaId?: string;
+}
+
+export async function registrarLigacao(empresaId: string, l: Omit<LigacaoChat, 'id' | 'em'>) {
+  await addDoc(collection(db, 'empresas', empresaId, 'chatLigacoes'), { ...l, em: new Date().toISOString() });
+}
+
+/** Ligações de hoje (a partir da meia-noite do navegador). */
+export function ouvirLigacoesHoje(empresaId: string, cb: (l: LigacaoChat[]) => void): Unsubscribe {
+  const inicio = new Date();
+  inicio.setHours(0, 0, 0, 0);
+  const q = query(collection(db, 'empresas', empresaId, 'chatLigacoes'), where('em', '>=', inicio.toISOString()));
+  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<LigacaoChat, 'id'>) }))));
+}

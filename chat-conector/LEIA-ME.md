@@ -27,6 +27,7 @@ match /conversas/{id} { allow read, write: if request.auth != null;
   match /mensagens/{m} { allow read, write: if request.auth != null; } }
 match /chatSaida/{id} { allow read, write: if request.auth != null; }
 match /chatTags/{id} { allow read, write: if request.auth != null; }
+match /chatLigacoes/{id} { allow read, write: if request.auth != null; }
 match /chatConexoes/{id} { allow read, write: if request.auth != null; }
 ```
 

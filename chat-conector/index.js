@@ -174,6 +174,14 @@ async function iniciar() {
           const ref = base.collection('conversas').doc(`whatsapp_${numero}`);
           await ref.set({ canal: 'whatsapp', contato: numero, telefone: numero, ultimaMensagem: texto, ultimaEm: quando, ultimaDe: 'cliente' }, { merge: true });
           await ref.collection('mensagens').doc(`call-${c.id}`).set({ de: 'cliente', texto, em: quando });
+          const dono = (await ref.get()).data() ?? {};
+          await base.collection('chatLigacoes').doc(`call-${c.id}`).set({
+            tipo: 'recebida',
+            em: quando,
+            conversaId: `whatsapp_${numero}`,
+            vendedorLogin: dono.vendedorLogin ?? '',
+            vendedorNome: dono.vendedorNome ?? 'Sem vendedor',
+          });
         } catch (e) {
           console.error('Erro ao registrar chamada:', e.message);
         }
