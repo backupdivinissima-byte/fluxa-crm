@@ -107,6 +107,64 @@ function lembrarContatos(lista) {
   }
 }
 
+// Histórico: o WhatsApp envia as conversas antigas uma vez, ao conectar o aparelho.
+// Importa os últimos 30 dias (no máx. 3000 mensagens), sem mexer nas "não lidas".
+const DIAS_HISTORICO = 30;
+const MAX_HISTORICO = 3000;
+async function importarHistorico(lista) {
+  if (MODO_TESTE || !base || !lista?.length) return;
+  const corte = Date.now() / 1000 - DIAS_HISTORICO * 86400;
+  const porConversa = new Map();
+  let total = 0;
+  for (const msg of lista) {
+    const jid = msg.key?.remoteJid;
+    const ts = Number(msg.messageTimestamp ?? 0);
+    if (!jid || !jid.endsWith('@s.whatsapp.net') || ts < corte || !msg.message) continue;
+    if (total >= MAX_HISTORICO) break;
+    const numero = soDigitos(jid);
+    if (!porConversa.has(numero)) porConversa.set(numero, []);
+    porConversa.get(numero).push(msg);
+    total++;
+  }
+  console.log(`Importando histórico: ${total} mensagens de ${porConversa.size} conversas…`);
+  for (const [numero, msgs] of porConversa) {
+    try {
+      msgs.sort((a, b) => Number(a.messageTimestamp) - Number(b.messageTimestamp));
+      const ref = base.collection('conversas').doc(`whatsapp_${numero}`);
+      const atual = (await ref.get()).data() ?? {};
+      const mais = msgs[msgs.length - 1];
+      const quandoUlt = new Date(Number(mais.messageTimestamp) * 1000).toISOString();
+      const nomePush = msgs.find((m) => !m.key.fromMe && m.pushName)?.pushName;
+      for (let i = 0; i < msgs.length; i += 400) {
+        const lote = getFirestore().batch();
+        for (const m of msgs.slice(i, i + 400)) {
+          const quando = new Date(Number(m.messageTimestamp) * 1000).toISOString();
+          lote.set(
+            ref.collection('mensagens').doc(m.key.id),
+            { de: m.key.fromMe ? 'equipe' : 'cliente', texto: textoDe(m), em: quando, ...(m.key.fromMe ? { autor: 'Celular' } : {}) },
+            { merge: true }
+          );
+        }
+        await lote.commit();
+      }
+      const novoUlt = !atual.ultimaEm || quandoUlt > atual.ultimaEm;
+      await ref.set(
+        {
+          canal: 'whatsapp',
+          contato: numero,
+          telefone: numero,
+          ...(agenda.has(numero) ? { nome: agenda.get(numero), nomeSugerido: agenda.get(numero), salvoNaAgenda: true } : !atual.nome ? { nome: nomePush || numero, ...(nomePush ? { nomeSugerido: nomePush } : {}) } : {}),
+          ...(novoUlt ? { ultimaMensagem: textoDe(mais), ultimaEm: quandoUlt, ultimaDe: mais.key.fromMe ? 'equipe' : 'cliente' } : {}),
+        },
+        { merge: true }
+      );
+    } catch (e) {
+      console.error('Histórico:', numero, e.message);
+    }
+  }
+  console.log('Histórico importado.');
+}
+
 async function guardarMensagem(msg) {
   const jid = msg.key.remoteJid;
   if (!jid || !jid.endsWith('@s.whatsapp.net')) return; // ignora grupos, status e listas
@@ -154,7 +212,10 @@ async function iniciar() {
     // Contatos salvos no celular chegam ao conectar e quando mudam.
     sock.ev.on('contacts.upsert', lembrarContatos);
     sock.ev.on('contacts.update', lembrarContatos);
-    sock.ev.on('messaging-history.set', ({ contacts }) => lembrarContatos(contacts));
+    sock.ev.on('messaging-history.set', ({ contacts, messages }) => {
+      lembrarContatos(contacts);
+      void importarHistorico(messages);
+    });
 
     sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
       if (qr && telefoneParear && !state.creds.registered) {
