@@ -52,12 +52,95 @@ const agora = () => new Date().toISOString();
 const soDigitos = (jid) => String(jid).split('@')[0].split(':')[0];
 
 // O WhatsApp novo identifica contatos por @lid; quando traz o número (Alt), usamos ele.
+// Mapa @lid -> número de telefone, guardado em arquivo (sobrevive a reinícios).
+const ARQ_LID = './lid-mapa.json';
+const lidParaTel = new Map();
+try {
+  for (const [k, v] of Object.entries(JSON.parse(fs.readFileSync(ARQ_LID, 'utf8')))) lidParaTel.set(k, v);
+} catch {
+  /* ainda não existe */
+}
+function salvarMapaLid() {
+  try {
+    fs.writeFileSync(ARQ_LID, JSON.stringify(Object.fromEntries(lidParaTel)));
+  } catch {
+    /* ignora */
+  }
+}
+
 function jidDe(msg) {
   const k = msg.key ?? {};
   const j = k.remoteJid ?? '';
   if (j.endsWith('@s.whatsapp.net')) return j;
-  if (j.endsWith('@lid')) return k.remoteJidAlt?.endsWith('@s.whatsapp.net') ? k.remoteJidAlt : j;
+  if (j.endsWith('@lid')) {
+    const alt = [k.remoteJidAlt, k.senderPn, k.participantPn].find((x) => typeof x === 'string' && x.endsWith('@s.whatsapp.net'));
+    if (alt) return alt;
+    const tel = lidParaTel.get(soDigitos(j));
+    return tel ? `${tel}@s.whatsapp.net` : j;
+  }
   return null; // grupo, status, lista de transmissão...
+}
+
+// Aprende que um @lid é na verdade um telefone e junta conversas que ficaram separadas.
+const mesclando = new Map();
+async function aprenderLid(lid, pn) {
+  if (!lid || !pn || !String(lid).endsWith('@lid') || !String(pn).endsWith('@s.whatsapp.net')) return;
+  const l = soDigitos(lid);
+  const t = soDigitos(pn);
+  if (lidParaTel.get(l) !== t) {
+    lidParaTel.set(l, t);
+    salvarMapaLid();
+  }
+  if (MODO_TESTE || !base) return;
+  if (!mesclando.has(l)) mesclando.set(l, mesclarConversas(l, t).catch((e) => console.error('Mesclar conversas:', e.message)));
+  await mesclando.get(l);
+}
+function aprenderDaMensagem(msg) {
+  const k = msg.key ?? {};
+  const alt = [k.remoteJidAlt, k.senderPn, k.participantPn].find((x) => typeof x === 'string' && x.endsWith('@s.whatsapp.net'));
+  return k.remoteJid?.endsWith('@lid') && alt ? aprenderLid(k.remoteJid, alt) : Promise.resolve();
+}
+
+// Move mensagens da conversa antiga (chave @lid) para a conversa do telefone.
+async function mesclarConversas(lid, tel) {
+  if (lid === tel) return;
+  const de = base.collection('conversas').doc(`whatsapp_${lid}`);
+  const snapDe = await de.get();
+  if (!snapDe.exists) return;
+  const para = base.collection('conversas').doc(`whatsapp_${tel}`);
+  const snapPara = await para.get();
+  const a = snapDe.data() ?? {};
+  const b = snapPara.data() ?? {};
+  console.log(`Juntando conversa ${lid} (@lid) com ${tel}…`);
+  const msgs = await de.collection('mensagens').get();
+  for (const m of msgs.docs) {
+    await para.collection('mensagens').doc(m.id).set(m.data(), { merge: true });
+    const partes = await m.ref.collection('partes').get();
+    for (const p of partes.docs) await para.collection('mensagens').doc(m.id).collection('partes').doc(p.id).set(p.data());
+    for (const p of partes.docs) await p.ref.delete();
+    await m.ref.delete();
+  }
+  const maisNovaA = (a.ultimaEm ?? '') > (b.ultimaEm ?? '');
+  const ult = maisNovaA ? a : b;
+  await para.set(
+    {
+      ...a,
+      ...b,
+      canal: 'whatsapp',
+      contato: tel,
+      telefone: tel,
+      contatoJid: `${tel}@s.whatsapp.net`,
+      ultimaMensagem: ult.ultimaMensagem ?? '',
+      ultimaEm: ult.ultimaEm ?? '',
+      ultimaDe: ult.ultimaDe ?? 'cliente',
+      naoLidas: (a.naoLidas ?? 0) + (b.naoLidas ?? 0),
+      teveResposta: !!(a.teveResposta || b.teveResposta),
+      ...(b.primeiroContato || a.primeiroContato ? { primeiroContato: true } : {}),
+    },
+    { merge: true }
+  );
+  await de.delete();
+  console.log(`Conversa ${lid} juntada com ${tel}.`);
 }
 
 // Desembrulha mensagens temporárias, "ver uma vez", editadas etc.
@@ -142,6 +225,8 @@ async function midiaDe(msg, numero) {
 
 function lembrarContatos(lista) {
   for (const c of lista ?? []) {
+    if (c.lid && c.id?.endsWith?.('@s.whatsapp.net')) void aprenderLid(c.lid, c.id);
+    else if (c.id?.endsWith?.('@lid') && c.phoneNumber) void aprenderLid(c.id, c.phoneNumber);
     const id = c.id ?? '';
     if (!id.endsWith('@s.whatsapp.net') || !c.name) continue; // `name` = nome salvo na agenda
     const numero = soDigitos(id);
@@ -160,6 +245,7 @@ async function importarHistorico(lista) {
   const porConversa = new Map();
   const jidsHist = new Map();
   let total = 0;
+  for (const msg of lista) await aprenderDaMensagem(msg);
   for (const msg of lista) {
     const jid = jidDe(msg);
     const ts = Number(msg.messageTimestamp ?? 0);
@@ -213,12 +299,16 @@ async function importarHistorico(lista) {
 }
 
 async function guardarMensagem(msg) {
+  await aprenderDaMensagem(msg);
   const jid = jidDe(msg);
   if (!jid) return; // ignora grupos, status e listas
   if (msg.key.fromMe && enviadasPorNos.has(msg.key.id)) return;
   const numero = soDigitos(jid);
   const texto = textoDe(msg);
-  if (texto === null) return; // não é mensagem de conversa
+  if (texto === null) {
+    console.log(`  (ignorada: ${msg.message ? Object.keys(conteudoDe(msg)).join(',') : 'sem conteúdo — falha ao decifrar, o WhatsApp reenvia'})`);
+    return; // não é mensagem de conversa
+  }
   const quando = new Date(Number(msg.messageTimestamp ?? Date.now() / 1000) * 1000).toISOString();
   const deCliente = !msg.key.fromMe;
   if (MODO_TESTE) {
@@ -274,6 +364,7 @@ async function iniciar() {
     // Contatos salvos no celular chegam ao conectar e quando mudam.
     sock.ev.on('contacts.upsert', lembrarContatos);
     sock.ev.on('contacts.update', lembrarContatos);
+    sock.ev.on('chats.phoneNumberShare', ({ lid, jid }) => void aprenderLid(lid, jid));
     sock.ev.on('messaging-history.set', ({ contacts, messages }) => {
       lembrarContatos(contacts);
       void importarHistorico(messages);
