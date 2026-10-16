@@ -495,7 +495,8 @@ export default function Chat() {
       }
       const nome = nomeContato.trim();
       if (editando) {
-        await editarContatoChat(empresaId, aberta.id, { nome, telefone: telContato.replace(/\D/g, '') || undefined });
+        const novoId = await editarContatoChat(empresaId, aberta.id, { nome, telefone: telContato.trim() || undefined });
+        if (novoId !== aberta.id) setAbertaId(novoId);
         setEditando(false);
         return;
       }

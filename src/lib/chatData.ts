@@ -304,7 +304,7 @@ export function normalizarTelefone(telefone: string): string {
 export async function criarContatoChat(empresaId: string, nome: string, telefone: string): Promise<ConversaChat> {
   await chatPronto;
   const d = normalizarTelefone(telefone);
-  if (d.length < 12) throw new Error('Telefone inválido. Informe DDD + número (ou +país para número de fora do Brasil).');
+  if (d.length < 10) throw new Error('Telefone inválido. Informe DDD + número (ou +país para número de fora do Brasil).');
   const id = `whatsapp_${d}`;
   const ref = doc(db, 'empresas', empresaId, 'conversas', id);
   const atual = await getDoc(ref);
@@ -403,13 +403,36 @@ export function ouvirLigacoesHoje(empresaId: string, cb: (l: LigacaoChat[]) => v
 
 /** Salva o contato na agenda do Fluxa Chat com o nome escolhido (o da agenda do celular ou outro). */
 /** Edita um contato já salvo: nome e (opcional) telefone. */
-export async function editarContatoChat(empresaId: string, conversaId: string, dados: { nome: string; telefone?: string }) {
+/** Edita o contato. Se o telefone mudou, a conversa inteira (com o histórico) passa para o número certo,
+ * e as próximas mensagens já saem para ele. Devolve o id da conversa (que muda quando o telefone muda). */
+export async function editarContatoChat(empresaId: string, conversaId: string, dados: { nome: string; telefone?: string }): Promise<string> {
   await chatPronto;
-  await updateDoc(doc(db, 'empresas', empresaId, 'conversas', conversaId), {
-    nome: dados.nome,
-    salvo: true,
-    ...(dados.telefone ? { telefone: dados.telefone } : {}),
-  });
+  const ref = doc(db, 'empresas', empresaId, 'conversas', conversaId);
+  const atual = await getDoc(ref);
+  const dadosAtuais = (atual.data() ?? {}) as Partial<ConversaChat>;
+  const novo = dados.telefone ? normalizarTelefone(dados.telefone) : '';
+  const mudou = !!novo && dadosAtuais.canal === 'whatsapp' && novo !== dadosAtuais.contato && `whatsapp_${novo}` !== conversaId;
+  if (!mudou) {
+    await updateDoc(ref, { nome: dados.nome, salvo: true, ...(novo ? { telefone: novo } : {}) });
+    return conversaId;
+  }
+  if (novo.length < 10) throw new Error('Telefone inválido. Informe DDD + número (ou +país para número de fora do Brasil).');
+  const novoId = `whatsapp_${novo}`;
+  const novaRef = doc(db, 'empresas', empresaId, 'conversas', novoId);
+  const existente = await getDoc(novaRef);
+  const msgs = await getDocs(collection(ref, 'mensagens'));
+  for (const m of msgs.docs) await setDoc(doc(novaRef, 'mensagens', m.id), m.data()); // copia o histórico
+  const campos = { ...(atual.data() ?? {}), contato: novo, telefone: novo, contatoJid: `${novo}@s.whatsapp.net`, nome: dados.nome, salvo: true };
+  if (existente.exists()) {
+    const e = existente.data() as Partial<ConversaChat>;
+    const maisRecente = (e.ultimaEm ?? '') > (dadosAtuais.ultimaEm ?? '');
+    await setDoc(novaRef, maisRecente ? { ...campos, ultimaMensagem: e.ultimaMensagem, ultimaEm: e.ultimaEm, ultimaDe: e.ultimaDe } : campos, { merge: true });
+  } else {
+    await setDoc(novaRef, campos);
+  }
+  for (const m of msgs.docs) await deleteDoc(m.ref); // só depois de copiar tudo
+  await deleteDoc(ref);
+  return novoId;
 }
 
 export async function salvarContatoChat(empresaId: string, conversaId: string, nome: string) {
