@@ -17,8 +17,8 @@ import { FieldValue } from 'firebase-admin/firestore';
 const MIN = 60 * 1000;
 const HORA = 60 * MIN;
 
-export function criarRobo({ refConexao, base, getSock, estaAberto, reconectar, reenviar, soDigitos, agora }) {
-  const eventos = { recebidas: [], enviadas: [], errosGravacao: [], errosDecifrar: [], quedas: [], semConfirmacao: [], reconexoesRobo: [] };
+export function criarRobo({ refConexao, base, getSock, estaAberto, reconectar, reenviar, reenviarTexto, soDigitos, agora }) {
+  const eventos = { recebidas: [], enviadas: [], errosGravacao: [], errosDecifrar: [], quedas: [], semConfirmacao: [], reconexoesRobo: [], recuperadas: [], pedidosReenvio: [] };
   const ultimas = { recebida: 0, enviada: 0 };
   const testes = new Set(); // ids das mensagens de teste (não vão para a plataforma)
   const confirmacoes = new Map(); // id da mensagem -> { status, aguardando }
@@ -59,6 +59,17 @@ export function criarRobo({ refConexao, base, getSock, estaAberto, reconectar, r
       marcar(eventos.errosDecifrar);
     },
     ehTeste: (id) => testes.has(id),
+    /** O WhatsApp pediu o reenvio de uma mensagem (o celular ou o cliente não conseguiu abri-la = "Aguardando mensagem"). */
+    pediuReenvio(chave) {
+      const id = [...envios.keys()].find((k) => String(chave).startsWith(k));
+      if (!id) return;
+      const e = envios.get(id);
+      e.retries = (e.retries ?? 0) + 1;
+      marcar(eventos.pedidosReenvio);
+      console.warn(`[robô] WhatsApp pediu reenvio da mensagem ${id} (pedido ${e.retries}).`);
+      // 1º pedido é normal e o conector responde sozinho; do 2º em diante algo está travado.
+      if (e.retries >= 2) void recuperar(id, 'WhatsApp pediu reenvio repetidas vezes');
+    },
     /** Mensagem enviada pela plataforma: acompanha a confirmação do WhatsApp. */
     enviada(id, dados) {
       ultimas.enviada = Date.now();
@@ -78,7 +89,7 @@ export function criarRobo({ refConexao, base, getSock, estaAberto, reconectar, r
         if (atual) atual.status = Math.max(atual.status, st);
         else if (testes.has(id)) confirmacoes.set(id, { status: st });
         const e = envios.get(id);
-        if (e && st >= 2 && base) {
+        if (e && e.msgId && st >= 2 && base) {
           const entrega = st >= 4 ? 'lida' : st >= 3 ? 'entregue' : 'enviada';
           base.collection('conversas').doc(e.conversaId).collection('mensagens').doc(e.msgId).set({ entrega }, { merge: true }).catch(() => {});
         }
@@ -93,6 +104,7 @@ export function criarRobo({ refConexao, base, getSock, estaAberto, reconectar, r
     if (c.status < 2) {
       marcar(eventos.semConfirmacao);
       console.warn(`[robô] Mensagem ${id} sem confirmação do WhatsApp em 90 s.`);
+      void recuperar(id, 'sem confirmação do WhatsApp em 90 s');
       if (base && e.msgId) base.collection('conversas').doc(e.conversaId).collection('mensagens').doc(e.msgId).set({ entrega: 'sem_confirmacao' }, { merge: true }).catch(() => {});
     }
     // Guarda só o essencial por mais algum tempo para receber o "entregue/lida".
@@ -103,6 +115,44 @@ export function criarRobo({ refConexao, base, getSock, estaAberto, reconectar, r
   }
 
   // ---- Ações ---------------------------------------------------------------
+  /**
+   * Recupera uma mensagem que não chegou ou ficou em "Aguardando mensagem":
+   * refaz a sessão de criptografia com o contato e envia o mesmo texto de novo (uma vez só).
+   * Mídia e áudio não são reenviados sozinhos (o arquivo não fica na memória): a mensagem fica marcada
+   * para a equipe reenviar.
+   */
+  async function recuperar(id, motivo) {
+    const e = envios.get(id);
+    if (!e || e.recuperada || !e.msgId) return;
+    e.recuperada = true;
+    const ref = base.collection('conversas').doc(e.conversaId).collection('mensagens').doc(e.msgId);
+    if (quantos(eventos.recuperadas, HORA) >= 30) {
+      console.warn('[robô] Limite de recuperações por hora atingido; não vou reenviar mais sozinho.');
+      return;
+    }
+    marcar(eventos.recuperadas);
+    const sock = getSock();
+    try {
+      if (e.tipo !== 'texto' || !e.texto || !e.jid) {
+        console.warn(`[robô] Mensagem ${id} (${e.tipo}) pode não ter chegado ao cliente; marcada para a equipe reenviar.`);
+        await ref.set({ erroEnvio: 'Pode não ter chegado ao cliente — reenvie esta mensagem.', entrega: 'sem_confirmacao' }, { merge: true });
+        return;
+      }
+      console.warn(`[robô] Recuperando a mensagem ${id}: ${motivo}. Refazendo a sessão com o contato e reenviando.`);
+      try {
+        await sock?.assertSessions?.([e.jid], true); // força uma sessão de criptografia nova com o contato
+      } catch (err) {
+        console.warn('[robô] Não consegui refazer a sessão:', err.message);
+      }
+      await reenviarTexto({ jid: e.jid, texto: e.texto });
+      await ref.set({ entrega: 'reenviada_pelo_robo' }, { merge: true });
+      console.log(`[robô] Mensagem ${id} reenviada com sessão nova.`);
+    } catch (err) {
+      console.error(`[robô] Falha ao recuperar a mensagem ${id}:`, err.message);
+      await ref.set({ erroEnvio: 'Não consegui reenviar sozinho — reenvie esta mensagem.' }, { merge: true }).catch(() => {});
+    }
+  }
+
   function reconectarPeloRobo(motivo) {
     if (Date.now() - ultimaReconexaoRobo < 10 * MIN) return false; // no máximo uma vez a cada 10 min
     ultimaReconexaoRobo = Date.now();
@@ -192,6 +242,11 @@ export function criarRobo({ refConexao, base, getSock, estaAberto, reconectar, r
     if (!aberto) {
       nivel = 'problema';
       avisos.push('WhatsApp desconectado — o robô está tentando reconectar.');
+    }
+    const recuperadas1h = quantos(eventos.recuperadas, HORA);
+    if (recuperadas1h > 0) {
+      nivel = nivel === 'ok' ? 'atencao' : nivel;
+      avisos.push(`O robô recuperou ${recuperadas1h} mensagem(ns) que não chegaram (na última hora).`);
     }
     if (decifrar10 > 200) {
       nivel = nivel === 'ok' ? 'atencao' : nivel;

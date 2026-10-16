@@ -464,6 +464,7 @@ const msgRetryCounterCache = {
   get: (k) => tentativasRetry.get(k),
   set: (k, v) => {
     tentativasRetry.set(k, v);
+    robo?.pediuReenvio(k);
     setTimeout(() => tentativasRetry.delete(k), 60 * 60 * 1000).unref?.();
   },
   del: (k) => tentativasRetry.delete(k),
@@ -715,7 +716,7 @@ async function enviarSaida(d) {
     }
     if (enviada?.key?.id) enviadasPorNos.add(enviada.key.id);
     lembrarEnviada(enviada?.key?.id, enviada?.message);
-    robo?.enviada(enviada?.key?.id, dado.msgId ? { conversaId: dado.conversaId, msgId: dado.msgId } : null);
+    robo?.enviada(enviada?.key?.id, dado.msgId ? { conversaId: dado.conversaId, msgId: dado.msgId, jid: destino, tipo: dado.tipo === 'audio' ? 'audio' : dado.tipo === 'midia' ? 'midia' : 'texto', texto: dado.texto } : null);
     // Diagnóstico: confere se o WhatsApp guardou o arquivo que acabamos de enviar.
     if (dado.tipo === 'audio' || dado.tipo === 'midia') {
       const m = enviada?.message ?? {};
@@ -766,6 +767,15 @@ if (!MODO_TESTE) {
     estaAberto: () => aberto,
     reconectar: reconectarForcado,
     reenviar: (d) => void enviarSaida(d),
+    // Reenvio feito pelo robô (mensagem nova com o mesmo texto; não gera outra mensagem na plataforma).
+    reenviarTexto: async ({ jid, texto }) => {
+      const r = await sock.sendMessage(jid, { text: texto });
+      if (r?.key?.id) {
+        enviadasPorNos.add(r.key.id);
+        lembrarEnviada(r.key.id, r.message);
+      }
+      return r;
+    },
     soDigitos,
     agora,
   });
