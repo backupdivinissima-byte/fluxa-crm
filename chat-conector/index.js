@@ -375,6 +375,7 @@ async function iniciar() {
     const { state, saveCreds } = await useMultiFileAuthState(PASTA_SESSAO);
     const { version } = await fetchLatestBaileysVersion();
     sock = makeWASocket({ version, auth: state, logger: log, printQRInTerminal: false, browser: ['Fluxa Chat', 'Chrome', '1.0'] });
+    const esteSock = sock; // eventos de um socket antigo (já trocado) são ignorados
     sock.ev.on('creds.update', saveCreds);
     // Contatos salvos no celular chegam ao conectar e quando mudam.
     sock.ev.on('contacts.upsert', lembrarContatos);
@@ -386,6 +387,7 @@ async function iniciar() {
     });
 
     sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
+      if (esteSock !== sock) return;
       if (qr && telefoneParear && !state.creds.registered) {
         // Conexão por número: o WhatsApp mostra um código de 8 letras no celular.
         const numero = telefoneParear;
@@ -480,8 +482,11 @@ async function iniciar() {
 
 // O botão "Gerar QR Code" do Fluxa marca o status como "solicitado".
 refConexao.onSnapshot(async (snap) => {
-  if (snap.data()?.status === 'solicitado' && !aberto && !iniciando) {
+  // Vale também com o conector "conectado": se a sessão estragou (erros Bad MAC),
+  // o botão tem que conseguir apagá-la e gerar um QR novo.
+  if (snap.data()?.status === 'solicitado' && !iniciando) {
     telefoneParear = String(snap.data()?.telefoneParear ?? '').replace(/\D/g, '');
+    aberto = false;
     try {
       sock?.end?.(undefined);
     } catch {
