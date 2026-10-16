@@ -733,6 +733,8 @@ function refazerEnvio(destino, conteudo, dado, tentativa) {
   };
 }
 
+const existeNoWhatsApp = new Map(); // telefone -> { ok, em }
+
 async function enviarSaida(d) {
   const dado = d.data();
   if (dado.canal !== 'whatsapp' || processando.has(d.id)) return;
@@ -758,6 +760,22 @@ async function enviarSaida(d) {
       conteudo = { text: dado.texto };
     }
     if (destino.endsWith('@s.whatsapp.net')) {
+      // O número tem WhatsApp? Se o WhatsApp diz que não, avisa na hora (em vez de ficar "sem confirmação").
+      const tel0 = destino.split('@')[0];
+      const visto = existeNoWhatsApp.get(tel0);
+      let existe = visto && Date.now() - visto.em < 10 * 60 * 1000 ? visto.ok : undefined;
+      if (existe === undefined) {
+        try {
+          const r = await sock.onWhatsApp(destino);
+          if (Array.isArray(r) && r.length) existe = r[0]?.exists !== false;
+          else if (Array.isArray(r)) existe = false;
+          if (existe !== undefined) existeNoWhatsApp.set(tel0, { ok: existe, em: Date.now() });
+        } catch (err) {
+          console.warn('[envio] não consegui consultar o número:', err.message);
+        }
+      }
+      console.log(`[envio] para ${tel0}: ${existe === undefined ? 'não consultado' : existe ? 'tem WhatsApp' : 'SEM WhatsApp'}`);
+      if (existe === false) throw new Error(`O número +${tel0} não tem WhatsApp. Confira o telefone em "Editar contato".`);
       const tel = destino.split('@')[0];
       const par = [...lidParaTel.entries()].find(([, t]) => t === tel);
       if (par) await ensinarMapaBaileys([par]);

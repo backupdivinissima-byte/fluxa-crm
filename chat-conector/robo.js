@@ -107,7 +107,7 @@ export function criarRobo({ refConexao, base, getSock, estaAberto, reconectar, r
     if (!c || !e) return;
     if (c.status < 2) {
       marcar(eventos.semConfirmacao);
-      console.warn(`[robô] Mensagem ${id} sem confirmação do WhatsApp em 6 s.`);
+      console.warn(`[robô] Mensagem ${id} (para ${e.jid ?? '?'}) sem confirmação do WhatsApp em 6 s.`);
       alertar(e, 'O WhatsApp não confirmou o envio. O robô está reenviando.');
       void recuperar(id, 'sem confirmação do WhatsApp em 6 s');
       if (base && e.msgId) base.collection('conversas').doc(e.conversaId).collection('mensagens').doc(e.msgId).set({ entrega: 'sem_confirmacao' }, { merge: true }).catch(() => {});
