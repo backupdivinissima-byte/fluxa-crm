@@ -3,7 +3,7 @@
 // `lerTabelaBruta` de importarPlanilha.ts (mesmo suporte a .xlsx/.xls/.csv)
 // em vez de duplicar a leitura de arquivo — só a interpretação de coluna é
 // diferente daqui pra lá.
-import { lerTabelaBruta } from './importarPlanilha';
+import { carregarXLSX, lerTabelaBruta } from './importarPlanilha';
 import type { CampanhaMeta, ReservaLive } from '../types';
 
 function normalizar(s: string): string {
@@ -17,7 +17,7 @@ function normalizar(s: string): string {
 /** Acha o índice da coluna cujo cabeçalho bate com algum dos nomes
  * aceitos (comparação sem acento/maiúsculas, "contém"). */
 function acharColuna(cabecalho: string[], nomes: string[]): number {
-  const cab = cabecalho.map(normalizar);
+  const cab = Array.from(cabecalho, (c) => normalizar(c ?? ''));
   for (const nome of nomes) {
     const alvo = normalizar(nome);
     const i = cab.findIndex((c) => c === alvo || c.includes(alvo));
@@ -186,4 +186,37 @@ export async function lerReservasLiveDoArquivo(arquivo: File): Promise<LeituraRe
   }
 
   return { reservas, ignoradas };
+}
+
+/** Planilha modelo da reserva da live (aba Live): uma linha por reserva. */
+export async function gerarModeloReservasLive(): Promise<Blob> {
+  const XLSX = await carregarXLSX();
+  const wb = XLSX.utils.book_new();
+
+  const aba = XLSX.utils.aoa_to_sheet([
+    ['Data', 'Código do cliente', 'Nome do cliente', 'Valor da reserva'],
+    ['15/10/2026', 'C001', 'Maria Silva', 1250.5],
+    ['15/10/2026', 'C002', 'Ana Souza', 480],
+  ]);
+  aba['!cols'] = [{ wch: 14 }, { wch: 20 }, { wch: 30 }, { wch: 18 }];
+  XLSX.utils.book_append_sheet(wb, aba, 'Reservas');
+
+  const instrucoes = XLSX.utils.aoa_to_sheet([
+    ['Como preencher a planilha de reservas da live'],
+    [''],
+    ['1. Preencha a aba "Reservas": uma linha para cada cliente que reservou peças na live.'],
+    ['2. Não mude o nome das colunas.'],
+    ['3. Data: DD/MM/AAAA (ex.: 15/10/2026) ou AAAA-MM-DD. Se ficar em branco, vale a data de hoje.'],
+    ['4. Código do cliente*: o mesmo código usado no cadastro do cliente no Fluxa. Obrigatório.'],
+    ['5. Nome do cliente: opcional (se vazio, aparece o código).'],
+    ['6. Valor da reserva*: valor do orçamento das peças reservadas (ex.: 1250,50). Obrigatório.'],
+    ['7. Pode reenviar a planilha: a mesma data + código atualiza a reserva em vez de duplicar.'],
+    ['8. Cliente com reserva conta como vindo da live; sem reserva é cliente catálogo (fora da live).'],
+    ['9. Apague as linhas de exemplo (C001 e C002) antes de enviar.'],
+  ]);
+  instrucoes['!cols'] = [{ wch: 100 }];
+  XLSX.utils.book_append_sheet(wb, instrucoes, 'Instruções');
+
+  const bytes = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  return new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { ouvirClientes } from '../../lib/crmData';
 import { ouvirLives, salvarLive, encerrarLive, ouvirReservasLive, importarReservasLive } from '../../lib/marketingData';
-import { lerReservasLiveDoArquivo } from '../../lib/importarMarketing';
+import { lerReservasLiveDoArquivo, gerarModeloReservasLive } from '../../lib/importarMarketing';
 import { resultadoClientesLive } from '../../lib/marketingLogic';
 import { formatarMoeda } from '../../lib/crmLogic';
 import type { Cliente, Live as LiveEvento, ReservaLive } from '../../types';
@@ -407,6 +407,21 @@ export default function Live() {
             onChange={(e) => setArquivoReservas(e.target.files?.[0] ?? null)}
             className="text-sm text-ink-soft file:mr-3 file:rounded-lg file:border-0 file:bg-surface file:px-3 file:py-2 file:text-sm file:font-bold file:text-ink hover:file:bg-line/50"
           />
+          <button
+            type="button"
+            onClick={async () => {
+              const blob = await gerarModeloReservasLive();
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = 'modelo-reservas-live-fluxa.xlsx';
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+            className="rounded-xl border border-line text-ink text-sm font-bold px-4 py-2.5 hover:bg-surface"
+          >
+            Baixar planilha modelo
+          </button>
           <button
             onClick={rodarImportacaoReservas}
             disabled={!arquivoReservas || importandoReservas}

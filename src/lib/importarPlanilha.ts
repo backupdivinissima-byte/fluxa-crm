@@ -19,7 +19,7 @@ import { db } from './firebase';
 import { idSeguro } from './crmLogic';
 import type { Cliente, Vendedor } from '../types';
 
-async function carregarXLSX() {
+export async function carregarXLSX() {
   return await import('xlsx');
 }
 
@@ -498,7 +498,7 @@ export async function lerTabelaBruta(arquivo: File): Promise<string[][]> {
   if (!primeiraAba) return [];
   return XLSX.utils
     .sheet_to_json<unknown[]>(primeiraAba, { header: 1 })
-    .map((linha) => (linha as unknown[]).map((c) => String(c ?? '').trim()));
+    .map((linha) => Array.from(linha as unknown[], (c) => String(c ?? '').trim())); // Array.from preenche as células vazias (a leitura deixa "buracos")
 }
 
 /** Processa um workbook (xlsx/xls/csv nativo, ou sintético montado a partir
