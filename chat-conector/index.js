@@ -20,6 +20,7 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import QRCode from 'qrcode';
 import pino from 'pino';
 import { guardarNoDrive, driveLigado } from './drive-midia.js';
+import { criarRobo } from './robo.js';
 
 // MODO TESTE: sem banco. Mostra o QR Code no terminal e escreve as mensagens
 // recebidas na tela. Ativa com MODO_TESTE=1 ou quando não há credenciais.
@@ -37,7 +38,32 @@ if (!MODO_TESTE) {
 } else {
   console.log('>>> MODO TESTE: sem banco de dados. As mensagens só aparecem aqui no terminal.');
 }
-const log = pino({ level: 'warn' });
+// Falhas de criptografia (Bad MAC, PreKeyError...) enchem o log: o robô só conta
+// (ver robo.js) e o resto do log fica limpo.
+let robo = null;
+const ERRO_CRIPTO = /Session error|Bad MAC|MessageCounterError|No matching sessions|Invalid PreKey|PreKeyError|SessionError/;
+const RUIDO_LIBSIGNAL = /Closing session|Removing old closed session|Session already (closed|open)|Opening session|Migrating session|Decrypted message with closed session|Closing open session|Failed to decrypt/;
+for (const nivel of ['log', 'info', 'warn', 'error']) {
+  const original = console[nivel].bind(console);
+  console[nivel] = (...args) => {
+    const primeiro = typeof args[0] === 'string' ? args[0] : '';
+    if (ERRO_CRIPTO.test(primeiro) || args.some((a) => a instanceof Error && ERRO_CRIPTO.test(`${a.name} ${a.message}`))) {
+      robo?.erroDecifrar();
+      return;
+    }
+    if (RUIDO_LIBSIGNAL.test(primeiro)) return;
+    original(...args);
+  };
+}
+const log = pino(
+  { level: 'warn' },
+  {
+    write(linha) {
+      if (ERRO_CRIPTO.test(linha)) robo?.erroDecifrar();
+      else process.stdout.write(linha);
+    },
+  }
+);
 
 let sock = null;
 let aberto = false;
@@ -50,6 +76,14 @@ const processando = new Set();
 
 const agora = () => new Date().toISOString();
 const soDigitos = (jid) => String(jid).split('@')[0].split(':')[0];
+const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
+function reconectarForcado() {
+  try {
+    sock?.end?.(new Error('Reconexão pedida pelo robô'));
+  } catch {
+    /* já fechado */
+  }
+}
 
 // O WhatsApp novo identifica contatos por @lid; quando traz o número (Alt), usamos ele.
 // Mapa @lid -> número de telefone, guardado em arquivo (sobrevive a reinícios).
@@ -318,7 +352,9 @@ async function guardarMensagem(msg) {
   const jid = jidDe(msg);
   if (!jid) return; // ignora grupos, status e listas
   if (msg.key.fromMe && enviadasPorNos.has(msg.key.id)) return;
+  if (robo?.ehTeste(msg.key.id)) return; // mensagem de teste do robô
   const numero = soDigitos(jid);
+  if (sock?.user?.id && numero === soDigitos(sock.user.id)) return; // conversa "Eu" (mensagens para si mesmo)
   const texto = textoDe(msg);
   if (texto === null) {
     console.log(`  (ignorada: ${msg.message ? Object.keys(conteudoDe(msg)).join(',') : 'sem conteúdo — falha ao decifrar, o WhatsApp reenvia'})`);
@@ -330,8 +366,10 @@ async function guardarMensagem(msg) {
     console.log(`[${deCliente ? 'RECEBIDA' : 'ENVIADA'}] ${msg.pushName || numero} (${numero}): ${texto}`);
     return;
   }
-  const midia = await midiaDe(msg, numero);
   const conversaRef = base.collection('conversas').doc(`whatsapp_${numero}`);
+  // Mensagem já gravada (o WhatsApp reentrega o que chegou durante uma queda): não repete nem conta de novo como "não lida".
+  if ((await conversaRef.collection('mensagens').doc(msg.key.id).get()).exists) return;
+  const midia = await midiaDe(msg, numero);
   const conversaAntes = await conversaRef.get();
   const jaSalvo = !!conversaAntes.data()?.salvo; // nome confirmado pela equipe
   // Primeiro contato: conversa que ainda não existia e a primeira mensagem veio do cliente.
@@ -366,6 +404,21 @@ async function guardarMensagem(msg) {
       await msgRef.collection('partes').doc(String(i).padStart(4, '0')).set({ n: i, dados: bufPartes.subarray(i * TAM_PARTE, (i + 1) * TAM_PARTE) });
     }
   }
+}
+
+// Se a gravação no banco falhar, tenta de novo (5 s, 30 s, 2 min) antes de desistir.
+async function gravarComNovasTentativas(msg) {
+  for (const espera of [5000, 30000, 120000]) {
+    await dormir(espera);
+    try {
+      await guardarMensagem(msg);
+      console.log(`Mensagem ${msg.key?.id} gravada na nova tentativa.`);
+      return;
+    } catch (e) {
+      console.error('Nova tentativa de gravar a mensagem falhou:', e.message);
+    }
+  }
+  robo?.erroGravacao();
 }
 
 async function iniciar() {
@@ -414,9 +467,11 @@ async function iniciar() {
         aberto = true;
         await refConexao.set({ status: 'conectado', qr: '', codigoPareamento: '', erro: '', telefone: soDigitos(sock.user?.id ?? ''), atualizadoEm: agora() }, { merge: true });
         console.log('WhatsApp conectado.');
+        robo?.conectou();
       }
       if (connection === 'close') {
         aberto = false;
+        robo?.caiu();
         const codigo = lastDisconnect?.error?.output?.statusCode;
         if (codigo === DisconnectReason.loggedOut) {
           fs.rmSync(PASTA_SESSAO, { recursive: true, force: true });
@@ -467,14 +522,19 @@ async function iniciar() {
       if (type !== 'notify' && type !== 'append') return;
       for (const msg of messages) {
         console.log(`  de ${msg.key?.remoteJid} (alt ${msg.key?.remoteJidAlt ?? '-'}) fromMe=${!!msg.key?.fromMe}`);
-        if (Date.now() / 1000 - Number(msg.messageTimestamp ?? 0) > 600) continue;
+        // Mensagens novas (notify) valem por 6 h: depois de uma queda o WhatsApp reentrega o que chegou nesse meio tempo.
+        const limite = type === 'notify' ? 6 * 3600 : 600;
+        if (Date.now() / 1000 - Number(msg.messageTimestamp ?? 0) > limite) continue;
+        if (!msg.key?.fromMe && !robo?.ehTeste(msg.key?.id)) robo?.recebida();
         try {
           await guardarMensagem(msg);
         } catch (e) {
           console.error('Erro ao guardar mensagem:', e.message);
+          void gravarComNovasTentativas(msg);
         }
       }
     });
+    sock.ev.on('messages.update', (atualizacoes) => robo?.status(atualizacoes));
   } finally {
     iniciando = false;
   }
@@ -596,6 +656,7 @@ async function enviarSaida(d) {
       enviada = await sock.sendMessage(destino, { text: dado.texto });
     }
     if (enviada?.key?.id) enviadasPorNos.add(enviada.key.id);
+    robo?.enviada(enviada?.key?.id, dado.msgId ? { conversaId: dado.conversaId, msgId: dado.msgId } : null);
     // Diagnóstico: confere se o WhatsApp guardou o arquivo que acabamos de enviar.
     if (dado.tipo === 'audio' || dado.tipo === 'midia') {
       const m = enviada?.message ?? {};
@@ -621,6 +682,13 @@ async function enviarSaida(d) {
     }
   } catch (e) {
     console.error('Falha ao enviar:', e.message);
+    // Falha de conexão: o robô tenta de novo sozinho (até 5 vezes), em vez de desistir na primeira.
+    const tentativas = (dado.tentativas ?? 0) + 1;
+    if (/desconectado|Connection Closed|Timed Out|timed out|Stream Errored|rate-overlimit|ECONN|socket/i.test(e.message) && tentativas < 5) {
+      await d.ref.update({ tentativas, proximaTentativa: new Date(Date.now() + 60000 * tentativas).toISOString(), ultimoErro: e.message }).catch(() => {});
+      processando.delete(d.id);
+      return;
+    }
     await d.ref.update({ enviada: true, erro: e.message });
     if (dado.msgId) {
       await base.collection('conversas').doc(dado.conversaId).collection('mensagens').doc(dado.msgId).set({ erroEnvio: e.message }, { merge: true }).catch(() => {});
@@ -628,6 +696,19 @@ async function enviarSaida(d) {
   } finally {
     processando.delete(d.id);
   }
+}
+
+if (!MODO_TESTE) {
+  robo = criarRobo({
+    refConexao,
+    base,
+    getSock: () => sock,
+    estaAberto: () => aberto,
+    reconectar: reconectarForcado,
+    reenviar: (d) => void enviarSaida(d),
+    soDigitos,
+    agora,
+  });
 }
 
 if (!MODO_TESTE) {

@@ -648,6 +648,23 @@ export default function Chat() {
           >
             WhatsApp: {conexao.status === 'conectado' ? `conectado${conexao.telefone ? ` (${conexao.telefone})` : ''}` : conexao.status === 'aguardando_qr' ? 'aguardando leitura do QR' : conexao.status === 'solicitado' ? 'gerando QR…' : 'desconectado'}
           </span>
+          {conexao.saude && (
+            <span
+              title={`${conexao.saude.mensagem}\nRecebidas em 24 h: ${conexao.saude.recebidas24h ?? 0} · Enviadas: ${conexao.saude.enviadas24h ?? 0} · Quedas: ${conexao.saude.quedas24h ?? 0}${
+                conexao.saude.verificadoEm ? `\nVerificado às ${new Date(conexao.saude.verificadoEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : ''
+              }`}
+              className={`rounded-full px-3 py-1 font-bold border ${
+                conexao.saude.nivel === 'ok'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : conexao.saude.nivel === 'atencao'
+                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                    : 'bg-red-50 text-red-700 border-red-200'
+              }`}
+            >
+              🤖 Robô: {conexao.saude.nivel === 'ok' ? 'tudo certo' : conexao.saude.nivel === 'atencao' ? 'atenção' : 'problema'}
+              {conexao.saude.nivel !== 'ok' && ` — ${conexao.saude.mensagem}`}
+            </span>
+          )}
           {souAdmin && (
             <button onClick={() => setForcarQr((v) => !v)} className="rounded-full px-3 py-1 font-bold border border-line text-ink hover:bg-surface">
               {forcarQr ? 'Fechar conexão' : 'Reconectar WhatsApp'}

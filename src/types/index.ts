@@ -392,4 +392,17 @@ export interface ConexaoChat {
   erro?: string;
   telefone?: string;
   atualizadoEm?: string;
+  // Estado de saúde publicado pelo robô do conector (conector/robo.js).
+  saude?: {
+    nivel: 'ok' | 'atencao' | 'problema';
+    mensagem: string;
+    verificadoEm?: string;
+    recebidas24h?: number;
+    enviadas24h?: number;
+    quedas24h?: number;
+    reconexoesRobo24h?: number;
+    ultimaRecebida?: string | null;
+    ultimaEnviada?: string | null;
+    teste?: { ok?: boolean; em?: string; envio?: boolean; noCelular?: boolean; banco?: boolean } | null;
+  };
 }
