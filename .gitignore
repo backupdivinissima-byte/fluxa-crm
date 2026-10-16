@@ -11,3 +11,7 @@ chat-conector/sessao-*
 chat-conector/node_modules
 
 chat-conector/servidor/segredos
+
+# Chave da IA supervisora (nunca vai para o repositório)
+chat-conector/servidor/.env
+.env

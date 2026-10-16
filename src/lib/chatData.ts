@@ -41,6 +41,26 @@ export function ouvirMensagens(empresaId: string, conversaId: string, cb: (m: Me
   return aposChatPronto(() => onSnapshot(q, (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as MensagemChat))));
 }
 
+export interface SugestaoSupervisora {
+  estagio?: string;
+  leitura?: string;
+  tecnica?: string;
+  sugestao?: string;
+  alternativa?: string;
+  atencao?: string;
+  dica?: string;
+  paraMensagem?: string;
+  geradoEm?: string;
+  erro?: string;
+}
+
+/** A supervisora só escreve aqui; o navegador só lê. */
+export function ouvirSupervisora(empresaId: string, conversaId: string, cb: (s: SugestaoSupervisora | null) => void): Unsubscribe {
+  return aposChatPronto(() =>
+    onSnapshot(doc(db, 'empresas', empresaId, 'conversas', conversaId, 'supervisora', 'atual'), (snap) => cb(snap.exists() ? (snap.data() as SugestaoSupervisora) : null))
+  );
+}
+
 export function ouvirConexaoWhatsapp(empresaId: string, cb: (c: ConexaoChat) => void): Unsubscribe {
   return aposChatPronto(() => onSnapshot(doc(db, 'empresas', empresaId, 'chatConexoes', 'whatsapp'), (snap) => {
     cb(snap.exists() ? (snap.data() as ConexaoChat) : { status: 'desconectado' });

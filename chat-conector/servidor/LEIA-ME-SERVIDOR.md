@@ -41,3 +41,16 @@ No arquivo `docker-compose.yml`, tire o `#` das linhas da `carlafidelis`, coloqu
 - A chave `conta-servico.json` só fica no servidor (pasta `segredos`, fora do GitHub).
 - Ative o firewall do provedor liberando só a porta de acesso (SSH). O conector não abre nenhuma porta.
 - Troque a senha de acesso do servidor e, se puder, use chave SSH.
+
+## IA supervisora (sugestões de resposta)
+
+Ela só lê a conversa e sugere; nunca envia nada. Fica desligada até existir a chave da API da Anthropic.
+
+1. Crie a chave em console.anthropic.com (API Keys). Nunca cole a chave no chat nem no repositório.
+2. No servidor, crie o arquivo `~/fluxa-crm/chat-conector/servidor/.env` com uma linha:
+   `ANTHROPIC_API_KEY=sua-chave-aqui`
+3. Suba de novo: `docker compose up -d --build`
+4. O log mostra `[supervisora] ligada`. A sugestão aparece no painel à direita da conversa.
+
+Opcionais no mesmo `.env`: `SUPERVISORA_MODELO` (padrão `claude-sonnet-5-5`; `claude-haiku-5-5` é mais barato) e `SUPERVISORA_ESPERA_S` (segundos de espera antes de analisar, padrão 8).
+O jeito de vender dela está em `chat-conector/supervisora-base.js` e pode ser ajustado.

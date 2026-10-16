@@ -26,6 +26,8 @@ import {
   ouvirConexaoWhatsapp,
   ouvirConversas,
   ouvirMensagens,
+  ouvirSupervisora,
+  type SugestaoSupervisora,
   solicitarConexaoWhatsapp,
 } from '../lib/chatData';
 import { CRM_COLUNAS_PADRAO } from '../types';
@@ -75,6 +77,65 @@ function Cartao({ titulo, valor, dica, cor, ativo, onClick }: { titulo: string; 
       <div className="text-[10px] font-bold text-ink-soft uppercase tracking-wide truncate">{titulo}</div>
       <div className={`text-xl font-extrabold tabular-nums ${corValor}`}>{valor}</div>
     </div>
+  );
+}
+
+const ESTAGIOS: Record<string, string> = {
+  descoberta: 'Descoberta',
+  interesse: 'Interesse',
+  objecao: 'Objeção',
+  decisao: 'Decisão',
+  pos_venda: 'Pós-venda',
+  suporte: 'Suporte',
+};
+
+/** Painel da IA supervisora: só sugere. Quem edita e envia é a atendente. */
+function PainelSupervisora({ sug, ultimaMsgId, aoUsar }: { sug: SugestaoSupervisora | null; ultimaMsgId?: string; aoUsar: (t: string) => void }) {
+  const [copiado, setCopiado] = useState('');
+  const atual = !!sug?.sugestao && (!ultimaMsgId || sug.paraMensagem === ultimaMsgId);
+  const copiar = (t: string) => {
+    void navigator.clipboard?.writeText(t).then(() => {
+      setCopiado(t);
+      setTimeout(() => setCopiado(''), 1500);
+    });
+  };
+  const Bloco = ({ titulo, texto }: { titulo: string; texto: string }) => (
+    <div className="rounded-xl border border-line bg-white p-3">
+      <div className="text-[10px] font-bold text-ink-soft uppercase tracking-wide mb-1">{titulo}</div>
+      <p className="text-sm text-ink whitespace-pre-wrap">{texto}</p>
+      <div className="flex gap-3 mt-2 text-[11px] font-bold">
+        <button onClick={() => aoUsar(texto)} className="text-teal-600 hover:underline">Usar na resposta</button>
+        <button onClick={() => copiar(texto)} className="text-ink-soft hover:underline">{copiado === texto ? 'Copiado!' : 'Copiar'}</button>
+      </div>
+    </div>
+  );
+  return (
+    <aside className="bg-violet-50/60 border border-violet-200 rounded-2xl flex flex-col min-h-[240px] lg:h-[var(--ph)] lg:min-h-[320px] overflow-hidden">
+      <div className="px-4 py-3 border-b border-violet-200">
+        <div className="font-bold text-sm text-violet-800">🧠 Supervisora de vendas</div>
+        <div className="text-[11px] text-violet-700">Só sugere. Você decide o que enviar.</div>
+      </div>
+      <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
+        {!sug ? (
+          <p className="text-xs text-ink-soft p-2">Quando a cliente escrever, a supervisora lê a conversa e a sugestão aparece aqui.</p>
+        ) : sug.erro && !sug.sugestao ? (
+          <p className="text-xs text-red-600 p-2">A supervisora não conseguiu analisar agora: {sug.erro}</p>
+        ) : (
+          <>
+            <div className="flex items-center gap-2 flex-wrap">
+              {sug.estagio && <span className="text-[11px] font-bold bg-violet-600 text-white rounded-full px-2 py-0.5">{ESTAGIOS[sug.estagio] ?? sug.estagio}</span>}
+              {sug.tecnica && <span className="text-[11px] font-bold text-violet-800 bg-violet-100 rounded-full px-2 py-0.5">{sug.tecnica}</span>}
+              {!atual && <span className="text-[10px] text-ink-soft">sugestão anterior</span>}
+            </div>
+            {sug.leitura && <p className="text-xs text-ink-soft italic">{sug.leitura}</p>}
+            {sug.atencao && <div className="rounded-xl bg-amber-50 border border-amber-200 p-2 text-xs text-amber-800">⚠️ {sug.atencao}</div>}
+            {sug.sugestao && <Bloco titulo="Sugestão de resposta" texto={sug.sugestao} />}
+            {sug.alternativa && <Bloco titulo="Outra opção" texto={sug.alternativa} />}
+            {sug.dica && <p className="text-[11px] text-violet-800">💡 {sug.dica}</p>}
+          </>
+        )}
+      </div>
+    </aside>
   );
 }
 
@@ -236,6 +297,7 @@ export default function Chat() {
   const [abertaId, setAbertaId] = useState<string | null>(null);
   const [mensagens, setMensagens] = useState<MensagemChat[]>([]);
   const [texto, setTexto] = useState('');
+  const [sugSup, setSugSup] = useState<SugestaoSupervisora | null>(null);
   const [agendadas, setAgendadas] = useState<MensagemAgendada[]>([]);
   const [mostrarEmojis, setMostrarEmojis] = useState(false);
   const [mostrarRelogio, setMostrarRelogio] = useState(false);
@@ -291,6 +353,12 @@ export default function Chat() {
   useEffect(() => {
     if (!empresaId || !abertaId) return;
     return ouvirAgendadas(empresaId, abertaId, setAgendadas);
+  }, [empresaId, abertaId]);
+
+  useEffect(() => {
+    setSugSup(null);
+    if (!empresaId || !abertaId) return;
+    return ouvirSupervisora(empresaId, abertaId, setSugSup);
   }, [empresaId, abertaId]);
 
   useEffect(() => {
@@ -825,7 +893,7 @@ export default function Chat() {
       {erro && <p className="text-xs text-red-500">{erro}</p>}
 
 
-      <div ref={gradeRef} style={{ ["--ph" as string]: `${alturaPainel}px` }} className="grid grid-cols-1 lg:grid-cols-[minmax(360px,520px)_minmax(0,1fr)] gap-4 items-stretch">
+      <div ref={gradeRef} style={{ ["--ph" as string]: `${alturaPainel}px` }} className="grid grid-cols-1 lg:grid-cols-[minmax(320px,440px)_minmax(0,1fr)] xl:grid-cols-[minmax(320px,420px)_minmax(0,1fr)_minmax(280px,340px)] gap-4 items-stretch">
         <div className="bg-white border border-line rounded-2xl overflow-hidden flex flex-col lg:h-[var(--ph)] lg:min-h-[320px]">
           <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-line">
             <span className="text-xs font-bold text-ink flex items-center gap-1.5"><IconeWhatsApp />Conversas</span>
@@ -1257,6 +1325,15 @@ export default function Chat() {
           )}
         </div>
 
+        {aberta && (
+          <div className="hidden xl:block">
+            <PainelSupervisora
+              sug={sugSup}
+              ultimaMsgId={mensagens[mensagens.length - 1]?.id}
+              aoUsar={(t) => setTexto(t)}
+            />
+          </div>
+        )}
       </div>
       {novoContato && (
         <div className="fixed inset-0 z-50 bg-ink/40 flex items-center justify-center p-4" onClick={() => setNovoContato(null)}>

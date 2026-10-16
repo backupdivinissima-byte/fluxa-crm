@@ -21,6 +21,7 @@ import QRCode from 'qrcode';
 import pino from 'pino';
 import { guardarNoDrive, driveLigado } from './drive-midia.js';
 import { criarRobo } from './robo.js';
+import { criarSupervisora } from './supervisora.js';
 
 // MODO TESTE: sem banco. Mostra o QR Code no terminal e escreve as mensagens
 // recebidas na tela. Ativa com MODO_TESTE=1 ou quando não há credenciais.
@@ -41,6 +42,7 @@ if (!MODO_TESTE) {
 // Falhas de criptografia (Bad MAC, PreKeyError...) enchem o log: o robô só conta
 // (ver robo.js) e o resto do log fica limpo.
 let robo = null;
+let supervisora = null;
 const ERRO_CRIPTO = /Session error|Bad MAC|MessageCounterError|No matching sessions|Invalid PreKey|PreKeyError|SessionError/;
 const RUIDO_LIBSIGNAL = /Closing session|Removing old closed session|Session already (closed|open)|Opening session|Migrating session|Decrypted message with closed session|Closing open session|Failed to decrypt/;
 for (const nivel of ['log', 'info', 'warn', 'error']) {
@@ -404,6 +406,8 @@ async function guardarMensagem(msg) {
       await msgRef.collection('partes').doc(String(i).padStart(4, '0')).set({ n: i, dados: bufPartes.subarray(i * TAM_PARTE, (i + 1) * TAM_PARTE) });
     }
   }
+  // IA supervisora: só mensagens novas de cliente (nada de histórico antigo).
+  if (deCliente && Date.now() - new Date(quando).getTime() < 10 * 60 * 1000) supervisora?.mensagemDoCliente(`whatsapp_${numero}`);
 }
 
 // Se a gravação no banco falhar, tenta de novo (5 s, 30 s, 2 min) antes de desistir.
@@ -699,6 +703,7 @@ async function enviarSaida(d) {
 }
 
 if (!MODO_TESTE) {
+  supervisora = criarSupervisora({ base, agora });
   robo = criarRobo({
     refConexao,
     base,

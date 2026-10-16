@@ -12,6 +12,8 @@ x-conector: &conector
     options: { max-size: "10m", max-file: "3" }
   environment: &env-base
     GOOGLE_APPLICATION_CREDENTIALS: /segredos/conta-servico.json
+    # IA supervisora: a chave fica no arquivo servidor/.env (fora do repositório). Sem chave, ela fica desligada.
+    ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
   volumes:
     - ./segredos/conta-servico.json:/segredos/conta-servico.json:ro
 
