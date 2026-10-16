@@ -392,7 +392,7 @@ async function sincronizarInstagram(env) {
       await sincronizarDiretas(env, empresaId, t, meuId);
       await sincronizarLives(env, empresaId, t);
     } catch (e) {
-      console.error(`Leitura do Instagram (${empresaId}):`, e);
+      console.error(`Leitura do Instagram (${empresaId}): ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 }
@@ -452,7 +452,7 @@ export default {
     try {
       await enviarFila(env);
     } catch (e) {
-      console.error('Erro na fila de envio:', e);
+      console.error(`Erro na fila de envio: ${e instanceof Error ? e.message : String(e)}`);
     }
     try {
       await sincronizarInstagram(env);
