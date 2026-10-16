@@ -1396,7 +1396,7 @@ export default function Chat() {
               value={novoContato.telefone}
               onChange={(e) => setNovoContato({ ...novoContato, telefone: e.target.value })}
               onKeyDown={(e) => e.key === 'Enter' && void cadastrarContato()}
-              placeholder="DDD + número"
+              placeholder="DDD + número (exterior: +1 508 309 5403)"
               className="w-full rounded-lg border border-line px-3 py-2 text-sm"
             />
             <div className="flex gap-2 mt-4">
