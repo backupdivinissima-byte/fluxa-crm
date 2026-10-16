@@ -293,7 +293,7 @@ export default function Chat() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [colunas, setColunas] = useState<ColunaCrm[]>([]);
   const [conexao, setConexao] = useState<ConexaoChat>({ status: 'desconectado' });
-  const [filtro, setFiltro] = useState<'todas' | 'novos' | 'minhas' | 'aguardando' | 'atendimento' | 'semresposta'>('todas');
+  const [filtro, setFiltro] = useState<'todas' | 'novos' | 'minhas' | 'aguardando' | 'atendimento' | 'semresposta' | 'alerta'>('todas');
   const [abertaId, setAbertaId] = useState<string | null>(null);
   const [mensagens, setMensagens] = useState<MensagemChat[]>([]);
   const [texto, setTexto] = useState('');
@@ -388,7 +388,9 @@ export default function Chat() {
                 ? !!c.vendedorLogin
                 : filtro === 'semresposta'
                   ? c.ultimaDe === 'cliente'
-                  : true
+                  : filtro === 'alerta'
+                    ? c.alertaEntrega === true
+                    : true
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [visiveis, filtro, meuLogin, clientes]
@@ -418,6 +420,13 @@ export default function Chat() {
   const emAtendimento = visiveis.filter((c) => !!c.vendedorLogin).length;
   const semResposta = visiveis.filter((c) => c.ultimaDe === 'cliente').length;
   const novos = visiveis.filter(ehNovo).length;
+  const comAlerta = visiveis.filter((c) => c.alertaEntrega === true).length;
+  // Toca a campainha quando surge um novo alerta de entrega (a equipe percebe na hora).
+  const alertasAntesRef = useRef(0);
+  useEffect(() => {
+    if (comAlerta > alertasAntesRef.current) tocarCampainha();
+    alertasAntesRef.current = comAlerta;
+  }, [comAlerta]);
   const minhasN = visiveis.filter((c) => c.vendedorLogin === meuLogin).length;
   const porOrigem = (Object.keys(ORIGENS) as (keyof typeof ORIGENS)[]).map((k) => ({
     chave: k,
@@ -758,6 +767,17 @@ export default function Chat() {
         </div>
       </div>
 
+      {comAlerta > 0 && (
+        <div className="rounded-xl border-2 border-red-400 bg-red-50 px-4 py-3 flex items-center justify-between gap-3 flex-wrap" role="alert">
+          <div className="text-sm font-bold text-red-700">
+            ⚠ {comAlerta} conversa{comAlerta > 1 ? 's' : ''} com mensagem que pode NÃO ter chegado ao cliente. O robô já está tentando reenviar.
+          </div>
+          <button onClick={() => setFiltro(filtro === 'alerta' ? 'todas' : 'alerta')} className="rounded-lg bg-red-600 text-white text-xs font-bold px-3 py-1.5 hover:bg-red-700">
+            {filtro === 'alerta' ? 'Ver todas' : 'Ver quais'}
+          </button>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-3 items-stretch">
         <div className="space-y-2">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -916,10 +936,10 @@ export default function Chat() {
               </button>
             ))}
           </div>
-          {(filtro === 'aguardando' || filtro === 'atendimento' || filtro === 'semresposta') && (
+          {(filtro === 'aguardando' || filtro === 'atendimento' || filtro === 'semresposta' || filtro === 'alerta') && (
             <div className="flex items-center justify-between px-4 py-1.5 bg-teal-50 text-[11px] font-bold text-teal-700">
               <span>
-                Mostrando: {filtro === 'aguardando' ? 'Aguardando atendimento' : filtro === 'atendimento' ? 'Em atendimento' : 'Abertas sem resposta'} ({lista.length})
+                Mostrando: {filtro === 'aguardando' ? 'Aguardando atendimento' : filtro === 'atendimento' ? 'Em atendimento' : filtro === 'alerta' ? 'Com alerta de entrega' : 'Abertas sem resposta'} ({lista.length})
               </span>
               <button onClick={() => setFiltro('todas')} className="underline">Limpar</button>
             </div>
@@ -942,6 +962,7 @@ export default function Chat() {
                   <div className="flex items-center justify-between gap-2 mt-0.5">
                     <span className="text-xs text-ink-soft truncate">{c.ultimaMensagem}</span>
                     {c.ultimaDe === 'cliente' && <span className="w-2 h-2 rounded-full bg-teal-500 shrink-0" title="Sem resposta" />}
+                    {c.alertaEntrega && <span className="text-[10px] font-bold text-red-600 shrink-0" title={c.alertaMotivo}>⚠ entrega</span>}
                   </div>
                   <div className="text-[10px] text-ink-soft mt-1">
                     {NOME_CANAL[c.canal]} · {c.vendedorNome ? `com ${c.vendedorNome}` : 'livre'}

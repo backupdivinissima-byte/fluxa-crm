@@ -356,6 +356,9 @@ export interface ConversaChat {
   ultimaEm: string; // ISO
   ultimaDe: 'cliente' | 'equipe'; // sem resposta = a última foi do cliente
   naoLidas?: number;
+  alertaEntrega?: boolean; // o robô detectou mensagem que pode não ter chegado ao cliente
+  alertaMotivo?: string;
+  alertaEm?: string;
   vendedorLogin?: string; // quem pegou o atendimento (sem valor = livre para todos)
   vendedorNome?: string;
   clienteId?: string; // cliente do CRM vinculado

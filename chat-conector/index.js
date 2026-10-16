@@ -776,6 +776,7 @@ async function enviarSaida(d) {
     await d.ref.update({ enviada: true, erro: e.message });
     if (dado.msgId) {
       await base.collection('conversas').doc(dado.conversaId).collection('mensagens').doc(dado.msgId).set({ erroEnvio: e.message }, { merge: true }).catch(() => {});
+      await base.collection('conversas').doc(dado.conversaId).set({ alertaEntrega: true, alertaMotivo: `Falha no envio: ${String(e.message).slice(0, 120)}`, alertaEm: agora() }, { merge: true }).catch(() => {});
     }
   } finally {
     processando.delete(d.id);

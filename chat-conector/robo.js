@@ -66,6 +66,7 @@ export function criarRobo({ refConexao, base, getSock, estaAberto, reconectar, r
       const e = envios.get(id);
       e.retries = (e.retries ?? 0) + 1;
       marcar(eventos.pedidosReenvio);
+      alertar(e, 'O WhatsApp pediu reenvio: o cliente pode não ter recebido. O robô está reenviando.');
       console.warn(`[robô] WhatsApp pediu reenvio da mensagem ${id} (pedido ${e.retries}).`);
       // 1º pedido: o conector já responde sozinho; o robô, em paralelo, renova a sessão com o contato na hora
       // (assim o reenvio já sai com criptografia nova). 2º pedido: algo está travado -> reenvia o texto.
@@ -106,6 +107,7 @@ export function criarRobo({ refConexao, base, getSock, estaAberto, reconectar, r
     if (c.status < 2) {
       marcar(eventos.semConfirmacao);
       console.warn(`[robô] Mensagem ${id} sem confirmação do WhatsApp em 20 s.`);
+      alertar(e, 'O WhatsApp não confirmou o envio. O robô está reenviando.');
       void recuperar(id, 'sem confirmação do WhatsApp em 20 s');
       if (base && e.msgId) base.collection('conversas').doc(e.conversaId).collection('mensagens').doc(e.msgId).set({ entrega: 'sem_confirmacao' }, { merge: true }).catch(() => {});
     }
@@ -114,6 +116,22 @@ export function criarRobo({ refConexao, base, getSock, estaAberto, reconectar, r
       envios.delete(id);
       confirmacoes.delete(id);
     }, 30 * MIN);
+  }
+
+  // ---- Alerta de entrega (aparece na hora para a equipe, na conversa e no topo do Chat) ----
+  const ultimoProblema = new Map(); // conversaId -> quando foi o último problema
+  function alertar(e, motivo) {
+    if (!base || !e?.conversaId) return;
+    ultimoProblema.set(e.conversaId, Date.now());
+    base.collection('conversas').doc(e.conversaId).set({ alertaEntrega: true, alertaMotivo: motivo, alertaEm: agora() }, { merge: true }).catch(() => {});
+  }
+  // Depois de reenviar, se por 60 s não houver novo problema nessa conversa, o alerta sai sozinho.
+  function limparAlertaSeCalmo(conversaId) {
+    if (!base || !conversaId) return;
+    setTimeout(() => {
+      if (Date.now() - (ultimoProblema.get(conversaId) ?? 0) < 55000) return;
+      base.collection('conversas').doc(conversaId).set({ alertaEntrega: false }, { merge: true }).catch(() => {});
+    }, 60000);
   }
 
   // ---- Ações ---------------------------------------------------------------
@@ -138,6 +156,7 @@ export function criarRobo({ refConexao, base, getSock, estaAberto, reconectar, r
       if (!e.refazer || !e.jid) {
         console.warn(`[robô] Mensagem ${id} (${e.tipo}) pode não ter chegado ao cliente; marcada para a equipe reenviar.`);
         await ref.set({ erroEnvio: 'Pode não ter chegado ao cliente — reenvie esta mensagem.', entrega: 'sem_confirmacao' }, { merge: true });
+        alertar(e, 'Uma mensagem pode não ter chegado ao cliente. Reenvie.');
         return;
       }
       console.warn(`[robô] Recuperando ${e.tipo} ${id}: ${motivo}. Refazendo a sessão com o contato e reenviando.`);
@@ -148,10 +167,12 @@ export function criarRobo({ refConexao, base, getSock, estaAberto, reconectar, r
       }
       await e.refazer();
       await ref.set({ entrega: 'reenviada_pelo_robo' }, { merge: true });
+      limparAlertaSeCalmo(e.conversaId);
       console.log(`[robô] Mensagem ${id} reenviada com sessão nova.`);
     } catch (err) {
       console.error(`[robô] Falha ao recuperar a mensagem ${id}:`, err.message);
       await ref.set({ erroEnvio: 'Não consegui reenviar sozinho — reenvie esta mensagem.' }, { merge: true }).catch(() => {});
+      alertar(e, 'O robô não conseguiu reenviar. Reenvie a mensagem.');
     }
   }
 
