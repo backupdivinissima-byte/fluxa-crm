@@ -114,7 +114,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function login(email: string, senha: string) {
     sessionStorage.removeItem(CHAVE_SESSAO_VENDEDOR);
     setSessaoVendedor(null);
-    await signInWithEmailAndPassword(auth, email, senha);
+    const cred = await signInWithEmailAndPassword(auth, email, senha);
+    // Se já havia essa mesma conta aberta na aba (ex.: cadastro que não
+    // chegou a carregar o perfil), o onAuthStateChanged não dispara de novo:
+    // recarrega o perfil e a empresa aqui para o login não ficar "parado".
+    const perfilSnap = await getDoc(doc(db, 'usuarios', cred.user.uid));
+    if (perfilSnap.exists()) {
+      const p = perfilSnap.data() as UsuarioPerfil;
+      setUsuario(cred.user);
+      setPerfil(p);
+      const empresaSnap = await getDoc(doc(db, 'empresas', p.empresaId));
+      if (empresaSnap.exists()) setEmpresa({ id: empresaSnap.id, ...empresaSnap.data() } as Empresa);
+    }
   }
 
   async function loginVendedor(loginVend: string, senha: string, empresaIdHint?: string) {
@@ -217,6 +228,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       criadoEm: new Date().toISOString(),
     };
     await setDoc(doc(db, 'usuarios', cred.user.uid), novoPerfil);
+    // O onAuthStateChanged dispara assim que a conta é criada — ANTES de o
+    // perfil e a empresa serem gravados acima — e então não encontra nada.
+    // Sem isso a pessoa recém-cadastrada ficava sem perfil e era mandada de
+    // volta para a página inicial. Carrega o perfil agora que ele existe.
+    setUsuario(cred.user);
+    setPerfil(novoPerfil);
+    setEmpresa(novaEmpresa);
   }
 
   async function sair() {
