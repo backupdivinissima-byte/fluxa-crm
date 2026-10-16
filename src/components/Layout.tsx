@@ -1,5 +1,6 @@
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { useEffect } from 'react';
+import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { modulosDaEmpresa, moduloDaRota, type Modulo } from '../lib/modulos';
 import fluxaIcon from '../assets/fluxa-icon.svg';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -30,15 +31,47 @@ const itens = [
   { to: '/chat', label: 'Chat', icon: <IconChat /> },
 ];
 
+const NOME_MODULO: Record<Modulo, string> = { crm: 'CRM', marketing: 'Marketing' };
+const CHAVE_MODULO_ATUAL = 'fluxa_modulo_atual';
+
 /** Nav superior única (marca + abas): nada de menu lateral, todas as abas
  * acessíveis no topo, tela toda livre para os dados. */
 export default function Layout() {
-  const { empresa, perfil, sessaoVendedor, papel, sair } = useAuth();
+  const { empresa, perfil, sessaoVendedor, papel, sair, definirVinculoModulos } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
 
-  useEffect(() => {
-    // Reservado para fechar dropdowns futuros ao trocar de rota.
-  }, [location.pathname]);
+  // Módulos contratados: cada um mostra só as próprias abas. Com mais de um,
+  // a empresa escolhe vincular tudo (todas as abas juntas) ou trabalhar em
+  // módulos separados (um de cada vez, trocando no seletor).
+  const modulos = modulosDaEmpresa(empresa);
+  const varios = modulos.length > 1;
+  const vinculados = varios && empresa?.modulosVinculados === true;
+  const [moduloEscolhido, setModuloEscolhido] = useState<Modulo | null>(() => {
+    try {
+      return sessionStorage.getItem(CHAVE_MODULO_ATUAL) as Modulo | null;
+    } catch {
+      return null;
+    }
+  });
+  const moduloAtual: Modulo = moduloEscolhido && modulos.includes(moduloEscolhido) ? moduloEscolhido : modulos[0];
+  const visiveis: Modulo[] = vinculados || !varios ? modulos : [moduloAtual];
+  const perguntarVinculo = papel === 'admin' && varios && empresa?.modulosVinculados === undefined;
+
+  function trocarModulo(m: Modulo) {
+    setModuloEscolhido(m);
+    try {
+      sessionStorage.setItem(CHAVE_MODULO_ATUAL, m);
+    } catch {
+      /* sem armazenamento */
+    }
+    navigate(m === 'marketing' ? '/marketing' : '/dashboard');
+  }
+
+  // Quem abre uma tela de um módulo que não está liberado vai para o módulo certo.
+  if (empresa?.id && !visiveis.includes(moduloDaRota(location.pathname))) {
+    return <Navigate to={visiveis[0] === 'marketing' ? '/marketing' : '/dashboard'} replace />;
+  }
 
   const nomeUsuario = papel === 'admin' ? perfil?.nome : sessaoVendedor?.vendedor.nome;
 
@@ -48,12 +81,29 @@ export default function Layout() {
         <div className="flex items-center gap-1 px-5 py-2 min-h-14 flex-wrap">
           <div className="flex items-center gap-2 mr-4 shrink-0">
             <img src={fluxaIcon} alt="Fluxa CRM" className="w-8 h-8" />
-            <span className="text-lg font-extrabold tracking-tight text-ink">Fluxa CRM</span>
+            <span className="text-lg font-extrabold tracking-tight text-ink">
+              {modulos.length === 1 && modulos[0] === 'marketing' ? 'Fluxa Marketing' : 'Fluxa CRM'}
+            </span>
           </div>
+
+          {varios && !vinculados && !perguntarVinculo && (
+            <div className="flex bg-slate-100 rounded-lg p-0.5 mr-2 shrink-0">
+              {modulos.map((m) => (
+                <button
+                  key={m}
+                  onClick={() => trocarModulo(m)}
+                  className={`px-3 h-8 rounded-md text-xs font-bold uppercase tracking-wide ${m === moduloAtual ? 'bg-white text-ink shadow-sm' : 'text-ink-soft'}`}
+                >
+                  {NOME_MODULO[m]}
+                </button>
+              ))}
+            </div>
+          )}
 
           <nav className="flex items-center gap-1 flex-wrap">
             {itens
               .filter((item) => !item.apenasAdmin || papel === 'admin')
+              .filter((item) => visiveis.includes(moduloDaRota(item.to)))
               .map((item) => (
                 <NavLink
                   key={item.to}
@@ -86,6 +136,26 @@ export default function Layout() {
           </div>
         </div>
       </header>
+
+      {perguntarVinculo && (
+        <div className="fixed inset-0 z-50 bg-ink/40 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-xl">
+            <h3 className="text-base font-extrabold text-ink">Vincular todos os módulos?</h3>
+            <p className="text-xs text-ink-soft mt-2">
+              Você tem mais de um módulo ({modulos.map((m) => NOME_MODULO[m]).join(' e ')}). Se vincular, as abas de todos aparecem juntas na barra
+              de cima. Se não, cada módulo funciona separado e você troca entre eles no seletor.
+            </p>
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => void definirVinculoModulos(true)} className="flex-1 rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold py-2">
+                Sim, vincular tudo
+              </button>
+              <button onClick={() => void definirVinculoModulos(false)} className="flex-1 rounded-xl border border-line text-sm font-bold py-2 text-ink">
+                Não, separados
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <main className="flex-1 min-w-0">
         <Outlet />

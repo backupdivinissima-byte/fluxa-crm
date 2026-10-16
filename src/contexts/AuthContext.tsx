@@ -7,7 +7,7 @@ import {
   signOut as firebaseSignOut,
   type User,
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import type { Empresa, UsuarioPerfil, Vendedor } from '../types';
 
@@ -49,6 +49,8 @@ interface AuthState {
   loginVendedor: (login: string, senha: string, empresaIdHint?: string) => Promise<void>;
   cadastrar: (dados: DadosCadastro) => Promise<void>;
   sair: () => Promise<void>;
+  /** Responde à pergunta "vincular todos os módulos?" (só administrador). */
+  definirVinculoModulos: (vincular: boolean) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -215,6 +217,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ...(dados.documento ? { cnpj: dados.documento, documentoTipo: dados.documentoTipo } : {}),
       criadoEm: new Date().toISOString(),
       plano: 'trial',
+      modulos: [dados.produto === 'marketing' ? 'marketing' : 'crm'], // só o módulo escolhido
       produto: dados.produto ?? 'crm', // qual card/plataforma a pessoa escolheu no cadastro (ver DadosCadastro.produto)
     };
     await setDoc(empresaRef, novaEmpresa);
@@ -237,6 +240,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setEmpresa(novaEmpresa);
   }
 
+  async function definirVinculoModulos(vincular: boolean) {
+    if (!empresa?.id) return;
+    await updateDoc(doc(db, 'empresas', empresa.id), { modulosVinculados: vincular });
+    setEmpresa((atual) => (atual ? { ...atual, modulosVinculados: vincular } : atual));
+  }
+
   async function sair() {
     sessionStorage.removeItem(CHAVE_SESSAO_VENDEDOR);
     setSessaoVendedor(null);
@@ -247,7 +256,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ carregando, usuario, perfil, empresa, sessaoVendedor, papel, login, loginVendedor, cadastrar, sair }}
+      value={{ carregando, usuario, perfil, empresa, sessaoVendedor, papel, login, loginVendedor, cadastrar, sair, definirVinculoModulos }}
     >
       {children}
     </AuthContext.Provider>

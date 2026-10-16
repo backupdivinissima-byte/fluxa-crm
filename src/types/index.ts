@@ -17,6 +17,13 @@ export interface Empresa {
   // Usado, entre outras coisas, pra personalizar a tela de login por módulo
   // quando os outros produtos tiverem cadastro próprio.
   produto?: 'crm' | 'erp' | 'marketing' | 'prospect' | 'live';
+  // Módulos contratados (cada um tem só as próprias abas). Sem este campo =
+  // empresa antiga: segue com tudo liberado (exceto as que se cadastraram só
+  // no Marketing, ver src/lib/modulos.ts).
+  modulos?: ('crm' | 'marketing')[];
+  // Com mais de um módulo: true = abas de todos juntas; false = módulos
+  // separados (um de cada vez); sem valor = ainda não respondeu à pergunta.
+  modulosVinculados?: boolean;
   // Chave de API ("Importar via API", tela Importar/Sincronização) — só o
   // hash SHA-256 fica salvo aqui, nunca a chave em texto puro (gerada e
   // mostrada uma única vez no navegador, ver src/lib/apiKey.ts).
