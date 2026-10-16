@@ -116,7 +116,7 @@ export function criarRobo({ refConexao, base, getSock, estaAberto, reconectar, r
     setTimeout(() => {
       envios.delete(id);
       confirmacoes.delete(id);
-    }, 30 * MIN);
+    }, 6 * 60 * MIN); // fica vigiando por 6 h: se o cliente ligar o celular, o aviso some sozinho
   }
 
   // ---- Alerta de entrega (aparece na hora para a equipe, na conversa e no topo do Chat) ----
@@ -173,9 +173,9 @@ export function criarRobo({ refConexao, base, getSock, estaAberto, reconectar, r
     const sock = getSock();
     try {
       if (!e.refazer || !e.jid) {
-        console.warn(`[robô] Mensagem ${id} (${e.tipo}) pode não ter chegado ao cliente; marcada para a equipe reenviar.`);
-        await ref.set({ erroEnvio: 'Pode não ter chegado ao cliente — reenvie esta mensagem.', entrega: 'sem_confirmacao' }, { merge: true });
-        alertar(e, 'Uma mensagem pode não ter chegado ao cliente. Reenvie.');
+        console.warn(`[robô] Mensagem ${id} (${e.tipo}) ainda sem confirmação de entrega; o robô continua vigiando e avisa quando chegar.`);
+        await ref.set({ entrega: 'sem_confirmacao' }, { merge: true });
+        alertar(e, 'O WhatsApp ainda não confirmou a entrega (o celular do cliente pode estar desligado ou sem internet). O robô continua vigiando.');
         return;
       }
       console.warn(`[robô] Recuperando ${e.tipo} ${id}: ${motivo}. Refazendo a sessão com o contato e reenviando.`);

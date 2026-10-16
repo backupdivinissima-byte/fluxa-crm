@@ -713,7 +713,7 @@ async function lerAnexo(dado) {
   throw new Error('Anexo não encontrado.');
 }
 
-// Reenvio pelo robô: a mesma coisa, de novo, com a sessão renovada. Até 3 tentativas seguidas.
+// Reenvio pelo robô: a mesma coisa, de novo, com a sessão renovada. Uma segunda tentativa só (evita mensagem repetida para quem está com o celular desligado).
 function refazerEnvio(destino, conteudo, dado, tentativa) {
   return async () => {
     const r = await sock.sendMessage(destino, conteudo);
@@ -726,7 +726,7 @@ function refazerEnvio(destino, conteudo, dado, tentativa) {
         jid: destino,
         tipo: dado.tipo === 'audio' ? 'audio' : dado.tipo === 'midia' ? 'midia' : 'texto',
         reenvio: true,
-        ...(tentativa < 3 ? { refazer: refazerEnvio(destino, conteudo, dado, tentativa + 1) } : {}),
+        ...(tentativa < 2 ? { refazer: refazerEnvio(destino, conteudo, dado, tentativa + 1) } : {}),
       });
     }
     return r;
