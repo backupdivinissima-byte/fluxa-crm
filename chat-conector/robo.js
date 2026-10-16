@@ -94,7 +94,8 @@ export function criarRobo({ refConexao, base, getSock, estaAberto, reconectar, r
         const e = envios.get(id);
         if (e && e.msgId && st >= 2 && base) {
           const entrega = st >= 4 ? 'lida' : st >= 3 ? 'entregue' : 'enviada';
-          base.collection('conversas').doc(e.conversaId).collection('mensagens').doc(e.msgId).set({ entrega }, { merge: true }).catch(() => {});
+          base.collection('conversas').doc(e.conversaId).collection('mensagens').doc(e.msgId).set({ entrega, erroEnvio: FieldValue.delete() }, { merge: true }).catch(() => {});
+          limparAlertaSeResolvido(e.conversaId); // chegou: o aviso sai da tela na hora
         }
       }
     },
@@ -124,6 +125,24 @@ export function criarRobo({ refConexao, base, getSock, estaAberto, reconectar, r
     if (!base || !e?.conversaId) return;
     ultimoProblema.set(e.conversaId, Date.now());
     base.collection('conversas').doc(e.conversaId).set({ alertaEntrega: true, alertaMotivo: motivo, alertaEm: agora() }, { merge: true }).catch(() => {});
+  }
+  // Chegou (WhatsApp confirmou): se não sobrou nenhuma mensagem pendente nessa conversa, tira o alerta agora.
+  function limparAlertaSeResolvido(conversaId) {
+    if (!base || !conversaId) return;
+    for (const [id, env] of envios) if (env.conversaId === conversaId && !env.recuperada && (confirmacoes.get(id)?.status ?? 0) < 2) return;
+    ultimoProblema.delete(conversaId);
+    base.collection('conversas').doc(conversaId).set({ alertaEntrega: false, alertaMotivo: FieldValue.delete() }, { merge: true }).catch(() => {});
+  }
+  // Ao ligar, avisos antigos (de antes do robô reiniciar) saem da tela; o robô já refez as sessões.
+  async function limparAlertasAntigos() {
+    if (!base) return;
+    try {
+      const q = await base.collection('conversas').where('alertaEntrega', '==', true).get();
+      for (const d of q.docs) await d.ref.set({ alertaEntrega: false, alertaMotivo: FieldValue.delete() }, { merge: true });
+      if (q.size) console.log(`[robô] ${q.size} aviso(s) antigo(s) de entrega limpo(s).`);
+    } catch (err) {
+      console.warn('[robô] Não consegui limpar avisos antigos:', err.message);
+    }
   }
   // Depois de reenviar, se por 60 s não houver novo problema nessa conversa, o alerta sai sozinho.
   function limparAlertaSeCalmo(conversaId) {
@@ -358,6 +377,7 @@ export function criarRobo({ refConexao, base, getSock, estaAberto, reconectar, r
     setTimeout(() => void testeIdaEVolta(), 5 * MIN); // primeiro teste logo depois de ligar
   }
   setTimeout(() => void publicar(true), 20 * 1000);
+  setTimeout(() => void limparAlertasAntigos(), 15 * 1000);
 
   return { ...ganchos, testeIdaEVolta, publicar, FieldValue };
 }
