@@ -105,17 +105,14 @@ export function cacNoMes(campanhas: CampanhaMeta[], clientes: Cliente[], mesRef:
 
 // ===== Receita atribuída à live e ROI =====
 
-/** Receita (valor final no CRM) dos clientes cuja reserva de live caiu no
- * mês pedido — parte da receita do mês que dá pra atribuir diretamente às
- * lives. */
-export function receitaAtribuidaLiveNoMes(clientes: Cliente[], reservas: ReservaLive[], mesRef: string): number {
-  const reservasNoMes = reservas.filter((r) => (r.data ?? '').slice(0, 7) === mesRef);
-  const indice = indiceReservasPorCliente(reservasNoMes);
-  let soma = 0;
-  for (const cliente of clientes) {
-    if (indice.has(cliente.cod)) soma += valorCliente(cliente);
-  }
-  return soma;
+/** Receita das lives no mês pedido: soma do valor reservado (coluna "Valor da
+ * reserva" da planilha de lives) de TODAS as reservas com data naquele mês.
+ * Antes somava o total geral de compras (de todos os meses) dos clientes que
+ * tinham reserva — o que inflava o número. */
+export function receitaAtribuidaLiveNoMes(_clientes: Cliente[], reservas: ReservaLive[], mesRef: string): number {
+  return reservas
+    .filter((r) => (r.data ?? '').slice(0, 7) === mesRef)
+    .reduce((soma, r) => soma + (r.valorReservaLive ?? 0), 0);
 }
 
 export interface ResumoMarketingMes {
