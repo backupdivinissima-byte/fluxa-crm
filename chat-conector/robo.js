@@ -135,18 +135,18 @@ export function criarRobo({ refConexao, base, getSock, estaAberto, reconectar, r
     marcar(eventos.recuperadas);
     const sock = getSock();
     try {
-      if (e.tipo !== 'texto' || !e.texto || !e.jid) {
+      if (!e.refazer || !e.jid) {
         console.warn(`[robô] Mensagem ${id} (${e.tipo}) pode não ter chegado ao cliente; marcada para a equipe reenviar.`);
         await ref.set({ erroEnvio: 'Pode não ter chegado ao cliente — reenvie esta mensagem.', entrega: 'sem_confirmacao' }, { merge: true });
         return;
       }
-      console.warn(`[robô] Recuperando a mensagem ${id}: ${motivo}. Refazendo a sessão com o contato e reenviando.`);
+      console.warn(`[robô] Recuperando ${e.tipo} ${id}: ${motivo}. Refazendo a sessão com o contato e reenviando.`);
       try {
         await sock?.assertSessions?.([e.jid], true); // força uma sessão de criptografia nova com o contato
       } catch (err) {
         console.warn('[robô] Não consegui refazer a sessão:', err.message);
       }
-      await reenviarTexto({ jid: e.jid, texto: e.texto });
+      await e.refazer();
       await ref.set({ entrega: 'reenviada_pelo_robo' }, { merge: true });
       console.log(`[robô] Mensagem ${id} reenviada com sessão nova.`);
     } catch (err) {

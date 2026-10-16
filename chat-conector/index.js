@@ -700,23 +700,45 @@ async function enviarSaida(d) {
     if (!aberto || !sock) throw new Error('WhatsApp desconectado');
     const destino = dado.paraJid || `${dado.para}@s.whatsapp.net`;
     let enviada;
+    let conteudo; // o que foi enviado: o robô usa para reenviar sozinho (texto, áudio, foto, vídeo ou arquivo)
     if (dado.tipo === 'audio') {
       const bruto = Buffer.from(String(dado.audioUrl).split(',')[1] ?? '', 'base64');
       const ogg = await paraOggOpus(bruto);
       console.log(`Enviando áudio de voz: ${ogg.buf.length} bytes, ${ogg.seconds}s`);
-      enviada = await sock.sendMessage(destino, { audio: ogg.buf, mimetype: FORMATO_AUDIO === 'ogg' ? 'audio/ogg; codecs=opus' : 'audio/mp4', ptt: true, seconds: ogg.seconds, ...(ogg.waveform ? { waveform: ogg.waveform } : {}) });
+      conteudo = { audio: ogg.buf, mimetype: FORMATO_AUDIO === 'ogg' ? 'audio/ogg; codecs=opus' : 'audio/mp4', ptt: true, seconds: ogg.seconds, ...(ogg.waveform ? { waveform: ogg.waveform } : {}) };
     } else if (dado.tipo === 'midia') {
       const buf = await lerAnexo(dado);
       const legenda = dado.legenda || undefined;
-      if (dado.midiaTipo === 'imagem') enviada = await sock.sendMessage(destino, { image: buf, caption: legenda });
-      else if (dado.midiaTipo === 'video') enviada = await sock.sendMessage(destino, { video: buf, caption: legenda, mimetype: dado.mime || 'video/mp4' });
-      else enviada = await sock.sendMessage(destino, { document: buf, mimetype: dado.mime || 'application/octet-stream', fileName: dado.nomeArquivo || 'arquivo', caption: legenda });
+      if (dado.midiaTipo === 'imagem') conteudo = { image: buf, caption: legenda };
+      else if (dado.midiaTipo === 'video') conteudo = { video: buf, caption: legenda, mimetype: dado.mime || 'video/mp4' };
+      else conteudo = { document: buf, mimetype: dado.mime || 'application/octet-stream', fileName: dado.nomeArquivo || 'arquivo', caption: legenda };
     } else {
-      enviada = await sock.sendMessage(destino, { text: dado.texto });
+      conteudo = { text: dado.texto };
     }
+    enviada = await sock.sendMessage(destino, conteudo);
     if (enviada?.key?.id) enviadasPorNos.add(enviada.key.id);
     lembrarEnviada(enviada?.key?.id, enviada?.message);
-    robo?.enviada(enviada?.key?.id, dado.msgId ? { conversaId: dado.conversaId, msgId: dado.msgId, jid: destino, tipo: dado.tipo === 'audio' ? 'audio' : dado.tipo === 'midia' ? 'midia' : 'texto', texto: dado.texto } : null);
+    robo?.enviada(
+      enviada?.key?.id,
+      dado.msgId
+        ? {
+            conversaId: dado.conversaId,
+            msgId: dado.msgId,
+            jid: destino,
+            tipo: dado.tipo === 'audio' ? 'audio' : dado.tipo === 'midia' ? 'midia' : 'texto',
+            texto: dado.texto,
+            // Reenvio pelo robô: a mesma coisa, de novo, com a sessão renovada.
+            refazer: async () => {
+              const r = await sock.sendMessage(destino, conteudo);
+              if (r?.key?.id) {
+                enviadasPorNos.add(r.key.id);
+                lembrarEnviada(r.key.id, r.message);
+              }
+              return r;
+            },
+          }
+        : null
+    );
     // Diagnóstico: confere se o WhatsApp guardou o arquivo que acabamos de enviar.
     if (dado.tipo === 'audio' || dado.tipo === 'midia') {
       const m = enviada?.message ?? {};
