@@ -63,10 +63,15 @@ function hora(iso: string) {
     : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 }
 
-function Cartao({ titulo, valor, dica, cor }: { titulo: string; valor: number; dica: string; cor?: 'verde' | 'laranja' | 'azul' }) {
+function Cartao({ titulo, valor, dica, cor, ativo, onClick }: { titulo: string; valor: number; dica: string; cor?: 'verde' | 'laranja' | 'azul'; ativo?: boolean; onClick?: () => void }) {
   const corValor = cor === 'verde' ? 'text-emerald-600' : cor === 'laranja' ? 'text-orange-500' : cor === 'azul' ? 'text-blue-600' : 'text-ink';
   return (
-    <div className="bg-white border border-line rounded-xl px-3 py-2" title={dica}>
+    <div
+      className={`bg-white border rounded-xl px-3 py-2 ${onClick ? 'cursor-pointer hover:border-teal-400 select-none' : ''} ${ativo ? 'border-teal-500 ring-2 ring-teal-200' : 'border-line'}`}
+      title={onClick ? `${dica} — clique para ver as conversas` : dica}
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+    >
       <div className="text-[10px] font-bold text-ink-soft uppercase tracking-wide truncate">{titulo}</div>
       <div className={`text-xl font-extrabold tabular-nums ${corValor}`}>{valor}</div>
     </div>
@@ -227,7 +232,7 @@ export default function Chat() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [colunas, setColunas] = useState<ColunaCrm[]>([]);
   const [conexao, setConexao] = useState<ConexaoChat>({ status: 'desconectado' });
-  const [filtro, setFiltro] = useState<'todas' | 'novos' | 'minhas'>('todas');
+  const [filtro, setFiltro] = useState<'todas' | 'novos' | 'minhas' | 'aguardando' | 'atendimento' | 'semresposta'>('todas');
   const [abertaId, setAbertaId] = useState<string | null>(null);
   const [mensagens, setMensagens] = useState<MensagemChat[]>([]);
   const [texto, setTexto] = useState('');
@@ -305,7 +310,17 @@ export default function Chat() {
   const lista = useMemo(
     () =>
       visiveis.filter((c) =>
-        filtro === 'novos' ? ehNovo(c) : filtro === 'minhas' ? c.vendedorLogin === meuLogin : true
+        filtro === 'novos'
+          ? ehNovo(c)
+          : filtro === 'minhas'
+            ? c.vendedorLogin === meuLogin
+            : filtro === 'aguardando'
+              ? !c.vendedorLogin && c.ultimaDe === 'cliente'
+              : filtro === 'atendimento'
+                ? !!c.vendedorLogin
+                : filtro === 'semresposta'
+                  ? c.ultimaDe === 'cliente'
+                  : true
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [visiveis, filtro, meuLogin, clientes]
@@ -679,10 +694,10 @@ export default function Chat() {
       <div className="grid grid-cols-1 gap-3 items-stretch">
         <div className="space-y-2">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-        <Cartao titulo="Aguardando atendimento" valor={aguardando} dica="Clientes sem vendedor esperando resposta" />
-        <Cartao titulo="Em atendimento" valor={emAtendimento} dica="Conversas com um vendedor responsável" cor="verde" />
-        <Cartao titulo="Abertas sem resposta" valor={semResposta} dica="A última mensagem foi do cliente" cor="laranja" />
-        <Cartao titulo="Clientes novos" valor={novos} dica="Contatos sem cadastro no CRM" cor="azul" />
+        <Cartao ativo={filtro === 'aguardando'} onClick={() => setFiltro(filtro === 'aguardando' ? 'todas' : 'aguardando')} titulo="Aguardando atendimento" valor={aguardando} dica="Clientes sem vendedor esperando resposta" />
+        <Cartao ativo={filtro === 'atendimento'} onClick={() => setFiltro(filtro === 'atendimento' ? 'todas' : 'atendimento')} titulo="Em atendimento" valor={emAtendimento} dica="Conversas com um vendedor responsável" cor="verde" />
+        <Cartao ativo={filtro === 'semresposta'} onClick={() => setFiltro(filtro === 'semresposta' ? 'todas' : 'semresposta')} titulo="Abertas sem resposta" valor={semResposta} dica="A última mensagem foi do cliente" cor="laranja" />
+        <Cartao ativo={filtro === 'novos'} onClick={() => setFiltro(filtro === 'novos' ? 'todas' : 'novos')} titulo="Clientes novos" valor={novos} dica="Contatos sem cadastro no CRM" cor="azul" />
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -833,6 +848,14 @@ export default function Chat() {
               </button>
             ))}
           </div>
+          {(filtro === 'aguardando' || filtro === 'atendimento' || filtro === 'semresposta') && (
+            <div className="flex items-center justify-between px-4 py-1.5 bg-teal-50 text-[11px] font-bold text-teal-700">
+              <span>
+                Mostrando: {filtro === 'aguardando' ? 'Aguardando atendimento' : filtro === 'atendimento' ? 'Em atendimento' : 'Abertas sem resposta'} ({lista.length})
+              </span>
+              <button onClick={() => setFiltro('todas')} className="underline">Limpar</button>
+            </div>
+          )}
           <ul className="flex-1 min-h-0 overflow-y-auto divide-y divide-line">
             {lista.length === 0 && <li className="p-6 text-sm text-ink-soft text-center">Nenhuma conversa por aqui.</li>}
             {lista.map((c) => (
