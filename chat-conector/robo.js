@@ -93,7 +93,7 @@ export function criarRobo({ refConexao, base, getSock, estaAberto, reconectar, r
         else if (testes.has(id)) confirmacoes.set(id, { status: st });
         const e = envios.get(id);
         if (e && e.msgId && st >= 2 && base) {
-          const entrega = st >= 4 ? 'lida' : st >= 3 ? 'entregue' : 'enviada';
+          const entrega = st >= 4 ? 'lida' : st >= 3 ? (e.reenvio ? 'reenviada_entregue' : 'entregue') : 'enviada';
           base.collection('conversas').doc(e.conversaId).collection('mensagens').doc(e.msgId).set({ entrega, erroEnvio: FieldValue.delete() }, { merge: true }).catch(() => {});
           limparAlertaSeResolvido(e.conversaId); // chegou: o aviso sai da tela na hora
         }

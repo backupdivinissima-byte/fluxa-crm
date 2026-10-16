@@ -420,6 +420,9 @@ export default function Chat() {
   const emAtendimento = visiveis.filter((c) => !!c.vendedorLogin).length;
   const semResposta = visiveis.filter((c) => c.ultimaDe === 'cliente').length;
   const novos = visiveis.filter(ehNovo).length;
+  // Mensagem que falhou e foi reenviada depois (pelo robô ou pela equipe) e chegou: o aviso vermelho deixa de valer.
+  const reenviadaDepois = (m: MensagemChat) =>
+    mensagens.some((n) => n.id !== m.id && n.de === 'equipe' && n.texto === m.texto && n.em > m.em && !n.erroEnvio && (n.entrega === 'entregue' || n.entrega === 'lida'));
   const comAlerta = visiveis.filter((c) => c.alertaEntrega === true).length;
   // Toca a campainha quando surge um novo alerta de entrega (a equipe percebe na hora).
   const alertasAntesRef = useRef(0);
@@ -1167,21 +1170,23 @@ export default function Chat() {
                         <div className="text-[11px] font-bold text-teal-700 mb-0.5">{m.autor}</div>
                       )}
                       {(!m.midiaTipo || (m.texto && !m.texto.startsWith('['))) && <div className="whitespace-pre-wrap break-words">{m.texto}</div>}
-                      {m.erroEnvio && <div className="text-[11px] font-bold text-red-500 mt-1">⚠ Não chegou ao cliente: {m.erroEnvio}</div>}
+                      {m.erroEnvio && (reenviadaDepois(m)
+                        ? <div className="text-[11px] font-bold text-emerald-600 mt-1">✓✓ Reenviada e entregue</div>
+                        : <div className="text-[11px] font-bold text-red-500 mt-1">⚠ Não chegou ao cliente: {m.erroEnvio}</div>)}
                       <div className="text-[10px] text-ink-soft mt-1">
                         {m.autor ? `${m.autor} · ` : ''}
                         {hora(m.em)}
                         {m.de === 'equipe' && m.autor !== 'Celular' && !m.erroEnvio && (
                           <span
-                            className={`ml-1.5 font-bold ${m.entrega === 'lida' ? 'text-sky-500' : m.entrega === 'sem_confirmacao' ? 'text-orange-500' : m.entrega === 'entregue' ? 'text-emerald-600' : 'text-ink-soft'}`}
+                            className={`ml-1.5 font-bold ${m.entrega === 'lida' ? 'text-sky-500' : m.entrega === 'sem_confirmacao' ? 'text-orange-500' : (m.entrega === 'entregue' || m.entrega === 'reenviada_entregue') ? 'text-emerald-600' : 'text-ink-soft'}`}
                             title={
                               m.entrega === 'lida' ? 'Lida pelo cliente' : m.entrega === 'entregue' ? 'Entregue no WhatsApp do cliente'
                               : m.entrega === 'enviada' ? 'Enviada ao WhatsApp, aguardando chegar ao cliente'
                               : m.entrega === 'sem_confirmacao' ? 'O WhatsApp não confirmou — o robô está tentando de novo'
-                              : m.entrega === 'reenviada_pelo_robo' ? 'O robô reenviou esta mensagem' : 'Enviando…'
+                              : m.entrega === 'reenviada_entregue' ? 'O robô reenviou e a mensagem foi entregue' : m.entrega === 'reenviada_pelo_robo' ? 'O robô reenviou esta mensagem' : 'Enviando…'
                             }
                           >
-                            {m.entrega === 'lida' ? '✓✓ lida' : m.entrega === 'entregue' ? '✓✓ entregue' : m.entrega === 'enviada' ? '✓ enviada'
+                            {m.entrega === 'lida' ? '✓✓ lida' : m.entrega === 'entregue' ? '✓✓ entregue' : m.entrega === 'reenviada_entregue' ? '🤖 ✓✓ reenviada e entregue' : m.entrega === 'enviada' ? '✓ enviada'
                               : m.entrega === 'sem_confirmacao' ? '⚠ sem confirmação' : m.entrega === 'reenviada_pelo_robo' ? '🤖 reenviada' : '⏳'}
                           </span>
                         )}

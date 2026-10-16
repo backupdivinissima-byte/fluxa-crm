@@ -386,7 +386,7 @@ export interface MensagemChat {
   midiaMime?: string;
   midiaNome?: string; // nome do arquivo (documentos)
   erroEnvio?: string; // o conector não conseguiu entregar ao cliente
-  entrega?: 'enviada' | 'entregue' | 'lida' | 'sem_confirmacao' | 'reenviada_pelo_robo'; // acompanhamento do robô
+  entrega?: 'enviada' | 'entregue' | 'lida' | 'sem_confirmacao' | 'reenviada_pelo_robo' | 'reenviada_entregue'; // acompanhamento do robô
 }
 
 export interface ConexaoChat {
