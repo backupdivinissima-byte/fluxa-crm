@@ -11,6 +11,7 @@ import {
   registrarLigacao,
   salvarTag,
   salvarContatoChat,
+  normalizarTelefone,
   editarContatoChat,
   cancelarAgendada,
   ouvirAgendadas,
@@ -1003,7 +1004,7 @@ export default function Chat() {
                 </div>
                 {aberta.canal === 'whatsapp' && (() => {
                   let num = (aberta.telefone || clienteCrm?.telefone || (aberta.contatoJid?.endsWith('@lid') ? '' : aberta.contato) || '').replace(/\D/g, '');
-                  if (num && num.length <= 11) num = `55${num}`;
+                  if (num && num.length <= 11) num = normalizarTelefone(num);
                   if (!num) {
                     return (
                       <button
@@ -1096,7 +1097,7 @@ export default function Chat() {
                       value={telContato}
                       onChange={(e) => setTelContato(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && void salvarContato()}
-                      placeholder="Telefone (DDD + número)"
+                      placeholder="Telefone (DDD + número; exterior: +país)"
                       className="w-44 rounded-lg border border-line px-2 py-1.5 text-sm bg-white"
                     />
                   )}

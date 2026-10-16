@@ -290,12 +290,21 @@ export async function transferirConversa(
   }
 }
 
+/** Telefone só com dígitos. Com "+" na frente (ou 11 dígitos que não são celular brasileiro) é número internacional e não leva o 55. */
+export function normalizarTelefone(telefone: string): string {
+  const t = telefone.trim();
+  const d = t.replace(/\D/g, '');
+  if (t.startsWith('+') || t.startsWith('00')) return t.startsWith('00') ? d.slice(2) : d;
+  if (d.length === 11 && d[2] !== '9') return d; // ex.: 1 508 309 5403 (EUA): celular brasileiro tem 9 depois do DDD
+  if (d.length === 10 || d.length === 11) return `55${d}`; // DDD + número → inclui o país
+  return d;
+}
+
 /** Cria (ou reabre) um contato dentro do Fluxa Chat, já salvo na agenda e no nome de quem cadastrou. */
 export async function criarContatoChat(empresaId: string, nome: string, telefone: string): Promise<ConversaChat> {
   await chatPronto;
-  let d = telefone.replace(/\D/g, '');
-  if (d.length === 10 || d.length === 11) d = `55${d}`; // DDD + número → inclui o país
-  if (d.length < 12) throw new Error('Telefone inválido. Informe DDD + número.');
+  const d = normalizarTelefone(telefone);
+  if (d.length < 12) throw new Error('Telefone inválido. Informe DDD + número (ou +país para número de fora do Brasil).');
   const id = `whatsapp_${d}`;
   const ref = doc(db, 'empresas', empresaId, 'conversas', id);
   const atual = await getDoc(ref);
