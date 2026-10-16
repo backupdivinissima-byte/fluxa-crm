@@ -67,7 +67,9 @@ export function criarRobo({ refConexao, base, getSock, estaAberto, reconectar, r
       e.retries = (e.retries ?? 0) + 1;
       marcar(eventos.pedidosReenvio);
       console.warn(`[robô] WhatsApp pediu reenvio da mensagem ${id} (pedido ${e.retries}).`);
-      // 1º pedido é normal e o conector responde sozinho; do 2º em diante algo está travado.
+      // 1º pedido: o conector já responde sozinho; o robô, em paralelo, renova a sessão com o contato na hora
+      // (assim o reenvio já sai com criptografia nova). 2º pedido: algo está travado -> reenvia o texto.
+      if (e.retries === 1) void Promise.resolve(getSock()?.assertSessions?.([e.jid], true)).catch(() => {});
       if (e.retries >= 2) void recuperar(id, 'WhatsApp pediu reenvio repetidas vezes');
     },
     /** Mensagem enviada pela plataforma: acompanha a confirmação do WhatsApp. */
@@ -77,7 +79,7 @@ export function criarRobo({ refConexao, base, getSock, estaAberto, reconectar, r
       if (!id) return;
       envios.set(id, { ...dados, em: Date.now() });
       confirmacoes.set(id, { status: 1 });
-      setTimeout(() => void conferirConfirmacao(id), 90 * 1000);
+      setTimeout(() => void conferirConfirmacao(id), 20 * 1000);
     },
     /** Atualizações de status do WhatsApp (2 = servidor recebeu, 3 = chegou no aparelho, 4 = lida). */
     status(atualizacoes) {
@@ -103,8 +105,8 @@ export function criarRobo({ refConexao, base, getSock, estaAberto, reconectar, r
     if (!c || !e) return;
     if (c.status < 2) {
       marcar(eventos.semConfirmacao);
-      console.warn(`[robô] Mensagem ${id} sem confirmação do WhatsApp em 90 s.`);
-      void recuperar(id, 'sem confirmação do WhatsApp em 90 s');
+      console.warn(`[robô] Mensagem ${id} sem confirmação do WhatsApp em 20 s.`);
+      void recuperar(id, 'sem confirmação do WhatsApp em 20 s');
       if (base && e.msgId) base.collection('conversas').doc(e.conversaId).collection('mensagens').doc(e.msgId).set({ entrega: 'sem_confirmacao' }, { merge: true }).catch(() => {});
     }
     // Guarda só o essencial por mais algum tempo para receber o "entregue/lida".
