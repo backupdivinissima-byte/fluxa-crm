@@ -40,10 +40,13 @@ export function criarRobo({ refConexao, base, getSock, estaAberto, reconectar, r
   const ganchos = {
     conectou() {
       abertoDesde = Date.now();
+      // Atualiza o selo logo que a conexão volta (sem esperar o ciclo de 5 min).
+      setTimeout(() => void publicar(true), 3000);
     },
     caiu() {
       abertoDesde = 0;
       marcar(eventos.quedas);
+      setTimeout(() => void publicar(true), 3000);
     },
     recebida() {
       ultimas.recebida = Date.now();
