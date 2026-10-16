@@ -127,9 +127,20 @@ async function aprenderLid(lid, pn) {
     lidParaTel.set(l, t);
     salvarMapaLid();
   }
+  void ensinarMapaBaileys([[l, t]]);
   if (MODO_TESTE || !base) return;
   if (!mesclando.has(l)) mesclando.set(l, mesclarConversas(l, t).catch((e) => console.error('Mesclar conversas:', e.message)));
   await mesclando.get(l);
+}
+// Baileys 7 precisa saber qual @lid é de qual telefone para enviar; sem isso o envio fica "sem confirmação".
+async function ensinarMapaBaileys(pares) {
+  const repo = sock?.signalRepository?.lidMapping;
+  if (!repo?.storeLIDPNMappings || !pares.length) return;
+  try {
+    await repo.storeLIDPNMappings(pares.map(([l, t]) => ({ lid: `${l}@lid`, pn: `${t}@s.whatsapp.net` })));
+  } catch (e) {
+    console.warn('[lid] não consegui ensinar o mapa ao WhatsApp:', e.message);
+  }
 }
 function aprenderDaMensagem(msg) {
   const k = msg.key ?? {};
@@ -534,6 +545,7 @@ async function iniciar() {
       }
       if (connection === 'open') {
         aberto = true;
+        void ensinarMapaBaileys([...lidParaTel.entries()]).then(() => console.log(`[lid] ${lidParaTel.size} contatos ensinados ao WhatsApp.`));
         await refConexao.set({ status: 'conectado', qr: '', codigoPareamento: '', erro: '', telefone: soDigitos(sock.user?.id ?? ''), atualizadoEm: agora() }, { merge: true });
         console.log('WhatsApp conectado.');
         robo?.conectou();
@@ -724,6 +736,11 @@ async function enviarSaida(d) {
       else conteudo = { document: buf, mimetype: dado.mime || 'application/octet-stream', fileName: dado.nomeArquivo || 'arquivo', caption: legenda };
     } else {
       conteudo = { text: dado.texto };
+    }
+    if (destino.endsWith('@s.whatsapp.net')) {
+      const tel = destino.split('@')[0];
+      const par = [...lidParaTel.entries()].find(([, t]) => t === tel);
+      if (par) await ensinarMapaBaileys([par]);
     }
     enviada = await sock.sendMessage(destino, conteudo);
     if (enviada?.key?.id) enviadasPorNos.add(enviada.key.id);
