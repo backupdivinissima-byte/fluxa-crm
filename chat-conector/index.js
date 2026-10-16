@@ -733,6 +733,8 @@ async function enviarSaida(d) {
               if (r?.key?.id) {
                 enviadasPorNos.add(r.key.id);
                 lembrarEnviada(r.key.id, r.message);
+                // Acompanha também o reenvio (sem nova recuperação: se falhar de novo, a equipe é avisada).
+                robo?.enviada(r.key.id, { conversaId: dado.conversaId, msgId: dado.msgId, jid: destino, tipo: dado.tipo === 'audio' ? 'audio' : dado.tipo === 'midia' ? 'midia' : 'texto', reenvio: true });
               }
               return r;
             },

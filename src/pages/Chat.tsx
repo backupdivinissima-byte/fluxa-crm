@@ -1150,6 +1150,20 @@ export default function Chat() {
                       <div className="text-[10px] text-ink-soft mt-1">
                         {m.autor ? `${m.autor} · ` : ''}
                         {hora(m.em)}
+                        {m.de === 'equipe' && m.autor !== 'Celular' && !m.erroEnvio && (
+                          <span
+                            className={`ml-1.5 font-bold ${m.entrega === 'lida' ? 'text-sky-500' : m.entrega === 'sem_confirmacao' ? 'text-orange-500' : m.entrega === 'entregue' ? 'text-emerald-600' : 'text-ink-soft'}`}
+                            title={
+                              m.entrega === 'lida' ? 'Lida pelo cliente' : m.entrega === 'entregue' ? 'Entregue no WhatsApp do cliente'
+                              : m.entrega === 'enviada' ? 'Enviada ao WhatsApp, aguardando chegar ao cliente'
+                              : m.entrega === 'sem_confirmacao' ? 'O WhatsApp não confirmou — o robô está tentando de novo'
+                              : m.entrega === 'reenviada_pelo_robo' ? 'O robô reenviou esta mensagem' : 'Enviando…'
+                            }
+                          >
+                            {m.entrega === 'lida' ? '✓✓ lida' : m.entrega === 'entregue' ? '✓✓ entregue' : m.entrega === 'enviada' ? '✓ enviada'
+                              : m.entrega === 'sem_confirmacao' ? '⚠ sem confirmação' : m.entrega === 'reenviada_pelo_robo' ? '🤖 reenviada' : '⏳'}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
