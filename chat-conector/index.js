@@ -475,6 +475,16 @@ async function iniciar() {
   if (iniciando) return;
   iniciando = true;
   try {
+    // Antes de a biblioteca nova mexer na sessão, guarda uma cópia (volta rápida, sem precisar de QR novo).
+    try {
+      const copia = `${PASTA_SESSAO}-copia-antes-da-v7`;
+      if (fs.existsSync(PASTA_SESSAO) && !fs.existsSync(copia)) {
+        fs.cpSync(PASTA_SESSAO, copia, { recursive: true });
+        console.log(`[sessão] Cópia de segurança criada em ${copia}.`);
+      }
+    } catch (e) {
+      console.warn('[sessão] Não consegui criar a cópia de segurança:', e.message);
+    }
     const { state, saveCreds } = await useMultiFileAuthState(PASTA_SESSAO);
     const { version } = await fetchLatestBaileysVersion();
     sock = makeWASocket({
