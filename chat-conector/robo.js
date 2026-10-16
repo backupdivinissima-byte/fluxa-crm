@@ -80,7 +80,7 @@ export function criarRobo({ refConexao, base, getSock, estaAberto, reconectar, r
       if (!id) return;
       envios.set(id, { ...dados, em: Date.now() });
       confirmacoes.set(id, { status: 1 });
-      setTimeout(() => void conferirConfirmacao(id), 20 * 1000);
+      setTimeout(() => void conferirConfirmacao(id), 6 * 1000);
     },
     /** Atualizações de status do WhatsApp (2 = servidor recebeu, 3 = chegou no aparelho, 4 = lida). */
     status(atualizacoes) {
@@ -106,9 +106,9 @@ export function criarRobo({ refConexao, base, getSock, estaAberto, reconectar, r
     if (!c || !e) return;
     if (c.status < 2) {
       marcar(eventos.semConfirmacao);
-      console.warn(`[robô] Mensagem ${id} sem confirmação do WhatsApp em 20 s.`);
+      console.warn(`[robô] Mensagem ${id} sem confirmação do WhatsApp em 6 s.`);
       alertar(e, 'O WhatsApp não confirmou o envio. O robô está reenviando.');
-      void recuperar(id, 'sem confirmação do WhatsApp em 20 s');
+      void recuperar(id, 'sem confirmação do WhatsApp em 6 s');
       if (base && e.msgId) base.collection('conversas').doc(e.conversaId).collection('mensagens').doc(e.msgId).set({ entrega: 'sem_confirmacao' }, { merge: true }).catch(() => {});
     }
     // Guarda só o essencial por mais algum tempo para receber o "entregue/lida".
@@ -146,7 +146,7 @@ export function criarRobo({ refConexao, base, getSock, estaAberto, reconectar, r
     if (!e || e.recuperada || !e.msgId) return;
     e.recuperada = true;
     const ref = base.collection('conversas').doc(e.conversaId).collection('mensagens').doc(e.msgId);
-    if (quantos(eventos.recuperadas, HORA) >= 30) {
+    if (quantos(eventos.recuperadas, HORA) >= 120) {
       console.warn('[robô] Limite de recuperações por hora atingido; não vou reenviar mais sozinho.');
       return;
     }

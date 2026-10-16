@@ -713,6 +713,26 @@ async function lerAnexo(dado) {
   throw new Error('Anexo não encontrado.');
 }
 
+// Reenvio pelo robô: a mesma coisa, de novo, com a sessão renovada. Até 3 tentativas seguidas.
+function refazerEnvio(destino, conteudo, dado, tentativa) {
+  return async () => {
+    const r = await sock.sendMessage(destino, conteudo);
+    if (r?.key?.id) {
+      enviadasPorNos.add(r.key.id);
+      lembrarEnviada(r.key.id, r.message);
+      robo?.enviada(r.key.id, {
+        conversaId: dado.conversaId,
+        msgId: dado.msgId,
+        jid: destino,
+        tipo: dado.tipo === 'audio' ? 'audio' : dado.tipo === 'midia' ? 'midia' : 'texto',
+        reenvio: true,
+        ...(tentativa < 3 ? { refazer: refazerEnvio(destino, conteudo, dado, tentativa + 1) } : {}),
+      });
+    }
+    return r;
+  };
+}
+
 async function enviarSaida(d) {
   const dado = d.data();
   if (dado.canal !== 'whatsapp' || processando.has(d.id)) return;
@@ -755,16 +775,7 @@ async function enviarSaida(d) {
             tipo: dado.tipo === 'audio' ? 'audio' : dado.tipo === 'midia' ? 'midia' : 'texto',
             texto: dado.texto,
             // Reenvio pelo robô: a mesma coisa, de novo, com a sessão renovada.
-            refazer: async () => {
-              const r = await sock.sendMessage(destino, conteudo);
-              if (r?.key?.id) {
-                enviadasPorNos.add(r.key.id);
-                lembrarEnviada(r.key.id, r.message);
-                // Acompanha também o reenvio (sem nova recuperação: se falhar de novo, a equipe é avisada).
-                robo?.enviada(r.key.id, { conversaId: dado.conversaId, msgId: dado.msgId, jid: destino, tipo: dado.tipo === 'audio' ? 'audio' : dado.tipo === 'midia' ? 'midia' : 'texto', reenvio: true });
-              }
-              return r;
-            },
+            refazer: refazerEnvio(destino, conteudo, dado, 1),
           }
         : null
     );
