@@ -758,7 +758,6 @@ export default function Chat() {
         </div>
       </div>
 
-      {souAdmin && (
       <div className="grid grid-cols-1 gap-3 items-stretch">
         <div className="space-y-2">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -768,6 +767,7 @@ export default function Chat() {
         <Cartao ativo={filtro === 'novos'} onClick={() => setFiltro(filtro === 'novos' ? 'todas' : 'novos')} titulo="Clientes novos" valor={novos} dica="Contatos sem cadastro no CRM" cor="azul" />
       </div>
 
+      {souAdmin && (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         {porOrigem.map((o) => (
           <Cartao key={o.chave} titulo={`Tag ${o.nome}`} valor={o.total} dica="Clientes com esta origem" />
@@ -776,9 +776,9 @@ export default function Chat() {
           <Cartao key={t.id} titulo={`Tag ${t.nome}`} valor={t.total} dica="Clientes com esta tag" />
         ))}
       </div>
+      )}
         </div>
       </div>
-      )}
 
       {souAdmin && (
         <div className="bg-white border border-line rounded-2xl p-4">
