@@ -64,7 +64,7 @@ export default function ClienteDetalheModal({
   const [cnpj, setCnpj] = useState(cliente.cnpj ?? '');
   const [telefone, setTelefone] = useState(telefoneInicial || cliente.telefone || '');
   const [cidadeUf, setCidadeUf] = useState(juntarCidadeUf(cliente.cidade, cliente.uf));
-  const [codVendedor, setCodVendedor] = useState(cliente.cod_vendedor ?? '');
+  const [codVendedor, setCodVendedor] = useState(vinculoVigente && cliente.crmVendedorLogin ? cliente.crmVendedorLogin : cliente.cod_vendedor ?? '');
   const [salvando, setSalvando] = useState(false);
 
   const dias = diasSemAtend(cliente);
@@ -100,8 +100,12 @@ export default function ClienteDetalheModal({
         patch.cidade = cidade;
         patch.uf = uf;
       }
-      if (codVendedor !== (cliente.cod_vendedor ?? '')) {
+      const donoAtual = vinculoVigente && cliente.crmVendedorLogin ? cliente.crmVendedorLogin : cliente.cod_vendedor ?? '';
+      if (codVendedor !== donoAtual) {
+        // Troca o dono de verdade: o cadastro e também o vendedor do funil (é ele que aparece no CRM e no Chat).
         patch.cod_vendedor = codVendedor || undefined;
+        patch.vend_nome = vendedores.find((v) => v.login === codVendedor)?.nome;
+        if (cliente.crmVendedorLogin) patch.crmVendedorLogin = codVendedor || undefined;
       }
       await atualizarCampoCliente(empresaId, cliente.id, patch);
       // Telefone novo que bate com uma conversa do Chat: cliente vai para "em atendimento".
@@ -296,8 +300,8 @@ export default function ClienteDetalheModal({
             </div>
           </div>
 
-          {/* Atribuir vendedor e salvar */}
-          {ehAdmin && (
+          {/* Atribuir vendedor (admin e vendedor: o vendedor usa para transferir o atendimento) e salvar */}
+          {true && (
             <div className="flex items-center gap-4 mt-6">
               <label className="text-[11px] font-bold uppercase tracking-wide text-ink-soft w-20 shrink-0 leading-tight">
                 Atribuir vendedor
