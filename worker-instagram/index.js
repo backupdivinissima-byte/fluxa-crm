@@ -383,8 +383,8 @@ async function sincronizarInstagram(env) {
   } catch {
     return;
   }
-  for (const [chave, t] of Object.entries(tokens)) {
-    if (!chave.endsWith(':instagram') || !t) continue;
+  for (const [chave, bruto] of Object.entries(tokens)) {
+    if (!chave.endsWith(':instagram') || !bruto) continue; const t = String(bruto).replace(/\s+/g, '').split('"').join('');
     const empresaId = chave.slice(0, -':instagram'.length);
     try {
       const eu = await igGet(t, 'me?fields=user_id,username');
