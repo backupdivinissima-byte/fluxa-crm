@@ -14,7 +14,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import ffmpegPath from 'ffmpeg-static';
-import makeWASocket, { DisconnectReason, useMultiFileAuthState, fetchLatestBaileysVersion, downloadMediaMessage, normalizeMessageContent } from '@whiskeysockets/baileys';
+import makeWASocket, { DisconnectReason, useMultiFileAuthState, fetchLatestBaileysVersion, downloadMediaMessage, normalizeMessageContent, BufferJSON } from '@whiskeysockets/baileys';
 import { initializeApp, applicationDefault } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import QRCode from 'qrcode';
@@ -425,13 +425,67 @@ async function gravarComNovasTentativas(msg) {
   robo?.erroGravacao();
 }
 
+
+// ---- Memória das mensagens enviadas (conserta o "Aguardando mensagem") ----------
+// Quando o celular (ou o cliente) não consegue abrir uma mensagem, o WhatsApp pede
+// o reenvio ("retry"). Para reenviar, o Baileys precisa receber o conteúdo de volta
+// em getMessage(); sem isto a mensagem fica pendente ("Aguardando mensagem. Essa
+// ação pode levar alguns instantes") para sempre. Guardamos as últimas enviadas,
+// inclusive em disco, para o reenvio funcionar mesmo depois de reiniciar.
+const ARQ_ENVIADAS = path.join(path.dirname(ARQ_LID), 'enviadas.json');
+const MAX_ENVIADAS = 3000;
+const enviadasMemoria = new Map(); // id -> conteúdo (proto)
+try {
+  const bruto = JSON.parse(fs.readFileSync(ARQ_ENVIADAS, 'utf8'), BufferJSON.reviver);
+  for (const [k, v] of Object.entries(bruto)) enviadasMemoria.set(k, v);
+  console.log(`[retry] ${enviadasMemoria.size} mensagens enviadas na memória.`);
+} catch {
+  /* primeira vez */
+}
+let salvarEnviadasAgendado = false;
+function lembrarEnviada(id, message) {
+  if (!id || !message) return;
+  enviadasMemoria.set(id, message);
+  while (enviadasMemoria.size > MAX_ENVIADAS) enviadasMemoria.delete(enviadasMemoria.keys().next().value);
+  if (salvarEnviadasAgendado) return;
+  salvarEnviadasAgendado = true;
+  setTimeout(() => {
+    salvarEnviadasAgendado = false;
+    try {
+      fs.writeFileSync(ARQ_ENVIADAS, JSON.stringify(Object.fromEntries(enviadasMemoria), BufferJSON.replacer));
+    } catch (e) {
+      console.error('[retry] Não consegui salvar as enviadas:', e.message);
+    }
+  }, 5000);
+}
+// Contador de tentativas de reenvio por mensagem (interface de cache do Baileys).
+const tentativasRetry = new Map();
+const msgRetryCounterCache = {
+  get: (k) => tentativasRetry.get(k),
+  set: (k, v) => {
+    tentativasRetry.set(k, v);
+    setTimeout(() => tentativasRetry.delete(k), 60 * 60 * 1000).unref?.();
+  },
+  del: (k) => tentativasRetry.delete(k),
+  flushAll: () => tentativasRetry.clear(),
+};
+
 async function iniciar() {
   if (iniciando) return;
   iniciando = true;
   try {
     const { state, saveCreds } = await useMultiFileAuthState(PASTA_SESSAO);
     const { version } = await fetchLatestBaileysVersion();
-    sock = makeWASocket({ version, auth: state, logger: log, printQRInTerminal: false, browser: ['Fluxa Chat', 'Chrome', '1.0'] });
+    sock = makeWASocket({
+      version,
+      auth: state,
+      logger: log,
+      printQRInTerminal: false,
+      browser: ['Fluxa Chat', 'Chrome', '1.0'],
+      msgRetryCounterCache,
+      // Devolve o conteúdo de uma mensagem nossa quando o WhatsApp pede o reenvio.
+      getMessage: async (key) => (key?.id ? enviadasMemoria.get(key.id) : undefined),
+    });
     const esteSock = sock; // eventos de um socket antigo (já trocado) são ignorados
     sock.ev.on('creds.update', saveCreds);
     // Contatos salvos no celular chegam ao conectar e quando mudam.
@@ -660,6 +714,7 @@ async function enviarSaida(d) {
       enviada = await sock.sendMessage(destino, { text: dado.texto });
     }
     if (enviada?.key?.id) enviadasPorNos.add(enviada.key.id);
+    lembrarEnviada(enviada?.key?.id, enviada?.message);
     robo?.enviada(enviada?.key?.id, dado.msgId ? { conversaId: dado.conversaId, msgId: dado.msgId } : null);
     // Diagnóstico: confere se o WhatsApp guardou o arquivo que acabamos de enviar.
     if (dado.tipo === 'audio' || dado.tipo === 'midia') {
