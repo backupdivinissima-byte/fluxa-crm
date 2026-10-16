@@ -9,7 +9,7 @@
     "backup-drive": "node backup-drive.js"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.7.9",
+    "@whiskeysockets/baileys": "^6.7.24",
     "ffmpeg-static": "^5.2.0",
     "firebase-admin": "^12.6.0",
     "pino": "^9.4.0",
