@@ -286,6 +286,117 @@ async function enviarFila(env) {
   }
 }
 
+
+// ===== Leitura direta (sem mexer no webhook da Meta que já existe) =====
+// A cada minuto o Fluxa pergunta ao Instagram: "chegou mensagem direta nova?" e "tem live no ar? quais @ comentaram?".
+// Usa o token do Instagram (TOKENS_JSON: "<idDaEmpresa>:instagram"). Não depende do webhook.
+async function igGet(t, caminho) {
+  const r = await fetch(`https://graph.instagram.com/v21.0/${caminho}${caminho.includes('?') ? '&' : '?'}access_token=${encodeURIComponent(t)}`);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(`Instagram ${r.status}: ${JSON.stringify(j).slice(0, 200)}`);
+  return j;
+}
+
+async function atualizarConversaDm(env, empresaId, contato, texto, quando, nomeSugerido) {
+  const raiz = `${DOCS(env)}/empresas/${empresaId}/conversas/instagram_${contato}`;
+  const token = await tokenGoogle(env);
+  const atual = await fetch(`https://firestore.googleapis.com/v1/${raiz}?mask.fieldPaths=nome`, { headers: { Authorization: `Bearer ${token}` } });
+  const conversaNova = atual.status === 404;
+  const semNome = conversaNova || !(await atual.json().catch(() => ({}))).fields?.nome;
+  const nome = semNome ? nomeSugerido || contato : '';
+  await commitFirestore(env, [
+    {
+      update: {
+        name: raiz,
+        fields: {
+          canal: { stringValue: 'instagram' },
+          contato: { stringValue: contato },
+          ...(nome ? { nome: { stringValue: nome } } : {}),
+          ultimaMensagem: { stringValue: texto },
+          ultimaEm: { stringValue: quando },
+          ultimaDe: { stringValue: 'cliente' },
+          ...(conversaNova ? { primeiroContato: { booleanValue: true } } : {}),
+        },
+      },
+      updateMask: { fieldPaths: ['canal', 'contato', ...(nome ? ['nome'] : []), 'ultimaMensagem', 'ultimaEm', 'ultimaDe', ...(conversaNova ? ['primeiroContato'] : [])] },
+      updateTransforms: [{ fieldPath: 'naoLidas', increment: { integerValue: '1' } }],
+    },
+  ]);
+}
+
+async function sincronizarDiretas(env, empresaId, t, meuId) {
+  const j = await igGet(t, 'me/conversations?platform=instagram&limit=8&fields=id,updated_time,messages.limit(4){id,message,from,created_time,attachments}');
+  const limite = Date.now() - 20 * 60 * 1000; // só olha o que chegou nos últimos 20 minutos
+  let novas = 0;
+  for (const conv of j.data ?? []) {
+    for (const m of conv.messages?.data ?? []) {
+      if (novas >= 8) return;
+      const de = String(m.from?.id ?? '');
+      if (!de || de === meuId) continue; // as nossas próprias respostas já estão no Fluxa
+      const quando = new Date(m.created_time).toISOString();
+      if (new Date(quando).getTime() < limite) continue;
+      const texto = m.message || (m.attachments?.data?.length ? '[anexo]' : '[mensagem]');
+      const token = await tokenGoogle(env);
+      const raiz = `${DOCS(env)}/empresas/${empresaId}/conversas/instagram_${de}`;
+      const r = await fetch(`https://firestore.googleapis.com/v1/${raiz}/mensagens/${encodeURIComponent(m.id)}?currentDocument.exists=false`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { de: { stringValue: 'cliente' }, texto: { stringValue: texto }, em: { stringValue: quando } } }),
+      });
+      if (r.status === 409 || r.status === 400) continue; // já estava no Fluxa
+      if (!r.ok) throw new Error(`Firestore ${r.status}: ${await r.text()}`);
+      novas++;
+      await atualizarConversaDm(env, empresaId, de, texto, quando, m.from?.username ? `@${m.from.username}` : '');
+    }
+  }
+}
+
+async function sincronizarLives(env, empresaId, t) {
+  let lives;
+  try {
+    lives = await igGet(t, 'me/live_media?fields=id,timestamp');
+  } catch {
+    return; // sem live no ar (ou a Meta não liberou): tenta de novo no próximo minuto
+  }
+  let gravados = 0;
+  for (const live of (lives.data ?? []).slice(0, 2)) {
+    let com;
+    try {
+      com = await igGet(t, `${live.id}/comments?fields=id,text,username,timestamp&limit=50`);
+    } catch {
+      continue;
+    }
+    for (const c of com.data ?? []) {
+      if (gravados >= 20) return;
+      const arroba = String(c.username ?? '').trim().toLowerCase();
+      if (!arroba) continue;
+      gravados++;
+      await guardarComentario(env, { empresaId, liveId: String(live.id), arroba, texto: String(c.text ?? ''), quando: c.timestamp ? new Date(c.timestamp).toISOString() : new Date().toISOString() });
+    }
+  }
+}
+
+async function sincronizarInstagram(env) {
+  let tokens = {};
+  try {
+    tokens = JSON.parse(env.TOKENS_JSON || '{}');
+  } catch {
+    return;
+  }
+  for (const [chave, t] of Object.entries(tokens)) {
+    if (!chave.endsWith(':instagram') || !t) continue;
+    const empresaId = chave.slice(0, -':instagram'.length);
+    try {
+      const eu = await igGet(t, 'me?fields=user_id,username');
+      const meuId = String(eu.user_id ?? eu.id ?? '');
+      await sincronizarDiretas(env, empresaId, t, meuId);
+      await sincronizarLives(env, empresaId, t);
+    } catch (e) {
+      console.error(`Leitura do Instagram (${empresaId}):`, e);
+    }
+  }
+}
+
 function extrair(corpo, env) {
   const lista = [];
   for (const entrada of corpo.entry ?? []) {
@@ -342,6 +453,11 @@ export default {
       await enviarFila(env);
     } catch (e) {
       console.error('Erro na fila de envio:', e);
+    }
+    try {
+      await sincronizarInstagram(env);
+    } catch (e) {
+      console.error('Erro ao ler o Instagram:', e);
     }
   },
 };

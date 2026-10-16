@@ -23,3 +23,10 @@ Servidor gratuito que recebe cada comentário da live (enviado pela Meta) e grav
 1. **Configurar webhooks**: URL de retorno = endereço do Worker; token de verificação = VERIFY_TOKEN → Verificar e salvar.
 2. Assine o campo **live_comments**.
 3. Na conta @divinissimasemijoias, ative **Assinar webhooks** (bloco "Gerar tokens de acesso").
+
+## 4. Leitura direta do Instagram (sem mexer no webhook que já existe na Meta)
+O Worker também **lê** o Instagram a cada minuto (cron): DMs novas vão para o Chat do Fluxa e os @ que comentam na live vão para o Marketing.
+Não precisa trocar o endereço do webhook na Meta (o do bot atual continua como está). Só é preciso:
+- `TOKENS_JSON` (secret): `{"<id da empresa>:instagram":"<token do Instagram>"}`
+- `SERVICE_ACCOUNT_JSON` (secret) e `CHAT_PROJECT_ID`/`FIREBASE_PROJECT_ID`
+- Cron `* * * * *` no Worker.
