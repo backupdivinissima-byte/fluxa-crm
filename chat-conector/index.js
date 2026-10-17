@@ -360,10 +360,14 @@ async function importarHistorico(lista) {
   console.log('Histórico importado.');
 }
 
-// Quem clica no botão de WhatsApp do Instagram chega com esta frase pronta: a conversa ganha a tag Instagram sozinha.
-function veioDoInstagram(texto) {
+// Quando o cliente diz de onde veio ("vim do Instagram", "vi no direct", "pelo Messenger", "do Face"), a conversa ganha a tag sozinha.
+function origemPeloTexto(texto) {
   const t = String(texto ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  return /vim do instagram/.test(t);
+  const veio = '(?:vim|veio|vieram|vir|cheguei|chego|chamei|chamo|falei|vi |vi$|vindo|encontrei|achei|conheci|pelo|pela|atraves)';
+  const perto = (nomes) => new RegExp(veio + '[^.!?\\n]{0,45}\\b(?:' + nomes + ')\\b').test(t);
+  if (perto('instagram|insta|instagran|direct|diret')) return 'instagram';
+  if (perto('facebook|face|fb|messenger|mensager|mensenger|messeger|mesenger')) return 'facebook';
+  return null;
 }
 
 async function guardarMensagem(msg) {
@@ -408,7 +412,7 @@ async function guardarMensagem(msg) {
       ultimaDe: deCliente ? 'cliente' : 'equipe',
       ...(deCliente ? {} : { teveResposta: true }),
       ...(primeiroContato ? { primeiroContato: true } : {}),
-      ...(deCliente && veioDoInstagram(texto) ? { origem: 'instagram' } : {}),
+      ...(deCliente && origemPeloTexto(texto) ? { origem: origemPeloTexto(texto) } : {}),
       ...(deCliente ? { naoLidas: FieldValue.increment(1) } : {}),
     },
     { merge: true }
