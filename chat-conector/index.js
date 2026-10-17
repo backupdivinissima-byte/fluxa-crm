@@ -360,6 +360,12 @@ async function importarHistorico(lista) {
   console.log('Histórico importado.');
 }
 
+// Quem clica no botão de WhatsApp do Instagram chega com esta frase pronta: a conversa ganha a tag Instagram sozinha.
+function veioDoInstagram(texto) {
+  const t = String(texto ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  return /vim do instagram/.test(t);
+}
+
 async function guardarMensagem(msg) {
   await aprenderDaMensagem(msg);
   const jid = jidDe(msg);
@@ -402,6 +408,7 @@ async function guardarMensagem(msg) {
       ultimaDe: deCliente ? 'cliente' : 'equipe',
       ...(deCliente ? {} : { teveResposta: true }),
       ...(primeiroContato ? { primeiroContato: true } : {}),
+      ...(deCliente && veioDoInstagram(texto) ? { origem: 'instagram' } : {}),
       ...(deCliente ? { naoLidas: FieldValue.increment(1) } : {}),
     },
     { merge: true }
