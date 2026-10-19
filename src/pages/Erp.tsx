@@ -4,10 +4,11 @@ import { ouvirProdutos, ouvirMovimentos, salvarProduto, excluirProduto, moviment
 import { lerProdutosDaPlanilha, modeloCsv, type ResultadoLeitura } from '../lib/erpImportar';
 import { formatarMoeda, parseValorBR } from '../lib/crmLogic';
 import ErpPedidos from './ErpPedidos';
+import ErpCadastros from './ErpCadastros';
 import { IconEstoque } from '../components/NavIcons';
 import type { MovimentoEstoque, Produto } from '../types';
 
-type Aba = 'produtos' | 'pedidos' | 'movimentos' | 'importar';
+type Aba = 'produtos' | 'pedidos' | 'cadastros' | 'movimentos' | 'importar';
 const campo = 'w-full rounded-lg border border-line px-3 h-10 text-sm bg-white';
 const rotulo = 'block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1';
 
@@ -63,9 +64,9 @@ export default function Erp() {
       </div>
 
       <div className="flex gap-1 mb-4 border-b border-line">
-        {(['produtos', 'pedidos', 'movimentos', 'importar'] as Aba[]).map((a) => (
+        {(['produtos', 'pedidos', 'cadastros', 'movimentos', 'importar'] as Aba[]).map((a) => (
           <button key={a} onClick={() => setAba(a)} className={`px-4 h-10 text-sm font-bold ${aba === a ? 'text-teal-500 border-b-2 border-teal-500' : 'text-ink-soft'}`}>
-            {a === 'produtos' ? 'Produtos' : a === 'pedidos' ? 'Pedidos' : a === 'movimentos' ? 'Movimentações' : 'Importar (Bling / Olist)'}
+            {a === 'produtos' ? 'Produtos' : a === 'pedidos' ? 'Pedidos' : a === 'cadastros' ? 'Cadastros' : a === 'movimentos' ? 'Movimentações' : 'Importar (Bling / Olist)'}
           </button>
         ))}
       </div>
@@ -112,6 +113,8 @@ export default function Erp() {
       )}
 
       {aba === 'pedidos' && empresaId && <ErpPedidos empresaId={empresaId} produtos={produtos} />}
+
+      {aba === 'cadastros' && empresaId && <ErpCadastros empresaId={empresaId} />}
 
       {aba === 'movimentos' && (
         <div className="overflow-x-auto rounded-xl border border-line bg-white">

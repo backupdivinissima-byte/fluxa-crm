@@ -128,6 +128,7 @@ export function totalDoPedido(itens: ItemPedido[], desconto: number, frete: numb
 export interface DadosPedido {
   clienteNome: string; clienteTelefone?: string; itens: ItemPedido[]; desconto: number; frete: number;
   pagamento?: string; observacao?: string; origem?: Pedido['origem'];
+  clienteId?: string; operacao?: string; vendedor?: string; condicaoPagamento?: string;
 }
 
 /** Cria o pedido e baixa o estoque de todos os itens numa transação só (ou tudo, ou nada). */
@@ -154,7 +155,8 @@ export async function criarPedido(empresaId: string, d: DadosPedido, usuario?: s
     });
     tx.set(contRef, { ultimo: numero });
     tx.set(pedRef, semUndefined({
-      numero, clienteNome: d.clienteNome.trim(), clienteTelefone: d.clienteTelefone?.trim() || undefined, itens: d.itens,
+      numero, clienteNome: d.clienteNome.trim(), clienteTelefone: d.clienteTelefone?.trim() || undefined, clienteId: d.clienteId || undefined,
+      operacao: d.operacao || undefined, vendedor: d.vendedor || undefined, condicaoPagamento: d.condicaoPagamento || undefined, itens: d.itens,
       desconto: d.desconto, frete: d.frete, total: totalDoPedido(d.itens, d.desconto, d.frete),
       pagamento: d.pagamento || undefined, observacao: d.observacao?.trim() || undefined,
       status: 'aberto' as StatusPedido, origem: d.origem ?? 'manual', criadoEm: agora, atualizadoEm: agora,

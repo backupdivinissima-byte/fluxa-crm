@@ -448,6 +448,10 @@ export interface Pedido {
   numero: number;
   clienteNome: string;
   clienteTelefone?: string;
+  clienteId?: string;
+  operacao?: string;
+  vendedor?: string;
+  condicaoPagamento?: string;
   itens: ItemPedido[];
   desconto: number;
   frete: number;

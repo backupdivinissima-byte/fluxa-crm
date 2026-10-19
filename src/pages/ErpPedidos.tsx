@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { criarPedido, mudarStatusPedido, ouvirPedidos, totalDoPedido } from '../lib/erpData';
 import { formatarMoeda, parseValorBR } from '../lib/crmLogic';
+import { ouvirCadastro, type RegistroCad } from '../lib/erpCadastros';
 import type { ItemPedido, Pedido, Produto, StatusPedido } from '../types';
 
 const campo = 'w-full rounded-lg border border-line px-3 h-10 text-sm bg-white';
@@ -39,13 +40,14 @@ export default function ErpPedidos({ empresaId, produtos }: { empresaId: string;
       {erro && <p className="text-sm text-red-600 mb-2">{erro}</p>}
       <div className="overflow-x-auto rounded-xl border border-line bg-white">
         <table className="w-full text-sm">
-          <thead className="text-xs uppercase text-ink-soft bg-surface"><tr><th className="text-left p-3">Nº</th><th className="text-left p-3">Cliente</th><th className="text-left p-3">Itens</th><th className="text-right p-3">Total</th><th className="text-left p-3">Status</th><th className="p-3" /></tr></thead>
+          <thead className="text-xs uppercase text-ink-soft bg-surface"><tr><th className="text-left p-3">Nº</th><th className="text-left p-3">Cliente</th><th className="text-left p-3">Itens</th><th className="text-left p-3">Operação</th><th className="text-right p-3">Total</th><th className="text-left p-3">Status</th><th className="p-3" /></tr></thead>
           <tbody>
             {lista.map((p) => (
               <tr key={p.id} className="border-t border-line align-top">
                 <td className="p-3 font-bold">#{p.numero}<div className="text-[11px] font-normal text-ink-soft">{new Date(p.criadoEm).toLocaleDateString('pt-BR')}</div></td>
                 <td className="p-3">{p.clienteNome}{p.clienteTelefone && <div className="text-xs text-ink-soft">{p.clienteTelefone}</div>}</td>
                 <td className="p-3 text-ink-soft">{p.itens.map((i) => `${i.quantidade}× ${i.nome}`).join(', ')}</td>
+                <td className="p-3 text-ink-soft">{p.operacao ?? '—'}{p.vendedor ? <div className="text-xs">{p.vendedor}</div> : null}</td>
                 <td className="p-3 text-right font-bold">{formatarMoeda(p.total)}</td>
                 <td className="p-3"><span className={`rounded-full px-2 py-0.5 text-xs font-bold ${COR[p.status]}`}>{ROTULO[p.status]}</span></td>
                 <td className="p-3 whitespace-nowrap text-right">
@@ -54,18 +56,35 @@ export default function ErpPedidos({ empresaId, produtos }: { empresaId: string;
                 </td>
               </tr>
             ))}
-            {lista.length === 0 && <tr><td colSpan={6} className="p-6 text-center text-ink-soft">Nenhum pedido ainda.</td></tr>}
+            {lista.length === 0 && <tr><td colSpan={7} className="p-6 text-center text-ink-soft">Nenhum pedido ainda.</td></tr>}
           </tbody>
         </table>
       </div>
-      {novo && <FormPedido produtos={produtos.filter((p) => p.ativo)} onFechar={() => setNovo(false)} onSalvar={async (d) => { try { await criarPedido(empresaId, d, perfil?.nome); setNovo(false); setErro(''); } catch (e) { return e instanceof Error ? e.message : 'Erro ao salvar.'; } }} />}
+      {novo && <FormPedido empresaId={empresaId} produtos={produtos.filter((p) => p.ativo)} onFechar={() => setNovo(false)} onSalvar={async (d) => { try { await criarPedido(empresaId, d, perfil?.nome); setNovo(false); setErro(''); } catch (e) { return e instanceof Error ? e.message : 'Erro ao salvar.'; } }} />}
     </>
   );
 }
 
-function FormPedido({ produtos, onFechar, onSalvar }: { produtos: Produto[]; onFechar: () => void; onSalvar: (d: Parameters<typeof criarPedido>[1]) => Promise<string | void> }) {
+function FormPedido({ empresaId, produtos, onFechar, onSalvar }: { empresaId: string; produtos: Produto[]; onFechar: () => void; onSalvar: (d: Parameters<typeof criarPedido>[1]) => Promise<string | void> }) {
   const [nome, setNome] = useState('');
   const [tel, setTel] = useState('');
+  const [clienteId, setClienteId] = useState('');
+  const [operacao, setOperacao] = useState('');
+  const [vendedor, setVendedor] = useState('');
+  const [cond, setCond] = useState('');
+  const [clientes, setClientes] = useState<RegistroCad[]>([]);
+  const [operacoes, setOperacoes] = useState<RegistroCad[]>([]);
+  const [vendedores, setVendedores] = useState<RegistroCad[]>([]);
+  const [condicoes, setCondicoes] = useState<RegistroCad[]>([]);
+  useEffect(() => {
+    const u = [ouvirCadastro(empresaId, 'clientes', setClientes), ouvirCadastro(empresaId, 'operacoesVenda', setOperacoes), ouvirCadastro(empresaId, 'vendedores', setVendedores), ouvirCadastro(empresaId, 'condicoesPagamento', setCondicoes)];
+    return () => u.forEach((f) => f());
+  }, [empresaId]);
+  function escolherCliente(id: string) {
+    setClienteId(id);
+    const c = clientes.find((x) => x.id === id);
+    if (c) { setNome(String(c.nome ?? '')); setTel(String(c.telefone ?? '')); }
+  }
   const [itens, setItens] = useState<ItemPedido[]>([]);
   const [prodId, setProdId] = useState('');
   const [qtd, setQtd] = useState('1');
@@ -92,6 +111,11 @@ function FormPedido({ produtos, onFechar, onSalvar }: { produtos: Produto[]; onF
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onFechar}>
       <div className="bg-white rounded-2xl p-5 w-full max-w-xl max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-extrabold text-ink mb-3">Novo pedido</h2>
+        {clientes.length > 0 && (
+          <div className="mb-3"><label className={rotulo}>Cliente cadastrado</label>
+            <select className={campo} value={clienteId} onChange={(e) => escolherCliente(e.target.value)}><option value="">Outro (digitar abaixo)</option>{clientes.map((c) => <option key={c.id} value={c.id}>{String(c.nome)}</option>)}</select>
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <div><label className={rotulo}>Cliente</label><input className={campo} value={nome} onChange={(e) => setNome(e.target.value)} /></div>
           <div><label className={rotulo}>Telefone</label><input className={campo} value={tel} onChange={(e) => setTel(e.target.value)} /></div>
@@ -125,12 +149,17 @@ function FormPedido({ produtos, onFechar, onSalvar }: { produtos: Produto[]; onF
             <select className={campo} value={pag} onChange={(e) => setPag(e.target.value)}>{['Pix', 'Cartão de crédito', 'Cartão de débito', 'Dinheiro', 'Boleto', 'Outro'].map((x) => <option key={x}>{x}</option>)}</select>
           </div>
         </div>
+        <div className="grid grid-cols-3 gap-3 mt-3">
+          <div><label className={rotulo}>Operação</label><select className={campo} value={operacao} onChange={(e) => setOperacao(e.target.value)}><option value="">—</option>{operacoes.map((o) => <option key={o.id} value={String(o.nome)}>{String(o.nome)}</option>)}</select></div>
+          <div><label className={rotulo}>Vendedor</label><select className={campo} value={vendedor} onChange={(e) => setVendedor(e.target.value)}><option value="">—</option>{vendedores.map((o) => <option key={o.id} value={String(o.nome)}>{String(o.nome)}</option>)}</select></div>
+          <div><label className={rotulo}>Condição</label><select className={campo} value={cond} onChange={(e) => setCond(e.target.value)}><option value="">À vista</option>{condicoes.map((o) => <option key={o.id} value={String(o.nome)}>{String(o.nome)}</option>)}</select></div>
+        </div>
         <label className={`${rotulo} mt-3`}>Observação</label>
         <input className={campo} value={obs} onChange={(e) => setObs(e.target.value)} />
         <div className="flex items-center justify-between mt-4">
           <span className="text-sm text-ink-soft">Total <b className="text-lg text-ink">{formatarMoeda(total)}</b></span>
           <div className="flex gap-2">
-            <button disabled={salvando} onClick={async () => { setSalvando(true); const r = await onSalvar({ clienteNome: nome, clienteTelefone: tel, itens, desconto: num(desc), frete: num(frete), pagamento: pag, observacao: obs }); if (r) setErro(r); setSalvando(false); }} className="rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-4 h-10 disabled:opacity-40">Criar pedido</button>
+            <button disabled={salvando} onClick={async () => { setSalvando(true); const r = await onSalvar({ clienteNome: nome, clienteTelefone: tel, clienteId, operacao, vendedor, condicaoPagamento: cond, itens, desconto: num(desc), frete: num(frete), pagamento: pag, observacao: obs }); if (r) setErro(r); setSalvando(false); }} className="rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-4 h-10 disabled:opacity-40">Criar pedido</button>
             <button onClick={onFechar} className="rounded-xl border border-line text-sm font-bold px-4">Cancelar</button>
           </div>
         </div>
