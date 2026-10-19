@@ -155,12 +155,12 @@ const produtos = [
   },
   {
     nome: 'Fluxa ERP',
-    status: 'Em breve',
-    statusCls: 'bg-slate-100 text-ink-soft',
-    desc: 'Gestão financeira, estoque e nota fiscal integrados ao seu CRM, pra cuidar da empresa inteira num só lugar.',
+    status: 'Disponível agora',
+    statusCls: 'bg-teal-500/10 text-teal-600',
+    desc: 'Produtos, estoque, pedidos, trocas, consignação e financeiro. Funciona sozinho e se liga ao CRM, Chat e Live por API.',
     icon: <IconErp />,
-    ctaLabel: 'Quero ser avisado',
-    ctaTo: null,
+    ctaLabel: 'Teste grátis',
+    ctaTo: '/cadastrar?plataforma=erp',
   },
   {
     nome: 'Fluxa Marketing',

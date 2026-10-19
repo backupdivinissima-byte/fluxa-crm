@@ -38,10 +38,10 @@ const PLATAFORMAS = [
   {
     id: 'erp',
     nome: 'Fluxa ERP',
-    status: 'Em breve',
-    statusCls: 'bg-slate-100 text-ink-soft',
-    desc: 'Financeiro, estoque e nota fiscal, integrados ao resto da empresa.',
-    disponivel: false,
+    status: 'Disponível agora',
+    statusCls: 'bg-teal-500/10 text-teal-600',
+    desc: 'Produtos, estoque, pedidos, trocas, consignação e financeiro. Funciona sozinho e se liga aos outros por API.',
+    disponivel: true,
   },
   {
     id: 'prospect',
@@ -116,8 +116,8 @@ export default function Cadastrar() {
   // (etapa 1); só Fluxa CRM e Fluxa Marketing têm formulário completo hoje
   // (mesma conta por baixo), os outros abrem "quero ser avisado".
   const plataformaUrl = params.get('plataforma');
-  const [plataforma, setPlataforma] = useState<'crm' | 'marketing' | 'chat' | null>(
-    plataformaUrl === 'crm' || plataformaUrl === 'marketing' || plataformaUrl === 'chat' ? plataformaUrl : null
+  const [plataforma, setPlataforma] = useState<'crm' | 'marketing' | 'chat' | 'erp' | null>(
+    plataformaUrl === 'crm' || plataformaUrl === 'marketing' || plataformaUrl === 'chat' || plataformaUrl === 'erp' ? plataformaUrl : null
   );
   const [nomeEmpresa, setNomeEmpresa] = useState('');
   const [nome, setNome] = useState('');
@@ -209,7 +209,7 @@ export default function Cadastrar() {
               <button
                 key={p.id}
                 type="button"
-                onClick={() => setPlataforma(p.id as 'crm' | 'marketing' | 'chat')}
+                onClick={() => setPlataforma(p.id as 'crm' | 'marketing' | 'chat' | 'erp')}
                 className="w-full flex items-center justify-between gap-3 rounded-xl border border-line bg-white p-4 text-left hover:border-teal-500 hover:bg-teal-500/5 transition-colors"
               >
                 <div>
@@ -262,6 +262,8 @@ export default function Cadastrar() {
   const subtituloPlataforma =
     plataforma === 'marketing'
       ? 'Comece seu teste grátis: anúncios, lives e ROI/CAC, já cruzados com o funil de vendas da sua empresa.'
+      : plataforma === 'erp'
+        ? 'Comece seu teste grátis: produtos, estoque, pedidos e financeiro da sua empresa, de forma simples.'
       : plataforma === 'chat'
         ? 'Comece seu teste grátis: todo o atendimento da sua empresa (WhatsApp, Instagram e Messenger) em um só lugar.'
         : 'Comece seu teste grátis e organize o funil de vendas da sua empresa.';
@@ -290,6 +292,12 @@ export default function Cadastrar() {
         <p className="text-xs text-ink-soft bg-surface rounded-xl p-3 mb-4">
           O Fluxa Marketing roda dentro da mesma conta do Fluxa CRM — sua empresa ganha acesso aos dois (CRM e
           Marketing) com este único cadastro.
+        </p>
+      )}
+      {plataforma === 'erp' && (
+        <p className="text-xs text-ink-soft bg-surface rounded-xl p-3 mb-4">
+          O Fluxa ERP funciona sozinho, em uma conta própria. Se depois você contratar o CRM, Chat ou Marketing, a
+          ligação entre eles é feita por API, sem misturar os dados.
         </p>
       )}
       {plataforma === 'chat' && (
