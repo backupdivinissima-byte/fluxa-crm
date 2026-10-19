@@ -295,6 +295,7 @@ export default function Chat() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [colunas, setColunas] = useState<ColunaCrm[]>([]);
   const [conexao, setConexao] = useState<ConexaoChat>({ status: 'desconectado' });
+  const [filtroTag, setFiltroTag] = useState<string | null>(null); // 'origem:instagram' ou 'tag:<id>'
   const [filtro, setFiltro] = useState<'todas' | 'novos' | 'minhas' | 'aguardando' | 'atendimento' | 'semresposta' | 'alerta'>('todas');
   const [abertaId, setAbertaId] = useState<string | null>(null);
   const [mensagens, setMensagens] = useState<MensagemChat[]>([]);
@@ -380,7 +381,9 @@ export default function Chat() {
   const lista = useMemo(
     () =>
       visiveis.filter((c) =>
-        filtro === 'novos'
+        (filtroTag === null ||
+          (filtroTag.startsWith('origem:') ? origemDe(c) === filtroTag.slice(7) : !!c.tags?.includes(filtroTag.slice(4)))) &&
+        (filtro === 'novos'
           ? ehNovo(c)
           : filtro === 'minhas'
             ? c.vendedorLogin === meuLogin
@@ -392,10 +395,10 @@ export default function Chat() {
                   ? c.ultimaDe === 'cliente'
                   : filtro === 'alerta'
                     ? c.alertaEntrega === true
-                    : true
+                    : true)
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [visiveis, filtro, meuLogin, clientes]
+    [visiveis, filtro, filtroTag, meuLogin, clientes]
   );
 
   // Campainha: toca quando chega mensagem de um NOVO contato (conversa nova ou
@@ -796,10 +799,10 @@ export default function Chat() {
       {souAdmin && (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         {porOrigem.map((o) => (
-          <Cartao key={o.chave} titulo={`Tag ${o.nome}`} valor={o.total} dica="Clientes com esta origem" />
+          <Cartao key={o.chave} ativo={filtroTag === `origem:${o.chave}`} onClick={() => setFiltroTag(filtroTag === `origem:${o.chave}` ? null : `origem:${o.chave}`)} titulo={`Tag ${o.nome}`} valor={o.total} dica="Clientes com esta origem" />
         ))}
         {porTag.map((t) => (
-          <Cartao key={t.id} titulo={`Tag ${t.nome}`} valor={t.total} dica="Clientes com esta tag" />
+          <Cartao key={t.id} ativo={filtroTag === `tag:${t.id}`} onClick={() => setFiltroTag(filtroTag === `tag:${t.id}` ? null : `tag:${t.id}`)} titulo={`Tag ${t.nome}`} valor={t.total} dica="Clientes com esta tag" />
         ))}
       </div>
       )}
@@ -942,12 +945,15 @@ export default function Chat() {
               </button>
             ))}
           </div>
-          {(filtro === 'aguardando' || filtro === 'atendimento' || filtro === 'semresposta' || filtro === 'alerta') && (
+          {(filtro === 'aguardando' || filtro === 'atendimento' || filtro === 'semresposta' || filtro === 'alerta' || filtroTag !== null) && (
             <div className="flex items-center justify-between px-4 py-1.5 bg-teal-50 text-[11px] font-bold text-teal-700">
               <span>
-                Mostrando: {filtro === 'aguardando' ? 'Aguardando atendimento' : filtro === 'atendimento' ? 'Em atendimento' : filtro === 'alerta' ? 'Com alerta de entrega' : 'Abertas sem resposta'} ({lista.length})
+                Mostrando: {[
+                  filtro === 'aguardando' ? 'Aguardando atendimento' : filtro === 'atendimento' ? 'Em atendimento' : filtro === 'alerta' ? 'Com alerta de entrega' : filtro === 'semresposta' ? 'Abertas sem resposta' : '',
+                  filtroTag === null ? '' : `Tag ${filtroTag.startsWith('origem:') ? ORIGENS[filtroTag.slice(7) as keyof typeof ORIGENS]?.nome ?? filtroTag.slice(7) : tags.find((t) => t.id === filtroTag.slice(4))?.nome ?? ''}`,
+                ].filter(Boolean).join(' + ')} ({lista.length})
               </span>
-              <button onClick={() => setFiltro('todas')} className="underline">Limpar</button>
+              <button onClick={() => { setFiltro('todas'); setFiltroTag(null); }} className="underline">Limpar</button>
             </div>
           )}
           <ul className="flex-1 min-h-0 overflow-y-auto divide-y divide-line">
