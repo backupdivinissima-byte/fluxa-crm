@@ -215,8 +215,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // (confirmando com a senha da conta, que a pessoa digitou no formulário).
       try {
         cred = await signInWithEmailAndPassword(auth, dados.email, dados.senha);
-      } catch {
-        throw Object.assign(new Error('senha'), { code: 'fluxa/senha-conta-existente' });
+      } catch (e2) {
+        const c2 = (e2 as { code?: string })?.code ?? '';
+        console.error('Falha ao confirmar conta existente:', c2);
+        throw Object.assign(new Error('senha'), { code: c2 === 'auth/too-many-requests' ? c2 : 'fluxa/senha-conta-existente', detalhe: c2 });
       }
       const perfilSnap = await getDoc(doc(db, 'usuarios', cred.user.uid));
       const perfilExistente = perfilSnap.exists() ? (perfilSnap.data() as UsuarioPerfil) : null;

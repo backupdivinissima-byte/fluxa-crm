@@ -167,7 +167,7 @@ export default function Cadastrar() {
       console.error('Erro ao cadastrar empresa:', err);
       const codigo = (err as { code?: string })?.code;
       if (codigo === 'fluxa/senha-conta-existente') {
-        setErro('Esse e-mail já tem uma conta. Para adicionar este módulo a ela, digite a senha atual dessa conta.');
+        setErro('Esse e-mail já tem uma conta e a senha digitada não confere com a dela (' + ((err as { detalhe?: string }).detalhe || 'senha incorreta') + '). Digite a senha com que você entra hoje.');
       } else if (codigo === 'fluxa/sem-empresa') {
         setErro('Esse e-mail já existe, mas sem empresa vinculada. Fale com o suporte.');
       } else if (codigo === 'auth/invalid-email') {
