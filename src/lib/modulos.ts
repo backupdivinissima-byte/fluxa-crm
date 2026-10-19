@@ -21,5 +21,5 @@ export function moduloDaRota(caminho: string, modulos: Modulo[] = []): Modulo {
 
 /** Tela inicial de cada módulo. */
 export function rotaInicial(m: Modulo): string {
-  return m === 'marketing' ? '/marketing' : m === 'chat' ? '/chat' : m === 'erp' ? '/erp' : '/dashboard';
+  return m === 'marketing' ? '/marketing' : m === 'chat' ? '/chat' : m === 'erp' ? '/erp/inicio' : '/dashboard';
 }

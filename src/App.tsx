@@ -67,7 +67,7 @@ function AppRoutes() {
         <Route path="/importar" element={<Importar />} />
         <Route path="/chat" element={<Chat />} />
         <Route path="/modulos" element={<Modulos />} />
-        <Route path="/erp" element={<Erp />} />
+        <Route path="/erp/:aba?" element={<Erp />} />
         <Route path="/marketing" element={<Marketing />}>
           <Route index element={null} />
           <Route path="meta" element={<MetaAds />} />

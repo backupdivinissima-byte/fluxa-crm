@@ -173,3 +173,49 @@ export function IconEstoque(props: { className?: string }) {
     </NavIcon>
   );
 }
+
+export function IconErpInicio(props: { className?: string }) {
+  return (
+    <NavIcon {...props}>
+      <path d="M4 11 12 4l8 7" />
+      <path d="M6 10v9.5h12V10M10 19.5v-5h4v5" />
+    </NavIcon>
+  );
+}
+
+export function IconErpVendas(props: { className?: string }) {
+  return (
+    <NavIcon {...props}>
+      <path d="M3.5 4.5h2.2l2 10.5h9.6l1.8-7.5H7" />
+      <circle cx="9.5" cy="19" r="1.3" />
+      <circle cx="16.5" cy="19" r="1.3" />
+    </NavIcon>
+  );
+}
+
+export function IconErpFinanceiro(props: { className?: string }) {
+  return (
+    <NavIcon {...props}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M14.5 9.2c-.5-.8-1.4-1.2-2.5-1.2-1.4 0-2.4.7-2.4 1.8 0 2.4 5 1.2 5 3.6 0 1.1-1.1 1.8-2.6 1.8-1.1 0-2.1-.4-2.6-1.3M12 6.5V8m0 8v1.5" />
+    </NavIcon>
+  );
+}
+
+export function IconErpCadastros(props: { className?: string }) {
+  return (
+    <NavIcon {...props}>
+      <path d="M5 4.5h11a2 2 0 0 1 2 2v13H7a2 2 0 0 1-2-2v-13Z" />
+      <path d="M5 17.5a2 2 0 0 1 2-2h11M9 8.5h5M9 11.5h5" />
+    </NavIcon>
+  );
+}
+
+export function IconErpIntegracoes(props: { className?: string }) {
+  return (
+    <NavIcon {...props}>
+      <path d="M9 4v4M15 4v4M7 8h10v3.5a5 5 0 0 1-10 0V8Z" />
+      <path d="M12 16.5V20" />
+    </NavIcon>
+  );
+}

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ouvirProdutos, ouvirMovimentos, salvarProduto, excluirProduto, movimentarEstoque, importarProdutos } from '../lib/erpData';
 import { lerProdutosDaPlanilha, modeloCsv, type ResultadoLeitura } from '../lib/erpImportar';
@@ -15,11 +16,11 @@ import { IconEstoque } from '../components/NavIcons';
 import type { MovimentoEstoque, Produto } from '../types';
 
 type Aba = 'inicio' | 'vendas' | 'estoque' | 'financeiro' | 'cadastros' | 'api';
+const ROTA_ABA: Record<string, Aba> = { inicio: 'inicio', vendas: 'vendas', estoque: 'estoque', financeiro: 'financeiro', cadastros: 'cadastros', integracoes: 'api' };
 const SUBS: Partial<Record<Aba, { id: string; nome: string }[]>> = {
   vendas: [{ id: 'pedidos', nome: 'Pedidos e orçamentos' }, { id: 'trocas', nome: 'Trocas e devoluções' }, { id: 'consignacao', nome: 'Consignação' }],
   estoque: [{ id: 'produtos', nome: 'Produtos' }, { id: 'movimentos', nome: 'Movimentações' }, { id: 'importar', nome: 'Importar (Bling / Olist)' }],
 };
-const NOME_ABA: Record<Aba, string> = { inicio: 'Início', vendas: 'Vendas', estoque: 'Estoque', financeiro: 'Financeiro', cadastros: 'Cadastros', api: 'Integrações' };
 const campo = 'w-full rounded-lg border border-line px-3 h-10 text-sm bg-white';
 const rotulo = 'block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1';
 
@@ -28,8 +29,12 @@ const numero = (t: string) => { const n = parseValorBR(t); return Number.isNaN(n
 export default function Erp() {
   const { empresa, papel, perfil } = useAuth();
   const empresaId = empresa?.id;
-  const [aba, setAba] = useState<Aba>('inicio');
+  const { aba: abaUrl } = useParams();
+  const navigate = useNavigate();
+  const aba: Aba = ROTA_ABA[abaUrl ?? ''] ?? 'inicio';
+  const setAba = (a: Aba) => navigate(`/erp/${a === 'api' ? 'integracoes' : a}`);
   const [sub, setSub] = useState('');
+  useEffect(() => { setSub(''); }, [aba]);
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [movimentos, setMovimentos] = useState<MovimentoEstoque[]>([]);
   const [busca, setBusca] = useState('');
@@ -78,11 +83,6 @@ export default function Erp() {
         <Card t="Estoque baixo" v={String(resumo.baixos)} alerta={resumo.baixos > 0} onClick={() => { setSub('produtos'); setSoBaixos(true); }} />
       </div>}
 
-      <div className="flex gap-1 mb-3 border-b border-line overflow-x-auto">
-        {(Object.keys(NOME_ABA) as Aba[]).map((a) => (
-          <button key={a} onClick={() => { setAba(a); setSub(''); }} className={`px-4 h-10 text-sm font-bold whitespace-nowrap ${aba === a ? 'text-teal-500 border-b-2 border-teal-500' : 'text-ink-soft'}`}>{NOME_ABA[a]}</button>
-        ))}
-      </div>
       {SUBS[aba] && (
         <div className="flex gap-1 mb-4 flex-wrap">
           {SUBS[aba]?.map((x) => (
