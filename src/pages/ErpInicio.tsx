@@ -9,7 +9,6 @@ export type DestinoErp = { aba: 'vendas' | 'estoque' | 'financeiro'; sub?: strin
 export default function ErpInicio({ empresaId, produtos, ir }: { empresaId: string; produtos: Produto[]; ir: (d: DestinoErp) => void }) {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [contas, setContas] = useState<ContaFin[]>([]);
-  const [cat, setCat] = useState('');
   const [consig, setConsig] = useState<Consignacao[]>([]);
   useEffect(() => { const a = ouvirPedidosDesde(empresaId, `${new Date().getFullYear() - 1}-01-01`, setPedidos); const b = ouvirContas(empresaId, setContas); const c = ouvirConsignacoes(empresaId, setConsig); return () => { a(); b(); c(); }; }, [empresaId]);
 
@@ -17,19 +16,8 @@ export default function ErpInicio({ empresaId, produtos, ir }: { empresaId: stri
     const agora = Date.now(); const h = new Date().toISOString().slice(0, 10); const mes = h.slice(0, 7);
     const vendas = pedidos.filter((p) => p.status !== 'cancelado' && p.status !== 'orcamento' && p.criadoEm.slice(0, 7) === mes);
     const total = vendas.reduce((s, p) => s + p.total, 0);
-    const categoriaDe = new Map(produtos.map((p) => [p.id, p.categoria?.trim() || 'Sem categoria']));
     const porProduto = new Map<string, { nome: string; qtd: number }>();
     vendas.forEach((p) => p.itens.forEach((i) => porProduto.set(i.produtoId, { nome: i.nome, qtd: (porProduto.get(i.produtoId)?.qtd ?? 0) + i.quantidade })));
-    const porCat = new Map<string, { qtd: number; valor: number }>();
-    const topCat = new Map<string, Map<string, { nome: string; qtd: number }>>();
-    vendas.forEach((p) => p.itens.forEach((i) => {
-      const c = categoriaDe.get(i.produtoId) ?? 'Sem categoria';
-      const a = porCat.get(c) ?? { qtd: 0, valor: 0 };
-      porCat.set(c, { qtd: a.qtd + i.quantidade, valor: a.valor + i.quantidade * i.preco });
-      const m = topCat.get(c) ?? new Map();
-      m.set(i.produtoId, { nome: i.nome, qtd: (m.get(i.produtoId)?.qtd ?? 0) + i.quantidade });
-      topCat.set(c, m);
-    }));
     const ano = new Date().getFullYear();
     const meses = Array.from({ length: 12 }, (_, m) => {
       const soma = (a: number) => pedidos.filter((p) => p.status !== 'cancelado' && p.status !== 'orcamento' && p.criadoEm.slice(0, 7) === `${a}-${String(m + 1).padStart(2, '0')}`).reduce((s, p) => s + p.total, 0);
@@ -39,8 +27,6 @@ export default function ErpInicio({ empresaId, produtos, ir }: { empresaId: stri
     const vencidas = contas.filter((c) => !c.pago && c.vencimento < h);
     return {
       ano, meses, total, qtd: vendas.length,
-      cats: Array.from(porCat.entries()).map(([nome, v]) => ({ nome, ...v, medio: v.qtd ? v.valor / v.qtd : 0 })).sort((a, b) => b.valor - a.valor),
-      topCat: (c: string) => Array.from(topCat.get(c)?.values() ?? []).sort((a, b) => b.qtd - a.qtd).slice(0, 5), ticket: vendas.length ? total / vendas.length : 0,
       top: Array.from(porProduto.values()).sort((a, b) => b.qtd - a.qtd).slice(0, 5),
       baixos: produtos.filter((p) => p.ativo && p.estoque <= p.estoqueMinimo),
       orcParados: pedidos.filter((p) => p.status === 'orcamento' && dias(p.criadoEm) >= 3),
@@ -67,26 +53,10 @@ export default function ErpInicio({ empresaId, produtos, ir }: { empresaId: stri
         <Cartao t="Ticket médio" v={formatarMoeda(d.ticket)} />
       </div>
       <GraficoAnual ano={d.ano} meses={d.meses} />
-      <div className="grid md:grid-cols-2 gap-4 mb-5">
-        <div>
-          <h2 className="text-sm font-extrabold text-ink mb-2">5 mais vendidos no mês</h2>
-          <div className="flex gap-1 mb-2 flex-wrap">
-            {['', ...d.cats.map((c) => c.nome)].map((c) => (
-              <button key={c} onClick={() => setCat(c)} className={`px-3 h-7 rounded-full text-xs font-bold ${cat === c ? 'bg-teal-500 text-white' : 'bg-slate-100 text-ink-soft'}`}>{c || 'Todos'}</button>
-            ))}
-          </div>
-          <div className="rounded-xl border border-line bg-white divide-y divide-line">
-            {(cat ? d.topCat(cat) : d.top).map((p, i) => <div key={i} className="flex justify-between px-4 py-2 text-sm"><span>{i + 1}. {p.nome}</span><b>{p.qtd} un.</b></div>)}
-            {d.top.length === 0 && <p className="px-4 py-3 text-sm text-ink-soft">Ainda sem vendas neste mês.</p>}
-          </div>
-        </div>
-        <div>
-          <h2 className="text-sm font-extrabold text-ink mb-2">Ticket médio por categoria (preço médio por peça)</h2>
-          <div className="rounded-xl border border-line bg-white divide-y divide-line">
-            {d.cats.map((c) => <div key={c.nome} className="flex justify-between px-4 py-2 text-sm"><span>{c.nome} <span className="text-ink-soft text-xs">· {c.qtd} un. · {formatarMoeda(c.valor)}</span></span><b>{formatarMoeda(c.medio)}</b></div>)}
-            {d.cats.length === 0 && <p className="px-4 py-3 text-sm text-ink-soft">Ainda sem vendas neste mês.</p>}
-          </div>
-        </div>
+      <h2 className="text-sm font-extrabold text-ink mb-2">5 mais vendidos no mês</h2>
+      <div className="rounded-xl border border-line bg-white divide-y divide-line mb-5">
+        {d.top.map((p, i) => <div key={i} className="flex justify-between px-4 py-2 text-sm"><span>{i + 1}. {p.nome}</span><b>{p.qtd} un.</b></div>)}
+        {d.top.length === 0 && <p className="px-4 py-3 text-sm text-ink-soft">Ainda sem vendas neste mês.</p>}
       </div>
       <h2 className="text-sm font-extrabold text-ink mb-2">Precisa de atenção</h2>
       <div className="space-y-2 mb-5">
