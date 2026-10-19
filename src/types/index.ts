@@ -440,3 +440,22 @@ export interface MovimentoEstoque {
   usuario?: string;
   criadoEm: string;
 }
+
+export type StatusPedido = 'aberto' | 'pago' | 'enviado' | 'entregue' | 'cancelado';
+export interface ItemPedido { produtoId: string; sku: string; nome: string; quantidade: number; preco: number }
+export interface Pedido {
+  id: string;
+  numero: number;
+  clienteNome: string;
+  clienteTelefone?: string;
+  itens: ItemPedido[];
+  desconto: number;
+  frete: number;
+  total: number;
+  pagamento?: string;
+  observacao?: string;
+  status: StatusPedido;
+  origem: 'manual' | 'api';
+  criadoEm: string;
+  atualizadoEm: string;
+}

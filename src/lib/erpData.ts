@@ -108,3 +108,83 @@ export async function importarProdutos(empresaId: string, lista: Omit<Produto, '
     await b.commit();
   }
 }
+
+// ===== Pedidos =====
+import type { ItemPedido, Pedido, StatusPedido } from '../types';
+
+const pedidosCol = (empresaId: string) => collection(db, 'empresas', empresaId, 'pedidos');
+
+export function ouvirPedidos(empresaId: string, cb: (p: Pedido[]) => void): Unsubscribe {
+  return onSnapshot(query(pedidosCol(empresaId), orderBy('numero', 'desc'), limit(300)), (snap) =>
+    cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Pedido))
+  );
+}
+
+export function totalDoPedido(itens: ItemPedido[], desconto: number, frete: number): number {
+  const sub = itens.reduce((s, i) => s + i.quantidade * i.preco, 0);
+  return Math.max(0, Math.round((sub - desconto + frete) * 100) / 100);
+}
+
+export interface DadosPedido {
+  clienteNome: string; clienteTelefone?: string; itens: ItemPedido[]; desconto: number; frete: number;
+  pagamento?: string; observacao?: string; origem?: Pedido['origem'];
+}
+
+/** Cria o pedido e baixa o estoque de todos os itens numa transação só (ou tudo, ou nada). */
+export async function criarPedido(empresaId: string, d: DadosPedido, usuario?: string): Promise<number> {
+  if (!d.clienteNome.trim()) throw new Error('Informe o nome do cliente.');
+  if (d.itens.length === 0) throw new Error('Adicione pelo menos um produto.');
+  const contRef = doc(db, 'empresas', empresaId, 'contadores', 'pedidos');
+  const pedRef = doc(pedidosCol(empresaId));
+  return await runTransaction(db, async (tx) => {
+    const prods = await Promise.all(d.itens.map((i) => tx.get(doc(produtosCol(empresaId), i.produtoId))));
+    const cont = await tx.get(contRef);
+    const numero = Number(cont.exists() ? cont.data().ultimo : 0) + 1;
+    const agora = new Date().toISOString();
+    d.itens.forEach((i, k) => {
+      const snap = prods[k];
+      if (!snap.exists()) throw new Error(`Produto ${i.nome} não existe mais.`);
+      const saldo = Number((snap.data() as Produto).estoque ?? 0);
+      if (saldo < i.quantidade) throw new Error(`Estoque insuficiente de ${i.nome}: saldo ${saldo}, pedido ${i.quantidade}.`);
+      tx.update(snap.ref, { estoque: saldo - i.quantidade, atualizadoEm: agora });
+      tx.set(doc(movimentosCol(empresaId)), semUndefined({
+        produtoId: i.produtoId, produtoNome: i.nome, sku: i.sku, tipo: 'saida', quantidade: -i.quantidade,
+        saldoApos: saldo - i.quantidade, motivo: `Pedido #${numero}`, usuario, criadoEm: agora,
+      }));
+    });
+    tx.set(contRef, { ultimo: numero });
+    tx.set(pedRef, semUndefined({
+      numero, clienteNome: d.clienteNome.trim(), clienteTelefone: d.clienteTelefone?.trim() || undefined, itens: d.itens,
+      desconto: d.desconto, frete: d.frete, total: totalDoPedido(d.itens, d.desconto, d.frete),
+      pagamento: d.pagamento || undefined, observacao: d.observacao?.trim() || undefined,
+      status: 'aberto' as StatusPedido, origem: d.origem ?? 'manual', criadoEm: agora, atualizadoEm: agora,
+    }));
+    return numero;
+  });
+}
+
+/** Muda o status. Cancelar devolve os itens ao estoque (e não dá para reativar um pedido cancelado). */
+export async function mudarStatusPedido(empresaId: string, pedido: Pedido, status: StatusPedido, usuario?: string) {
+  const ref = doc(pedidosCol(empresaId), pedido.id);
+  await runTransaction(db, async (tx) => {
+    const atual = await tx.get(ref);
+    if (!atual.exists()) throw new Error('Pedido não encontrado.');
+    const st = (atual.data() as Pedido).status;
+    if (st === 'cancelado') throw new Error('Pedido já cancelado.');
+    const agora = new Date().toISOString();
+    if (status === 'cancelado') {
+      const prods = await Promise.all(pedido.itens.map((i) => tx.get(doc(produtosCol(empresaId), i.produtoId))));
+      pedido.itens.forEach((i, k) => {
+        const snap = prods[k];
+        if (!snap.exists()) return;
+        const saldo = Number((snap.data() as Produto).estoque ?? 0);
+        tx.update(snap.ref, { estoque: saldo + i.quantidade, atualizadoEm: agora });
+        tx.set(doc(movimentosCol(empresaId)), semUndefined({
+          produtoId: i.produtoId, produtoNome: i.nome, sku: i.sku, tipo: 'entrada', quantidade: i.quantidade,
+          saldoApos: saldo + i.quantidade, motivo: `Cancelamento do pedido #${pedido.numero}`, usuario, criadoEm: agora,
+        }));
+      });
+    }
+    tx.update(ref, { status, atualizadoEm: agora });
+  });
+}
