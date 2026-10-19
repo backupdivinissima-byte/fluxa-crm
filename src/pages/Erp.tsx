@@ -5,6 +5,7 @@ import { lerProdutosDaPlanilha, modeloCsv, type ResultadoLeitura } from '../lib/
 import { formatarMoeda, parseValorBR } from '../lib/crmLogic';
 import ErpPedidos from './ErpPedidos';
 import ErpCadastros from './ErpCadastros';
+import { ouvirCadastro, type RegistroCad } from '../lib/erpCadastros';
 import { IconEstoque } from '../components/NavIcons';
 import type { MovimentoEstoque, Produto } from '../types';
 
@@ -139,7 +140,7 @@ export default function Erp() {
 
       {aba === 'importar' && empresaId && <Importar empresaId={empresaId} />}
 
-      {edicao && empresaId && <FormProduto dados={edicao} onFechar={() => setEdicao(null)} onSalvar={async (d, ex) => { try { await salvarProduto(empresaId, d, ex); setEdicao(null); setErro(''); } catch (e) { setErro(e instanceof Error ? e.message : 'Erro ao salvar.'); } }} onExcluir={edicao.id ? async () => { if (confirm('Excluir este produto?')) { await excluirProduto(empresaId, edicao.id as string); setEdicao(null); } } : undefined} />}
+      {edicao && empresaId && <FormProduto empresaId={empresaId} dados={edicao} onFechar={() => setEdicao(null)} onSalvar={async (d, ex) => { try { await salvarProduto(empresaId, d, ex); setEdicao(null); setErro(''); } catch (e) { setErro(e instanceof Error ? e.message : 'Erro ao salvar.'); } }} onExcluir={edicao.id ? async () => { if (confirm('Excluir este produto?')) { await excluirProduto(empresaId, edicao.id as string); setEdicao(null); } } : undefined} />}
       {mov && empresaId && <FormMov dados={mov} onFechar={() => setMov(null)} onConfirmar={async (valor, motivo) => { try { await movimentarEstoque(empresaId, mov.produto, mov.tipo, valor, motivo, perfil?.nome); setMov(null); setErro(''); } catch (e) { setErro(e instanceof Error ? e.message : 'Erro.'); setMov(null); } }} />}
     </div>
   );
@@ -165,11 +166,15 @@ function Modal({ titulo, children, onFechar }: { titulo: string; children: React
   );
 }
 
-function FormProduto({ dados, onFechar, onSalvar, onExcluir }: { dados: Partial<Produto>; onFechar: () => void; onSalvar: (d: Parameters<typeof salvarProduto>[1], ex?: Produto) => Promise<void>; onExcluir?: () => void }) {
+function FormProduto({ empresaId, dados, onFechar, onSalvar, onExcluir }: { empresaId: string; dados: Partial<Produto>; onFechar: () => void; onSalvar: (d: Parameters<typeof salvarProduto>[1], ex?: Produto) => Promise<void>; onExcluir?: () => void }) {
   const existente = dados.id ? (dados as Produto) : undefined;
   const [sku, setSku] = useState(dados.sku ?? '');
   const [nome, setNome] = useState(dados.nome ?? '');
   const [categoria, setCategoria] = useState(dados.categoria ?? '');
+  const [marca, setMarca] = useState(dados.marca ?? '');
+  const [cats, setCats] = useState<RegistroCad[]>([]);
+  const [marcas, setMarcas] = useState<RegistroCad[]>([]);
+  useEffect(() => { const a = ouvirCadastro(empresaId, 'categoriasProduto', setCats); const b = ouvirCadastro(empresaId, 'marcasProduto', setMarcas); return () => { a(); b(); }; }, [empresaId]);
   const [unidade, setUnidade] = useState(dados.unidade ?? 'un');
   const [preco, setPreco] = useState(String(dados.preco ?? 0).replace('.', ','));
   const [custo, setCusto] = useState(String(dados.custo ?? 0).replace('.', ','));
@@ -183,7 +188,8 @@ function FormProduto({ dados, onFechar, onSalvar, onExcluir }: { dados: Partial<
         <div><label className={rotulo}>Código (SKU)</label><input className={campo} value={sku} disabled={!!existente} onChange={(e) => setSku(e.target.value)} /></div>
         <div><label className={rotulo}>Unidade</label><input className={campo} value={unidade} onChange={(e) => setUnidade(e.target.value)} /></div>
         <div className="col-span-2"><label className={rotulo}>Nome</label><input className={campo} value={nome} onChange={(e) => setNome(e.target.value)} /></div>
-        <div className="col-span-2"><label className={rotulo}>Categoria</label><input className={campo} value={categoria} onChange={(e) => setCategoria(e.target.value)} /></div>
+        <div><label className={rotulo}>Categoria</label><input list="lista-categorias" className={campo} value={categoria} onChange={(e) => setCategoria(e.target.value)} /><datalist id="lista-categorias">{cats.map((c) => <option key={c.id} value={String(c.nome)} />)}</datalist></div>
+        <div><label className={rotulo}>Marca</label><input list="lista-marcas" className={campo} value={marca} onChange={(e) => setMarca(e.target.value)} /><datalist id="lista-marcas">{marcas.map((c) => <option key={c.id} value={String(c.nome)} />)}</datalist></div>
         <div><label className={rotulo}>Preço de venda</label><input className={campo} value={preco} onChange={(e) => setPreco(e.target.value)} /></div>
         <div><label className={rotulo}>Custo</label><input className={campo} value={custo} onChange={(e) => setCusto(e.target.value)} /></div>
         {!existente && <div><label className={rotulo}>Estoque inicial</label><input className={campo} value={estoque} onChange={(e) => setEstoque(e.target.value)} /></div>}
@@ -191,7 +197,7 @@ function FormProduto({ dados, onFechar, onSalvar, onExcluir }: { dados: Partial<
         <label className="col-span-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={ativo} onChange={(e) => setAtivo(e.target.checked)} /> Produto ativo</label>
       </div>
       <div className="flex gap-2 mt-4">
-        <button disabled={!ok} onClick={() => void onSalvar({ sku, nome, categoria, unidade, preco: numero(preco), custo: numero(custo), estoque: numero(estoque), estoqueMinimo: numero(minimo), ativo }, existente)} className="flex-1 rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold h-10 disabled:opacity-40">Salvar</button>
+        <button disabled={!ok} onClick={() => void onSalvar({ sku, nome, categoria, marca, unidade, preco: numero(preco), custo: numero(custo), estoque: numero(estoque), estoqueMinimo: numero(minimo), ativo }, existente)} className="flex-1 rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold h-10 disabled:opacity-40">Salvar</button>
         {onExcluir && <button onClick={onExcluir} className="rounded-xl border border-red-300 text-red-600 text-sm font-bold px-4">Excluir</button>}
         <button onClick={onFechar} className="rounded-xl border border-line text-sm font-bold px-4">Cancelar</button>
       </div>

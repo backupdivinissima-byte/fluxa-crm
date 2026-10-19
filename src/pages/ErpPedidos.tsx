@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { criarPedido, mudarStatusPedido, ouvirPedidos, totalDoPedido } from '../lib/erpData';
+import { converterOrcamento, criarPedido, mudarStatusPedido, ouvirPedidos, totalDoPedido } from '../lib/erpData';
 import { formatarMoeda, parseValorBR } from '../lib/crmLogic';
 import { ouvirCadastro, type RegistroCad } from '../lib/erpCadastros';
 import type { ItemPedido, Pedido, Produto, StatusPedido } from '../types';
@@ -8,8 +8,8 @@ import type { ItemPedido, Pedido, Produto, StatusPedido } from '../types';
 const campo = 'w-full rounded-lg border border-line px-3 h-10 text-sm bg-white';
 const rotulo = 'block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1';
 const num = (t: string) => { const n = parseValorBR(t); return Number.isNaN(n) ? 0 : n; };
-const ROTULO: Record<StatusPedido, string> = { aberto: 'Aberto', pago: 'Pago', enviado: 'Enviado', entregue: 'Entregue', cancelado: 'Cancelado' };
-const COR: Record<StatusPedido, string> = { aberto: 'bg-amber-100 text-amber-700', pago: 'bg-teal-100 text-teal-700', enviado: 'bg-blue-100 text-blue-700', entregue: 'bg-emerald-100 text-emerald-700', cancelado: 'bg-slate-200 text-slate-500' };
+const ROTULO: Record<StatusPedido, string> = { orcamento: 'Orçamento', aberto: 'Aberto', pago: 'Pago', enviado: 'Enviado', entregue: 'Entregue', cancelado: 'Cancelado' };
+const COR: Record<StatusPedido, string> = { orcamento: 'bg-violet-100 text-violet-700', aberto: 'bg-amber-100 text-amber-700', pago: 'bg-teal-100 text-teal-700', enviado: 'bg-blue-100 text-blue-700', entregue: 'bg-emerald-100 text-emerald-700', cancelado: 'bg-slate-200 text-slate-500' };
 const PROXIMO: Partial<Record<StatusPedido, StatusPedido>> = { aberto: 'pago', pago: 'enviado', enviado: 'entregue' };
 
 export default function ErpPedidos({ empresaId, produtos }: { empresaId: string; produtos: Produto[] }) {
@@ -35,7 +35,7 @@ export default function ErpPedidos({ empresaId, produtos }: { empresaId: string;
           {(Object.keys(ROTULO) as StatusPedido[]).map((s) => <option key={s} value={s}>{ROTULO[s]}</option>)}
         </select>
         <span className="text-sm text-ink-soft">Vendido (sem cancelados): <b className="text-ink">{formatarMoeda(vendido)}</b></span>
-        <button onClick={() => setNovo(true)} className="ml-auto rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-4 h-10">+ Novo pedido</button>
+        <button onClick={() => setNovo(true)} className="ml-auto rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-4 h-10">+ Novo pedido / orçamento</button>
       </div>
       {erro && <p className="text-sm text-red-600 mb-2">{erro}</p>}
       <div className="overflow-x-auto rounded-xl border border-line bg-white">
@@ -51,8 +51,9 @@ export default function ErpPedidos({ empresaId, produtos }: { empresaId: string;
                 <td className="p-3 text-right font-bold">{formatarMoeda(p.total)}</td>
                 <td className="p-3"><span className={`rounded-full px-2 py-0.5 text-xs font-bold ${COR[p.status]}`}>{ROTULO[p.status]}</span></td>
                 <td className="p-3 whitespace-nowrap text-right">
+                  {p.status === 'orcamento' && <button className="text-xs font-bold text-violet-600 mr-2" onClick={async () => { try { setErro(''); await converterOrcamento(empresaId, p, perfil?.nome); } catch (e) { setErro(e instanceof Error ? e.message : 'Erro.'); } }}>Converter em pedido</button>}
                   {PROXIMO[p.status] && <button className="text-xs font-bold text-teal-500 mr-2" onClick={() => void avancar(p, PROXIMO[p.status] as StatusPedido)}>Marcar {ROTULO[PROXIMO[p.status] as StatusPedido].toLowerCase()}</button>}
-                  {p.status !== 'cancelado' && p.status !== 'entregue' && <button className="text-xs font-bold text-red-600" onClick={() => { if (confirm(`Cancelar o pedido #${p.numero}? Os itens voltam ao estoque.`)) void avancar(p, 'cancelado'); }}>Cancelar</button>}
+                  {p.status !== 'cancelado' && p.status !== 'entregue' && <button className="text-xs font-bold text-red-600" onClick={() => { if (confirm(p.status === 'orcamento' ? `Cancelar o orçamento #${p.numero}?` : `Cancelar o pedido #${p.numero}? Os itens voltam ao estoque.`)) void avancar(p, 'cancelado'); }}>Cancelar</button>}
                 </td>
               </tr>
             ))}
@@ -72,18 +73,34 @@ function FormPedido({ empresaId, produtos, onFechar, onSalvar }: { empresaId: st
   const [operacao, setOperacao] = useState('');
   const [vendedor, setVendedor] = useState('');
   const [cond, setCond] = useState('');
+  const [orcamento, setOrcamento] = useState(false);
+  const [gruposC, setGruposC] = useState<RegistroCad[]>([]);
+  const [tabelas, setTabelas] = useState<RegistroCad[]>([]);
+  const [aviso, setAviso] = useState('');
   const [clientes, setClientes] = useState<RegistroCad[]>([]);
   const [operacoes, setOperacoes] = useState<RegistroCad[]>([]);
   const [vendedores, setVendedores] = useState<RegistroCad[]>([]);
   const [condicoes, setCondicoes] = useState<RegistroCad[]>([]);
   useEffect(() => {
-    const u = [ouvirCadastro(empresaId, 'clientes', setClientes), ouvirCadastro(empresaId, 'operacoesVenda', setOperacoes), ouvirCadastro(empresaId, 'vendedores', setVendedores), ouvirCadastro(empresaId, 'condicoesPagamento', setCondicoes)];
+    const u = [ouvirCadastro(empresaId, 'clientes', setClientes), ouvirCadastro(empresaId, 'operacoesVenda', setOperacoes), ouvirCadastro(empresaId, 'vendedores', setVendedores), ouvirCadastro(empresaId, 'condicoesPagamento', setCondicoes), ouvirCadastro(empresaId, 'gruposCliente', setGruposC), ouvirCadastro(empresaId, 'tabelasPreco', setTabelas)];
     return () => u.forEach((f) => f());
   }, [empresaId]);
   function escolherCliente(id: string) {
     setClienteId(id);
     const c = clientes.find((x) => x.id === id);
     if (c) { setNome(String(c.nome ?? '')); setTel(String(c.telefone ?? '')); }
+    const g = gruposC.find((x) => x.id === c?.grupoId);
+    const t = tabelas.find((x) => x.id === g?.tabelaPrecoId);
+    setAviso(g ? `Grupo ${String(g.nome)}${t ? `: tabela ${String(t.nome)} (${Number(t.ajuste ?? 0)}%)` : ''}${g.desconto ? `, desconto ${Number(g.desconto)}%` : ''}. Os preços dos itens seguem esse grupo.` : '');
+  }
+  /** Preço do item para o cliente escolhido: preço base ajustado pela tabela e pelo desconto do grupo. */
+  function precoParaCliente(base: number): number {
+    const c = clientes.find((x) => x.id === clienteId);
+    const g = gruposC.find((x) => x.id === c?.grupoId);
+    const t = tabelas.find((x) => x.id === g?.tabelaPrecoId);
+    const aj = 1 + Number(t?.ajuste ?? 0) / 100;
+    const ds = 1 - Number(g?.desconto ?? 0) / 100;
+    return Math.round(base * aj * ds * 100) / 100;
   }
   const [itens, setItens] = useState<ItemPedido[]>([]);
   const [prodId, setProdId] = useState('');
@@ -102,7 +119,7 @@ function FormPedido({ empresaId, produtos, onFechar, onSalvar }: { empresaId: st
     if (!p || q <= 0) return;
     setItens((atual) => {
       const ex = atual.find((i) => i.produtoId === p.id);
-      return ex ? atual.map((i) => (i.produtoId === p.id ? { ...i, quantidade: i.quantidade + q } : i)) : [...atual, { produtoId: p.id, sku: p.sku, nome: p.nome, quantidade: q, preco: p.preco }];
+      return ex ? atual.map((i) => (i.produtoId === p.id ? { ...i, quantidade: i.quantidade + q } : i)) : [...atual, { produtoId: p.id, sku: p.sku, nome: p.nome, quantidade: q, preco: precoParaCliente(p.preco) }];
     });
     setProdId(''); setQtd('1');
   }
@@ -120,6 +137,8 @@ function FormPedido({ empresaId, produtos, onFechar, onSalvar }: { empresaId: st
           <div><label className={rotulo}>Cliente</label><input className={campo} value={nome} onChange={(e) => setNome(e.target.value)} /></div>
           <div><label className={rotulo}>Telefone</label><input className={campo} value={tel} onChange={(e) => setTel(e.target.value)} /></div>
         </div>
+        {aviso && <p className="text-xs text-teal-600 mt-2">{aviso}</p>}
+        <label className="flex items-center gap-2 text-sm mt-3"><input type="checkbox" checked={orcamento} onChange={(e) => setOrcamento(e.target.checked)} /> Salvar como <b>orçamento</b> (não baixa o estoque até converter em pedido)</label>
         <label className={`${rotulo} mt-4`}>Adicionar produto</label>
         <div className="flex gap-2">
           <select className={campo} value={prodId} onChange={(e) => setProdId(e.target.value)}>
@@ -159,12 +178,12 @@ function FormPedido({ empresaId, produtos, onFechar, onSalvar }: { empresaId: st
         <div className="flex items-center justify-between mt-4">
           <span className="text-sm text-ink-soft">Total <b className="text-lg text-ink">{formatarMoeda(total)}</b></span>
           <div className="flex gap-2">
-            <button disabled={salvando} onClick={async () => { setSalvando(true); const r = await onSalvar({ clienteNome: nome, clienteTelefone: tel, clienteId, operacao, vendedor, condicaoPagamento: cond, itens, desconto: num(desc), frete: num(frete), pagamento: pag, observacao: obs }); if (r) setErro(r); setSalvando(false); }} className="rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-4 h-10 disabled:opacity-40">Criar pedido</button>
+            <button disabled={salvando} onClick={async () => { setSalvando(true); const r = await onSalvar({ clienteNome: nome, clienteTelefone: tel, clienteId, operacao, vendedor, condicaoPagamento: cond, comoOrcamento: orcamento, itens, desconto: num(desc), frete: num(frete), pagamento: pag, observacao: obs }); if (r) setErro(r); setSalvando(false); }} className="rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-4 h-10 disabled:opacity-40">{orcamento ? 'Salvar orçamento' : 'Criar pedido'}</button>
             <button onClick={onFechar} className="rounded-xl border border-line text-sm font-bold px-4">Cancelar</button>
           </div>
         </div>
         {erro && <p className="text-sm text-red-600 mt-2">{erro}</p>}
-        <p className="text-xs text-ink-soft mt-2">Ao criar, o estoque dos itens é baixado na hora. Cancelar o pedido devolve ao estoque.</p>
+        <p className="text-xs text-ink-soft mt-2">Pedido baixa o estoque na hora e cancelar devolve. Orçamento só reserva a conversa: o estoque baixa quando você converte em pedido.</p>
       </div>
     </div>
   );

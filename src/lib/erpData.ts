@@ -45,6 +45,7 @@ export async function salvarProduto(empresaId: string, dados: DadosProduto, exis
       sku: dados.sku.trim(),
       nome: dados.nome.trim(),
       categoria: dados.categoria?.trim() || undefined,
+      marca: dados.marca?.trim() || undefined,
       unidade: dados.unidade?.trim() || 'un',
       preco: dados.preco,
       custo: dados.custo,
@@ -129,6 +130,7 @@ export interface DadosPedido {
   clienteNome: string; clienteTelefone?: string; itens: ItemPedido[]; desconto: number; frete: number;
   pagamento?: string; observacao?: string; origem?: Pedido['origem'];
   clienteId?: string; operacao?: string; vendedor?: string; condicaoPagamento?: string;
+  comoOrcamento?: boolean; // orçamento não baixa o estoque
 }
 
 /** Cria o pedido e baixa o estoque de todos os itens numa transação só (ou tudo, ou nada). */
@@ -142,7 +144,7 @@ export async function criarPedido(empresaId: string, d: DadosPedido, usuario?: s
     const cont = await tx.get(contRef);
     const numero = Number(cont.exists() ? cont.data().ultimo : 0) + 1;
     const agora = new Date().toISOString();
-    d.itens.forEach((i, k) => {
+    if (!d.comoOrcamento) d.itens.forEach((i, k) => {
       const snap = prods[k];
       if (!snap.exists()) throw new Error(`Produto ${i.nome} não existe mais.`);
       const saldo = Number((snap.data() as Produto).estoque ?? 0);
@@ -159,7 +161,7 @@ export async function criarPedido(empresaId: string, d: DadosPedido, usuario?: s
       operacao: d.operacao || undefined, vendedor: d.vendedor || undefined, condicaoPagamento: d.condicaoPagamento || undefined, itens: d.itens,
       desconto: d.desconto, frete: d.frete, total: totalDoPedido(d.itens, d.desconto, d.frete),
       pagamento: d.pagamento || undefined, observacao: d.observacao?.trim() || undefined,
-      status: 'aberto' as StatusPedido, origem: d.origem ?? 'manual', criadoEm: agora, atualizadoEm: agora,
+      status: (d.comoOrcamento ? 'orcamento' : 'aberto') as StatusPedido, origem: d.origem ?? 'manual', criadoEm: agora, atualizadoEm: agora,
     }));
     return numero;
   });
@@ -174,7 +176,7 @@ export async function mudarStatusPedido(empresaId: string, pedido: Pedido, statu
     const st = (atual.data() as Pedido).status;
     if (st === 'cancelado') throw new Error('Pedido já cancelado.');
     const agora = new Date().toISOString();
-    if (status === 'cancelado') {
+    if (status === 'cancelado' && st !== 'orcamento') {
       const prods = await Promise.all(pedido.itens.map((i) => tx.get(doc(produtosCol(empresaId), i.produtoId))));
       pedido.itens.forEach((i, k) => {
         const snap = prods[k];
@@ -188,5 +190,28 @@ export async function mudarStatusPedido(empresaId: string, pedido: Pedido, statu
       });
     }
     tx.update(ref, { status, atualizadoEm: agora });
+  });
+}
+
+/** Transforma o orçamento em pedido: confere e baixa o estoque agora. */
+export async function converterOrcamento(empresaId: string, pedido: Pedido, usuario?: string) {
+  const ref = doc(pedidosCol(empresaId), pedido.id);
+  await runTransaction(db, async (tx) => {
+    const atual = await tx.get(ref);
+    if (!atual.exists() || (atual.data() as Pedido).status !== 'orcamento') throw new Error('Este orçamento já foi convertido ou cancelado.');
+    const prods = await Promise.all(pedido.itens.map((i) => tx.get(doc(produtosCol(empresaId), i.produtoId))));
+    const agora = new Date().toISOString();
+    pedido.itens.forEach((i, k) => {
+      const snap = prods[k];
+      if (!snap.exists()) throw new Error(`Produto ${i.nome} não existe mais.`);
+      const saldo = Number((snap.data() as Produto).estoque ?? 0);
+      if (saldo < i.quantidade) throw new Error(`Estoque insuficiente de ${i.nome}: saldo ${saldo}, pedido ${i.quantidade}.`);
+      tx.update(snap.ref, { estoque: saldo - i.quantidade, atualizadoEm: agora });
+      tx.set(doc(movimentosCol(empresaId)), semUndefined({
+        produtoId: i.produtoId, produtoNome: i.nome, sku: i.sku, tipo: 'saida', quantidade: -i.quantidade,
+        saldoApos: saldo - i.quantidade, motivo: `Pedido #${pedido.numero} (do orçamento)`, usuario, criadoEm: agora,
+      }));
+    });
+    tx.update(ref, { status: 'aberto', atualizadoEm: agora });
   });
 }

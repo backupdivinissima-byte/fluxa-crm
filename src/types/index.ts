@@ -417,6 +417,7 @@ export interface Produto {
   sku: string;
   nome: string;
   categoria?: string;
+  marca?: string;
   unidade?: string;
   preco: number;
   custo: number;
@@ -441,7 +442,7 @@ export interface MovimentoEstoque {
   criadoEm: string;
 }
 
-export type StatusPedido = 'aberto' | 'pago' | 'enviado' | 'entregue' | 'cancelado';
+export type StatusPedido = 'orcamento' | 'aberto' | 'pago' | 'enviado' | 'entregue' | 'cancelado';
 export interface ItemPedido { produtoId: string; sku: string; nome: string; quantidade: number; preco: number }
 export interface Pedido {
   id: string;
