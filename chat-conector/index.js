@@ -248,7 +248,7 @@ const partesPendentes = new Map();
 const EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'video/mp4': 'mp4', 'audio/ogg; codecs=opus': 'ogg', 'audio/mpeg': 'mp3', 'application/pdf': 'pdf' };
 async function midiaDe(msg, numero) {
   const m = conteudoDe(msg);
-  const img = m.imageMessage;
+  const img = m.imageMessage ?? m.stickerMessage; // figurinha (webp) aparece como imagem
   const vid = m.videoMessage;
   const aud = m.audioMessage;
   const doc = m.documentMessage;
