@@ -49,8 +49,12 @@ export default function Layout() {
   // a empresa escolhe vincular tudo (todas as abas juntas) ou trabalhar em
   // módulos separados (um de cada vez, trocando no seletor).
   const modulos = modulosDaEmpresa(empresa);
+  // O ERP é um módulo individual: nunca entra no "vincular tudo" (não mistura abas nem dados com os outros).
+  // A ligação dele com CRM/Marketing/Chat será só por API.
+  const vinculaveis = modulos.filter((m) => m !== 'erp');
   const varios = modulos.length > 1;
-  const vinculados = varios && empresa?.modulosVinculados === true;
+  const variosVinculaveis = vinculaveis.length > 1;
+  const vinculados = variosVinculaveis && empresa?.modulosVinculados === true;
   const [moduloEscolhido, setModuloEscolhido] = useState<Modulo | null>(() => {
     try {
       return sessionStorage.getItem(CHAVE_MODULO_ATUAL) as Modulo | null;
@@ -59,8 +63,8 @@ export default function Layout() {
     }
   });
   const moduloAtual: Modulo = moduloEscolhido && modulos.includes(moduloEscolhido) ? moduloEscolhido : modulos[0];
-  const visiveis: Modulo[] = vinculados || !varios ? modulos : [moduloAtual];
-  const perguntarVinculo = papel === 'admin' && varios && empresa?.modulosVinculados === undefined;
+  const visiveis: Modulo[] = !varios ? modulos : moduloAtual === 'erp' ? ['erp'] : vinculados ? vinculaveis : [moduloAtual];
+  const perguntarVinculo = papel === 'admin' && variosVinculaveis && empresa?.modulosVinculados === undefined;
 
   function trocarModulo(m: Modulo) {
     setModuloEscolhido(m);
@@ -90,17 +94,21 @@ export default function Layout() {
             </span>
           </div>
 
-          {varios && !vinculados && !perguntarVinculo && (
+          {varios && (!vinculados || modulos.includes('erp')) && !perguntarVinculo && (
             <div className="flex bg-slate-100 rounded-lg p-0.5 mr-2 shrink-0">
-              {modulos.map((m) => (
-                <button
-                  key={m}
-                  onClick={() => trocarModulo(m)}
-                  className={`px-3 h-8 rounded-md text-xs font-bold uppercase tracking-wide ${m === moduloAtual ? 'bg-white text-ink shadow-sm' : 'text-ink-soft'}`}
-                >
-                  {NOME_MODULO[m]}
-                </button>
-              ))}
+              {(vinculados ? [vinculaveis[0], 'erp' as Modulo] : modulos).map((m) => {
+                const grupo = vinculados && m !== 'erp';
+                const ativo = grupo ? moduloAtual !== 'erp' : m === moduloAtual;
+                return (
+                  <button
+                    key={m}
+                    onClick={() => trocarModulo(m)}
+                    className={`px-3 h-8 rounded-md text-xs font-bold uppercase tracking-wide ${ativo ? 'bg-white text-ink shadow-sm' : 'text-ink-soft'}`}
+                  >
+                    {grupo ? vinculaveis.map((x) => NOME_MODULO[x]).join(' + ') : NOME_MODULO[m]}
+                  </button>
+                );
+              })}
             </div>
           )}
 
@@ -151,7 +159,7 @@ export default function Layout() {
           <div className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-xl">
             <h3 className="text-base font-extrabold text-ink">Vincular todos os módulos?</h3>
             <p className="text-xs text-ink-soft mt-2">
-              Você tem mais de um módulo ({modulos.map((m) => NOME_MODULO[m]).join(' e ')}). Se vincular, as abas de todos aparecem juntas na barra
+              Você tem mais de um módulo ({vinculaveis.map((m) => NOME_MODULO[m]).join(' e ')}). Se vincular, as abas de todos aparecem juntas na barra
               de cima. Se não, cada módulo funciona separado e você troca entre eles no seletor.
             </p>
             <div className="flex gap-2 mt-4">
