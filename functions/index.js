@@ -518,4 +518,6 @@ app.use((req, res) => {
 
 // Região fixa (us-central1) pra URL previsível:
 // https://us-central1-fluxa-crm.cloudfunctions.net/api
+require('./erp')(app, db, empresaPelaChave);
+
 exports.api = functions.region('us-central1').https.onRequest(app);

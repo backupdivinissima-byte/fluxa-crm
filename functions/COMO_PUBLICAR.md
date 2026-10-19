@@ -92,3 +92,12 @@ Se o botão "Gerar chave de API" na tela do site der erro de permissão, é porq
 as regras de segurança do Firestore (Firebase Console → Firestore Database →
 Regras) ainda não liberam os campos novos (`apiKeyHash`, `apiKeyGeradaEm`) na
 empresa. Me manda o print do erro que eu te passo o ajuste certo pra colar lá.
+
+---
+
+# API do Fluxa ERP (mesma função "api")
+
+As rotas `/v1/erp/...` (produtos, estoque, pedidos/orçamentos) estão no arquivo
+`functions/erp.js` e usam a mesma chave de API. Publicar é o mesmo comando:
+`firebase deploy --only functions --project fluxa-crm` (depois do Blaze).
+A chave é gerada em Fluxa ERP → Integrações.

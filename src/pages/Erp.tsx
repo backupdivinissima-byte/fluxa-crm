@@ -9,16 +9,17 @@ import ErpFinanceiro from './ErpFinanceiro';
 import ErpConsignacao from './ErpConsignacao';
 import { ListaTrocas } from './ErpTrocas';
 import ErpCadastros from './ErpCadastros';
+import ErpApi from './ErpApi';
 import { ouvirCadastro, type RegistroCad } from '../lib/erpCadastros';
 import { IconEstoque } from '../components/NavIcons';
 import type { MovimentoEstoque, Produto } from '../types';
 
-type Aba = 'inicio' | 'vendas' | 'estoque' | 'financeiro' | 'cadastros';
+type Aba = 'inicio' | 'vendas' | 'estoque' | 'financeiro' | 'cadastros' | 'api';
 const SUBS: Partial<Record<Aba, { id: string; nome: string }[]>> = {
   vendas: [{ id: 'pedidos', nome: 'Pedidos e orçamentos' }, { id: 'trocas', nome: 'Trocas e devoluções' }, { id: 'consignacao', nome: 'Consignação' }],
   estoque: [{ id: 'produtos', nome: 'Produtos' }, { id: 'movimentos', nome: 'Movimentações' }, { id: 'importar', nome: 'Importar (Bling / Olist)' }],
 };
-const NOME_ABA: Record<Aba, string> = { inicio: 'Início', vendas: 'Vendas', estoque: 'Estoque', financeiro: 'Financeiro', cadastros: 'Cadastros' };
+const NOME_ABA: Record<Aba, string> = { inicio: 'Início', vendas: 'Vendas', estoque: 'Estoque', financeiro: 'Financeiro', cadastros: 'Cadastros', api: 'Integrações' };
 const campo = 'w-full rounded-lg border border-line px-3 h-10 text-sm bg-white';
 const rotulo = 'block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1';
 
@@ -139,6 +140,7 @@ export default function Erp() {
       {aba === 'financeiro' && empresaId && <ErpFinanceiro empresaId={empresaId} />}
 
       {aba === 'cadastros' && empresaId && <ErpCadastros empresaId={empresaId} />}
+      {aba === 'api' && empresaId && <ErpApi empresaId={empresaId} />}
 
       {vista === 'movimentos' && (
         <div className="overflow-x-auto rounded-xl border border-line bg-white">
