@@ -26,7 +26,7 @@ export default function ErpInicio({ empresaId, produtos, ir }: { empresaId: stri
     const dias = (iso: string) => (agora - new Date(iso).getTime()) / 86400000;
     const vencidas = contas.filter((c) => !c.pago && c.vencimento < h);
     return {
-      ano, meses, total, qtd: vendas.length,
+      ano, meses, total, qtd: vendas.length, ticket: vendas.length ? total / vendas.length : 0,
       top: Array.from(porProduto.values()).sort((a, b) => b.qtd - a.qtd).slice(0, 5),
       baixos: produtos.filter((p) => p.ativo && p.estoque <= p.estoqueMinimo),
       orcParados: pedidos.filter((p) => p.status === 'orcamento' && dias(p.criadoEm) >= 3),
