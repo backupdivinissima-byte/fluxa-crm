@@ -41,7 +41,7 @@ export default function ErpApi({ empresaId }: { empresaId: string }) {
     ['POST', '/pedidos/{numero}/status', 'Muda status: { status } — cancelar devolve ao estoque'],
   ];
   return (
-    <div className="max-w-3xl space-y-4">
+    <div className="space-y-4">
       <div className="bg-white border border-line rounded-2xl p-5">
         <h2 className="text-sm font-extrabold text-ink">Integrações (API)</h2>
         <p className="text-sm text-ink-soft mt-1">O Fluxa ERP funciona sozinho. Para ligar com o CRM, Chat, Live ou outro sistema, use a chave abaixo — é a única porta de entrada.</p>

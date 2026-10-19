@@ -67,7 +67,7 @@ export default function Erp() {
   if (papel !== 'admin') return <div className="p-6 text-sm text-ink-soft">Somente administradores acessam o Estoque.</div>;
 
   return (
-    <div className="p-5 w-full max-w-6xl mx-auto">
+    <div className="p-5 w-full">
       <div className="flex items-center gap-2 mb-1"><IconEstoque className="w-6 h-6" /><h1 className="text-xl font-extrabold text-ink">Fluxa ERP</h1></div>
       <p className="text-sm text-ink-soft mb-4">Vendas, estoque, financeiro e cadastros num só lugar.</p>
 
@@ -267,7 +267,7 @@ function Importar({ empresaId }: { empresaId: string }) {
     const a = document.createElement('a'); a.href = url; a.download = 'modelo-produtos-fluxa.csv'; a.click(); URL.revokeObjectURL(url);
   }
   return (
-    <div className="rounded-xl border border-line bg-white p-5 max-w-2xl">
+    <div className="rounded-xl border border-line bg-white p-5">
       <h2 className="font-extrabold text-ink mb-1">Trazer produtos do Bling, Olist/Tiny ou planilha</h2>
       <p className="text-sm text-ink-soft mb-3">No Bling ou no Olist, exporte seus produtos (CSV ou Excel) e envie aqui. O Fluxa reconhece as colunas Código, Descrição, Preço, Preço de custo, Estoque e Categoria. Importar de novo o mesmo código atualiza o produto em vez de duplicar.</p>
       <div className="flex gap-2 flex-wrap">
