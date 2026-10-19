@@ -4,12 +4,21 @@ import { ouvirProdutos, ouvirMovimentos, salvarProduto, excluirProduto, moviment
 import { lerProdutosDaPlanilha, modeloCsv, type ResultadoLeitura } from '../lib/erpImportar';
 import { formatarMoeda, parseValorBR } from '../lib/crmLogic';
 import ErpPedidos from './ErpPedidos';
+import ErpInicio from './ErpInicio';
+import ErpFinanceiro from './ErpFinanceiro';
+import ErpConsignacao from './ErpConsignacao';
+import { ListaTrocas } from './ErpTrocas';
 import ErpCadastros from './ErpCadastros';
 import { ouvirCadastro, type RegistroCad } from '../lib/erpCadastros';
 import { IconEstoque } from '../components/NavIcons';
 import type { MovimentoEstoque, Produto } from '../types';
 
-type Aba = 'produtos' | 'pedidos' | 'cadastros' | 'movimentos' | 'importar';
+type Aba = 'inicio' | 'vendas' | 'estoque' | 'financeiro' | 'cadastros';
+const SUBS: Partial<Record<Aba, { id: string; nome: string }[]>> = {
+  vendas: [{ id: 'pedidos', nome: 'Pedidos e orçamentos' }, { id: 'trocas', nome: 'Trocas e devoluções' }, { id: 'consignacao', nome: 'Consignação' }],
+  estoque: [{ id: 'produtos', nome: 'Produtos' }, { id: 'movimentos', nome: 'Movimentações' }, { id: 'importar', nome: 'Importar (Bling / Olist)' }],
+};
+const NOME_ABA: Record<Aba, string> = { inicio: 'Início', vendas: 'Vendas', estoque: 'Estoque', financeiro: 'Financeiro', cadastros: 'Cadastros' };
 const campo = 'w-full rounded-lg border border-line px-3 h-10 text-sm bg-white';
 const rotulo = 'block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1';
 
@@ -18,12 +27,14 @@ const numero = (t: string) => { const n = parseValorBR(t); return Number.isNaN(n
 export default function Erp() {
   const { empresa, papel, perfil } = useAuth();
   const empresaId = empresa?.id;
-  const [aba, setAba] = useState<Aba>('produtos');
+  const [aba, setAba] = useState<Aba>('inicio');
+  const [sub, setSub] = useState('');
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [movimentos, setMovimentos] = useState<MovimentoEstoque[]>([]);
   const [busca, setBusca] = useState('');
   const [soBaixos, setSoBaixos] = useState(false);
   const [edicao, setEdicao] = useState<Partial<Produto> | null>(null);
+  const [gerarVar, setGerarVar] = useState(false);
   const [mov, setMov] = useState<{ produto: Produto; tipo: MovimentoEstoque['tipo'] } | null>(null);
   const [erro, setErro] = useState('');
 
@@ -50,35 +61,43 @@ export default function Erp() {
     return produtos.filter((p) => (!q || p.nome.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q) || (p.categoria ?? '').toLowerCase().includes(q)) && (!soBaixos || (p.ativo && p.estoque <= p.estoqueMinimo)));
   }, [produtos, busca, soBaixos]);
 
+  const vista = SUBS[aba] ? (sub || SUBS[aba]?.[0].id) : aba;
+
   if (papel !== 'admin') return <div className="p-6 text-sm text-ink-soft">Somente administradores acessam o Estoque.</div>;
 
   return (
     <div className="p-5 w-full max-w-6xl mx-auto">
-      <div className="flex items-center gap-2 mb-1"><IconEstoque className="w-6 h-6" /><h1 className="text-xl font-extrabold text-ink">Produtos e estoque</h1></div>
-      <p className="text-sm text-ink-soft mb-4">Cadastre produtos, controle entradas e saídas e veja o que está acabando.</p>
+      <div className="flex items-center gap-2 mb-1"><IconEstoque className="w-6 h-6" /><h1 className="text-xl font-extrabold text-ink">Fluxa ERP</h1></div>
+      <p className="text-sm text-ink-soft mb-4">Vendas, estoque, financeiro e cadastros num só lugar.</p>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+      {aba === 'estoque' && <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
         <Card t="Produtos ativos" v={String(resumo.itens)} />
         <Card t="Unidades em estoque" v={resumo.unidades.toLocaleString('pt-BR')} />
         <Card t="Valor em estoque (custo)" v={formatarMoeda(resumo.valorCusto)} />
-        <Card t="Estoque baixo" v={String(resumo.baixos)} alerta={resumo.baixos > 0} onClick={() => { setAba('produtos'); setSoBaixos(true); }} />
-      </div>
+        <Card t="Estoque baixo" v={String(resumo.baixos)} alerta={resumo.baixos > 0} onClick={() => { setSub('produtos'); setSoBaixos(true); }} />
+      </div>}
 
-      <div className="flex gap-1 mb-4 border-b border-line">
-        {(['produtos', 'pedidos', 'cadastros', 'movimentos', 'importar'] as Aba[]).map((a) => (
-          <button key={a} onClick={() => setAba(a)} className={`px-4 h-10 text-sm font-bold ${aba === a ? 'text-teal-500 border-b-2 border-teal-500' : 'text-ink-soft'}`}>
-            {a === 'produtos' ? 'Produtos' : a === 'pedidos' ? 'Pedidos' : a === 'cadastros' ? 'Cadastros' : a === 'movimentos' ? 'Movimentações' : 'Importar (Bling / Olist)'}
-          </button>
+      <div className="flex gap-1 mb-3 border-b border-line overflow-x-auto">
+        {(Object.keys(NOME_ABA) as Aba[]).map((a) => (
+          <button key={a} onClick={() => { setAba(a); setSub(''); }} className={`px-4 h-10 text-sm font-bold whitespace-nowrap ${aba === a ? 'text-teal-500 border-b-2 border-teal-500' : 'text-ink-soft'}`}>{NOME_ABA[a]}</button>
         ))}
       </div>
+      {SUBS[aba] && (
+        <div className="flex gap-1 mb-4 flex-wrap">
+          {SUBS[aba]?.map((x) => (
+            <button key={x.id} onClick={() => setSub(x.id)} className={`px-3 h-8 rounded-full text-xs font-bold ${(sub || SUBS[aba]?.[0].id) === x.id ? 'bg-teal-500 text-white' : 'bg-slate-100 text-ink-soft'}`}>{x.nome}</button>
+          ))}
+        </div>
+      )}
       {erro && <p className="text-sm text-red-600 mb-3">{erro}</p>}
 
-      {aba === 'produtos' && (
+      {vista === 'produtos' && (
         <>
           <div className="flex gap-2 flex-wrap mb-3">
             <input className={`${campo} max-w-xs`} placeholder="Buscar por nome, código ou categoria" value={busca} onChange={(e) => setBusca(e.target.value)} />
             <label className="flex items-center gap-2 text-sm text-ink-soft"><input type="checkbox" checked={soBaixos} onChange={(e) => setSoBaixos(e.target.checked)} /> Só estoque baixo</label>
-            <button onClick={() => setEdicao({ ativo: true, unidade: 'un', preco: 0, custo: 0, estoque: 0, estoqueMinimo: 0 })} className="ml-auto rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-4 h-10">+ Novo produto</button>
+            <button onClick={() => setGerarVar(true)} className="ml-auto rounded-xl border border-line text-sm font-bold px-4 h-10">Produto com variações</button>
+            <button onClick={() => setEdicao({ ativo: true, unidade: 'un', preco: 0, custo: 0, estoque: 0, estoqueMinimo: 0 })} className="rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-4 h-10">+ Novo produto</button>
           </div>
           <div className="overflow-x-auto rounded-xl border border-line bg-white">
             <table className="w-full text-sm">
@@ -113,11 +132,15 @@ export default function Erp() {
         </>
       )}
 
-      {aba === 'pedidos' && empresaId && <ErpPedidos empresaId={empresaId} produtos={produtos} />}
+      {aba === 'inicio' && empresaId && <ErpInicio empresaId={empresaId} produtos={produtos} ir={(d) => { setAba(d.aba); setSub(d.sub ?? ''); }} />}
+      {vista === 'pedidos' && empresaId && <ErpPedidos empresaId={empresaId} produtos={produtos} />}
+      {vista === 'trocas' && empresaId && <ListaTrocas empresaId={empresaId} />}
+      {vista === 'consignacao' && empresaId && <ErpConsignacao empresaId={empresaId} produtos={produtos} />}
+      {aba === 'financeiro' && empresaId && <ErpFinanceiro empresaId={empresaId} />}
 
       {aba === 'cadastros' && empresaId && <ErpCadastros empresaId={empresaId} />}
 
-      {aba === 'movimentos' && (
+      {vista === 'movimentos' && (
         <div className="overflow-x-auto rounded-xl border border-line bg-white">
           <table className="w-full text-sm">
             <thead className="text-xs uppercase text-ink-soft bg-surface"><tr><th className="text-left p-3">Quando</th><th className="text-left p-3">Produto</th><th className="text-left p-3">Tipo</th><th className="text-right p-3">Qtd</th><th className="text-right p-3">Saldo</th><th className="text-left p-3">Motivo</th></tr></thead>
@@ -138,9 +161,10 @@ export default function Erp() {
         </div>
       )}
 
-      {aba === 'importar' && empresaId && <Importar empresaId={empresaId} />}
+      {vista === 'importar' && empresaId && <Importar empresaId={empresaId} />}
 
       {edicao && empresaId && <FormProduto empresaId={empresaId} dados={edicao} onFechar={() => setEdicao(null)} onSalvar={async (d, ex) => { try { await salvarProduto(empresaId, d, ex); setEdicao(null); setErro(''); } catch (e) { setErro(e instanceof Error ? e.message : 'Erro ao salvar.'); } }} onExcluir={edicao.id ? async () => { if (confirm('Excluir este produto?')) { await excluirProduto(empresaId, edicao.id as string); setEdicao(null); } } : undefined} />}
+      {gerarVar && empresaId && <FormVariacoes empresaId={empresaId} onFechar={() => setGerarVar(false)} />}
       {mov && empresaId && <FormMov dados={mov} onFechar={() => setMov(null)} onConfirmar={async (valor, motivo) => { try { await movimentarEstoque(empresaId, mov.produto, mov.tipo, valor, motivo, perfil?.nome); setMov(null); setErro(''); } catch (e) { setErro(e instanceof Error ? e.message : 'Erro.'); setMov(null); } }} />}
     </div>
   );
@@ -259,5 +283,46 @@ function Importar({ empresaId }: { empresaId: string }) {
       )}
       {!leitura && msg.includes('importados') && <p className="text-sm text-teal-600 mt-3">{msg}</p>}
     </div>
+  );
+}
+
+/** Cria de uma vez um produto em várias versões (tamanho, cor, banho…). Cada versão é um produto com estoque próprio. */
+function FormVariacoes({ empresaId, onFechar }: { empresaId: string; onFechar: () => void }) {
+  const [defs, setDefs] = useState<RegistroCad[]>([]);
+  const [defId, setDefId] = useState('');
+  const [valoresTxt, setValoresTxt] = useState('');
+  const [sku, setSku] = useState('');
+  const [nome, setNome] = useState('');
+  const [preco, setPreco] = useState('0');
+  const [custo, setCusto] = useState('0');
+  const [minimo, setMinimo] = useState('0');
+  const [erro, setErro] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  useEffect(() => ouvirCadastro(empresaId, 'variacoesProduto', setDefs), [empresaId]);
+  const valores = valoresTxt.split(',').map((x) => x.trim()).filter(Boolean);
+  return (
+    <Modal titulo="Produto com variações" onFechar={onFechar}>
+      <div className="grid grid-cols-2 gap-3">
+        <div><label className={rotulo}>Código base</label><input className={campo} value={sku} onChange={(e) => setSku(e.target.value)} placeholder="ANL-001" /></div>
+        <div><label className={rotulo}>Nome</label><input className={campo} value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Anel Solitário" /></div>
+        <div><label className={rotulo}>Preço de venda</label><input className={campo} value={preco} onChange={(e) => setPreco(e.target.value)} /></div>
+        <div><label className={rotulo}>Custo</label><input className={campo} value={custo} onChange={(e) => setCusto(e.target.value)} /></div>
+        {defs.length > 0 && <div className="col-span-2"><label className={rotulo}>Usar variação cadastrada</label>
+          <select className={campo} value={defId} onChange={(e) => { setDefId(e.target.value); const d = defs.find((x) => x.id === e.target.value); if (d) setValoresTxt(String(d.valores ?? '')); }}><option value="">—</option>{defs.map((d) => <option key={d.id} value={d.id}>{String(d.nome)}: {String(d.valores)}</option>)}</select></div>}
+        <div className="col-span-2"><label className={rotulo}>Versões (separe por vírgula)</label><input className={campo} value={valoresTxt} onChange={(e) => setValoresTxt(e.target.value)} placeholder="14, 16, 18" /></div>
+        <div><label className={rotulo}>Estoque mínimo de cada</label><input className={campo} value={minimo} onChange={(e) => setMinimo(e.target.value)} /></div>
+      </div>
+      {valores.length > 0 && sku.trim() && <p className="text-xs text-ink-soft mt-3">Vai criar: {valores.map((v) => `${sku.trim()}-${v}`).join(', ')}. O estoque de cada um começa em 0; depois use Entrada.</p>}
+      {erro && <p className="text-sm text-red-600 mt-2">{erro}</p>}
+      <div className="flex gap-2 mt-4">
+        <button disabled={salvando || !sku.trim() || !nome.trim() || valores.length === 0} onClick={async () => {
+          setSalvando(true);
+          try { for (const v of valores) await salvarProduto(empresaId, { sku: `${sku.trim()}-${v}`, nome: `${nome.trim()} — ${v}`, unidade: 'un', preco: numero(preco), custo: numero(custo), estoqueMinimo: numero(minimo), ativo: true, categoria: undefined, marca: undefined }); onFechar(); }
+          catch (e) { setErro(e instanceof Error ? e.message : 'Erro.'); }
+          setSalvando(false);
+        }} className="flex-1 rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold h-10 disabled:opacity-40">Criar {valores.length || ''} versões</button>
+        <button onClick={onFechar} className="rounded-xl border border-line text-sm font-bold px-4">Cancelar</button>
+      </div>
+    </Modal>
   );
 }

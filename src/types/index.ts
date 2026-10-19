@@ -449,6 +449,7 @@ export interface Pedido {
   numero: number;
   clienteNome: string;
   clienteTelefone?: string;
+  devolvidos?: Record<string, number>;
   clienteId?: string;
   operacao?: string;
   vendedor?: string;
@@ -463,4 +464,21 @@ export interface Pedido {
   origem: 'manual' | 'api';
   criadoEm: string;
   atualizadoEm: string;
+}
+
+export interface Troca {
+  id: string; numero: number; pedidoId: string; pedidoNumero: number; clienteNome: string;
+  tipo: 'devolucao' | 'troca';
+  devolvidos: ItemPedido[]; novos: ItemPedido[];
+  valorDevolvido: number; valorNovo: number; diferenca: number; // diferença > 0: cliente paga; < 0: devolver ao cliente
+  motivo?: string; criadoEm: string;
+}
+export interface ItemConsig { produtoId: string; sku: string; nome: string; enviada: number; vendida: number; devolvida: number; preco: number; custo: number }
+export interface Consignacao {
+  id: string; numero: number; tipo: 'cliente' | 'fornecedor'; parteNome: string; parteId?: string;
+  itens: ItemConsig[]; status: 'aberta' | 'encerrada'; valorAcertado: number; criadoEm: string; atualizadoEm: string;
+}
+export interface ContaFin {
+  id: string; tipo: 'receber' | 'pagar'; descricao: string; parteNome?: string; valor: number;
+  vencimento: string; pago: boolean; pagoEm?: string; origem?: string; origemId?: string; criadoEm: string;
 }

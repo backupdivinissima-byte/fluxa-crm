@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { converterOrcamento, criarPedido, mudarStatusPedido, ouvirPedidos, totalDoPedido } from '../lib/erpData';
 import { formatarMoeda, parseValorBR } from '../lib/crmLogic';
 import { ouvirCadastro, type RegistroCad } from '../lib/erpCadastros';
+import { FormTroca } from './ErpTrocas';
 import type { ItemPedido, Pedido, Produto, StatusPedido } from '../types';
 
 const campo = 'w-full rounded-lg border border-line px-3 h-10 text-sm bg-white';
@@ -12,10 +13,20 @@ const ROTULO: Record<StatusPedido, string> = { orcamento: 'Orçamento', aberto: 
 const COR: Record<StatusPedido, string> = { orcamento: 'bg-violet-100 text-violet-700', aberto: 'bg-amber-100 text-amber-700', pago: 'bg-teal-100 text-teal-700', enviado: 'bg-blue-100 text-blue-700', entregue: 'bg-emerald-100 text-emerald-700', cancelado: 'bg-slate-200 text-slate-500' };
 const PROXIMO: Partial<Record<StatusPedido, StatusPedido>> = { aberto: 'pago', pago: 'enviado', enviado: 'entregue' };
 
+/** Prazos de cada parcela: "30/60/90" vira [30,60,90]; senão usa o número de parcelas de 30 em 30 dias. Vazio = à vista. */
+function diasDaCondicao(c?: RegistroCad): number[] | undefined {
+  if (!c) return undefined;
+  const nome = String(c.nome ?? '');
+  if (/^\d+(\/\d+)*$/.test(nome.trim())) return nome.trim().split('/').map(Number);
+  const n = Number(c.parcelas ?? 1);
+  return Array.from({ length: Math.max(1, n) }, (_, k) => (k + 1) * 30);
+}
+
 export default function ErpPedidos({ empresaId, produtos }: { empresaId: string; produtos: Produto[] }) {
   const { perfil } = useAuth();
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [novo, setNovo] = useState(false);
+  const [troca, setTroca] = useState<Pedido | null>(null);
   const [filtro, setFiltro] = useState<StatusPedido | 'todos'>('todos');
   const [erro, setErro] = useState('');
   useEffect(() => ouvirPedidos(empresaId, setPedidos), [empresaId]);
@@ -51,6 +62,7 @@ export default function ErpPedidos({ empresaId, produtos }: { empresaId: string;
                 <td className="p-3 text-right font-bold">{formatarMoeda(p.total)}</td>
                 <td className="p-3"><span className={`rounded-full px-2 py-0.5 text-xs font-bold ${COR[p.status]}`}>{ROTULO[p.status]}</span></td>
                 <td className="p-3 whitespace-nowrap text-right">
+                  {(p.status === 'pago' || p.status === 'enviado' || p.status === 'entregue' || p.status === 'aberto') && <button className="text-xs font-bold text-ink-soft mr-2" onClick={() => setTroca(p)}>Troca / devolução</button>}
                   {p.status === 'orcamento' && <button className="text-xs font-bold text-violet-600 mr-2" onClick={async () => { try { setErro(''); await converterOrcamento(empresaId, p, perfil?.nome); } catch (e) { setErro(e instanceof Error ? e.message : 'Erro.'); } }}>Converter em pedido</button>}
                   {PROXIMO[p.status] && <button className="text-xs font-bold text-teal-500 mr-2" onClick={() => void avancar(p, PROXIMO[p.status] as StatusPedido)}>Marcar {ROTULO[PROXIMO[p.status] as StatusPedido].toLowerCase()}</button>}
                   {p.status !== 'cancelado' && p.status !== 'entregue' && <button className="text-xs font-bold text-red-600" onClick={() => { if (confirm(p.status === 'orcamento' ? `Cancelar o orçamento #${p.numero}?` : `Cancelar o pedido #${p.numero}? Os itens voltam ao estoque.`)) void avancar(p, 'cancelado'); }}>Cancelar</button>}
@@ -61,6 +73,7 @@ export default function ErpPedidos({ empresaId, produtos }: { empresaId: string;
           </tbody>
         </table>
       </div>
+      {troca && <FormTroca empresaId={empresaId} pedido={troca} produtos={produtos} onFechar={() => setTroca(null)} />}
       {novo && <FormPedido empresaId={empresaId} produtos={produtos.filter((p) => p.ativo)} onFechar={() => setNovo(false)} onSalvar={async (d) => { try { await criarPedido(empresaId, d, perfil?.nome); setNovo(false); setErro(''); } catch (e) { return e instanceof Error ? e.message : 'Erro ao salvar.'; } }} />}
     </>
   );
@@ -178,7 +191,7 @@ function FormPedido({ empresaId, produtos, onFechar, onSalvar }: { empresaId: st
         <div className="flex items-center justify-between mt-4">
           <span className="text-sm text-ink-soft">Total <b className="text-lg text-ink">{formatarMoeda(total)}</b></span>
           <div className="flex gap-2">
-            <button disabled={salvando} onClick={async () => { setSalvando(true); const r = await onSalvar({ clienteNome: nome, clienteTelefone: tel, clienteId, operacao, vendedor, condicaoPagamento: cond, comoOrcamento: orcamento, itens, desconto: num(desc), frete: num(frete), pagamento: pag, observacao: obs }); if (r) setErro(r); setSalvando(false); }} className="rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-4 h-10 disabled:opacity-40">{orcamento ? 'Salvar orçamento' : 'Criar pedido'}</button>
+            <button disabled={salvando} onClick={async () => { setSalvando(true); const r = await onSalvar({ clienteNome: nome, clienteTelefone: tel, clienteId, operacao, vendedor, condicaoPagamento: cond, comoOrcamento: orcamento, diasParcelas: diasDaCondicao(condicoes.find((x) => x.nome === cond)), itens, desconto: num(desc), frete: num(frete), pagamento: pag, observacao: obs }); if (r) setErro(r); setSalvando(false); }} className="rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-4 h-10 disabled:opacity-40">{orcamento ? 'Salvar orçamento' : 'Criar pedido'}</button>
             <button onClick={onFechar} className="rounded-xl border border-line text-sm font-bold px-4">Cancelar</button>
           </div>
         </div>
