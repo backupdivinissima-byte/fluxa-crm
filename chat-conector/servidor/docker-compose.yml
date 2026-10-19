@@ -42,6 +42,19 @@ services:
       - ./segredos/conta-servico.json:/segredos/conta-servico.json:ro
       - carlafidelis-dados:/dados
 
+  amandabernardes:
+    <<: *conector
+    container_name: fluxa-chat-amandabernardes
+    environment:
+      <<: *env-base
+      EMPRESA_ID: JCsWyu3SALZxAzGU41oLnYYJJ5r2
+      PASTA_SESSAO: /dados/sessao
+      ARQ_LID: /dados/lid-mapa.json
+    volumes:
+      - ./segredos/conta-servico.json:/segredos/conta-servico.json:ro
+      - amandabernardes-dados:/dados
+
 volumes:
   divinissima-dados:
   carlafidelis-dados:
+  amandabernardes-dados:
