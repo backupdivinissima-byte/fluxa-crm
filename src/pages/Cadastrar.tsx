@@ -28,6 +28,14 @@ const PLATAFORMAS = [
     disponivel: true,
   },
   {
+    id: 'chat',
+    nome: 'Fluxa Chat',
+    status: 'Disponível agora',
+    statusCls: 'bg-teal-500/10 text-teal-600',
+    desc: 'WhatsApp, Instagram Direct e Messenger em um só lugar, com tags, equipe e IA supervisora.',
+    disponivel: true,
+  },
+  {
     id: 'erp',
     nome: 'Fluxa ERP',
     status: 'Em breve',
@@ -108,8 +116,8 @@ export default function Cadastrar() {
   // (etapa 1); só Fluxa CRM e Fluxa Marketing têm formulário completo hoje
   // (mesma conta por baixo), os outros abrem "quero ser avisado".
   const plataformaUrl = params.get('plataforma');
-  const [plataforma, setPlataforma] = useState<'crm' | 'marketing' | null>(
-    plataformaUrl === 'crm' || plataformaUrl === 'marketing' ? plataformaUrl : null
+  const [plataforma, setPlataforma] = useState<'crm' | 'marketing' | 'chat' | null>(
+    plataformaUrl === 'crm' || plataformaUrl === 'marketing' || plataformaUrl === 'chat' ? plataformaUrl : null
   );
   const [nomeEmpresa, setNomeEmpresa] = useState('');
   const [nome, setNome] = useState('');
@@ -201,7 +209,7 @@ export default function Cadastrar() {
               <button
                 key={p.id}
                 type="button"
-                onClick={() => setPlataforma(p.id as 'crm' | 'marketing')}
+                onClick={() => setPlataforma(p.id as 'crm' | 'marketing' | 'chat')}
                 className="w-full flex items-center justify-between gap-3 rounded-xl border border-line bg-white p-4 text-left hover:border-teal-500 hover:bg-teal-500/5 transition-colors"
               >
                 <div>
@@ -254,7 +262,9 @@ export default function Cadastrar() {
   const subtituloPlataforma =
     plataforma === 'marketing'
       ? 'Comece seu teste grátis: anúncios, lives e ROI/CAC, já cruzados com o funil de vendas da sua empresa.'
-      : 'Comece seu teste grátis e organize o funil de vendas da sua empresa.';
+      : plataforma === 'chat'
+        ? 'Comece seu teste grátis: todo o atendimento da sua empresa (WhatsApp, Instagram e Messenger) em um só lugar.'
+        : 'Comece seu teste grátis e organize o funil de vendas da sua empresa.';
 
   return (
     <AuthShell
@@ -280,6 +290,12 @@ export default function Cadastrar() {
         <p className="text-xs text-ink-soft bg-surface rounded-xl p-3 mb-4">
           O Fluxa Marketing roda dentro da mesma conta do Fluxa CRM — sua empresa ganha acesso aos dois (CRM e
           Marketing) com este único cadastro.
+        </p>
+      )}
+      {plataforma === 'chat' && (
+        <p className="text-xs text-ink-soft bg-surface rounded-xl p-3 mb-4">
+          O Fluxa Chat funciona sozinho, com a sua equipe atendendo pelo WhatsApp, Instagram e Messenger. Se depois
+          você contratar o CRM ou o Marketing, dá para vincular tudo no mesmo lugar.
         </p>
       )}
       <form onSubmit={onSubmit} className="bg-white border border-line rounded-2xl p-6 space-y-4">

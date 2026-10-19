@@ -16,11 +16,11 @@ export interface Empresa {
   // tem formulário completo — os demais ainda são só "quero ser avisado").
   // Usado, entre outras coisas, pra personalizar a tela de login por módulo
   // quando os outros produtos tiverem cadastro próprio.
-  produto?: 'crm' | 'erp' | 'marketing' | 'prospect' | 'live';
+  produto?: 'crm' | 'erp' | 'marketing' | 'prospect' | 'live' | 'chat';
   // Módulos contratados (cada um tem só as próprias abas). Sem este campo =
   // empresa antiga: segue com tudo liberado (exceto as que se cadastraram só
   // no Marketing, ver src/lib/modulos.ts).
-  modulos?: ('crm' | 'marketing')[];
+  modulos?: ('crm' | 'marketing' | 'chat')[];
   // Com mais de um módulo: true = abas de todos juntas; false = módulos
   // separados (um de cada vez); sem valor = ainda não respondeu à pergunta.
   modulosVinculados?: boolean;

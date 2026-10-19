@@ -1,6 +1,6 @@
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
-import { modulosDaEmpresa, moduloDaRota, type Modulo } from '../lib/modulos';
+import { modulosDaEmpresa, moduloDaRota, rotaInicial, type Modulo } from '../lib/modulos';
 import fluxaIcon from '../assets/fluxa-icon.svg';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -31,7 +31,7 @@ const itens = [
   { to: '/chat', label: 'Chat', icon: <IconChat /> },
 ];
 
-const NOME_MODULO: Record<Modulo, string> = { crm: 'CRM', marketing: 'Marketing' };
+const NOME_MODULO: Record<Modulo, string> = { crm: 'CRM', marketing: 'Marketing', chat: 'Chat' };
 const CHAVE_MODULO_ATUAL = 'fluxa_modulo_atual';
 
 /** Nav superior única (marca + abas): nada de menu lateral, todas as abas
@@ -65,12 +65,12 @@ export default function Layout() {
     } catch {
       /* sem armazenamento */
     }
-    navigate(m === 'marketing' ? '/marketing' : '/dashboard');
+    navigate(rotaInicial(m));
   }
 
   // Quem abre uma tela de um módulo que não está liberado vai para o módulo certo.
-  if (empresa?.id && !visiveis.includes(moduloDaRota(location.pathname))) {
-    return <Navigate to={visiveis[0] === 'marketing' ? '/marketing' : '/dashboard'} replace />;
+  if (empresa?.id && !visiveis.includes(moduloDaRota(location.pathname, modulos))) {
+    return <Navigate to={rotaInicial(visiveis[0])} replace />;
   }
 
   const nomeUsuario = papel === 'admin' ? perfil?.nome : sessaoVendedor?.vendedor.nome;
@@ -82,7 +82,7 @@ export default function Layout() {
           <div className="flex items-center gap-2 mr-4 shrink-0">
             <img src={fluxaIcon} alt="Fluxa CRM" className="w-8 h-8" />
             <span className="text-lg font-extrabold tracking-tight text-ink">
-              {modulos.length === 1 && modulos[0] === 'marketing' ? 'Fluxa Marketing' : 'Fluxa CRM'}
+              {modulos.length === 1 && modulos[0] === 'marketing' ? 'Fluxa Marketing' : modulos.length === 1 && modulos[0] === 'chat' ? 'Fluxa Chat' : 'Fluxa CRM'}
             </span>
           </div>
 
@@ -103,7 +103,7 @@ export default function Layout() {
           <nav className="flex items-center gap-1 flex-wrap">
             {itens
               .filter((item) => !item.apenasAdmin || papel === 'admin')
-              .filter((item) => visiveis.includes(moduloDaRota(item.to)))
+              .filter((item) => visiveis.includes(moduloDaRota(item.to, modulos)))
               .map((item) => (
                 <NavLink
                   key={item.to}

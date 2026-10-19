@@ -105,6 +105,15 @@ function IconMarketing() {
   );
 }
 
+function IconChatProduto() {
+  return (
+    <IconBase>
+      <path d="M4 5h16v11H9l-5 4V5z" />
+      <path d="M8 9.5h8M8 12.5h5" />
+    </IconBase>
+  );
+}
+
 function IconProspect() {
   return (
     <IconBaseMuted>
@@ -134,6 +143,15 @@ const produtos = [
     // ?plataforma=crm pula a etapa "Qual plataforma deseja testar?" no
     // cadastro — quem clicou aqui já disse qual produto quer.
     ctaTo: '/cadastrar?plataforma=crm',
+  },
+  {
+    nome: 'Fluxa Chat',
+    status: 'Disponível agora',
+    statusCls: 'bg-teal-500/10 text-teal-600',
+    desc: 'Atendimento de WhatsApp, Instagram Direct e Messenger em um só lugar, com tags de origem, equipe e IA supervisora. Vende sozinho ou junto com os outros.',
+    icon: <IconChatProduto />,
+    ctaLabel: 'Teste grátis',
+    ctaTo: '/cadastrar?plataforma=chat',
   },
   {
     nome: 'Fluxa ERP',
