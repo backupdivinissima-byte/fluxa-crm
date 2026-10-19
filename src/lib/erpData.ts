@@ -121,6 +121,13 @@ export function ouvirPedidos(empresaId: string, cb: (p: Pedido[]) => void): Unsu
   );
 }
 
+/** Pedidos desde uma data (ISO) — usado no comparativo de vendas ano contra ano. */
+export function ouvirPedidosDesde(empresaId: string, desdeIso: string, cb: (p: Pedido[]) => void): Unsubscribe {
+  return onSnapshot(query(pedidosCol(empresaId), where('criadoEm', '>=', desdeIso), orderBy('criadoEm', 'asc')), (snap) =>
+    cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Pedido))
+  );
+}
+
 export function totalDoPedido(itens: ItemPedido[], desconto: number, frete: number): number {
   const sub = itens.reduce((s, i) => s + i.quantidade * i.preco, 0);
   return Math.max(0, Math.round((sub - desconto + frete) * 100) / 100);
