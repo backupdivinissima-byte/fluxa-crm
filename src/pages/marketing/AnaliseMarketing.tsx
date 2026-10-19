@@ -54,7 +54,15 @@ export default function AnaliseMarketing() {
     };
   }, [empresaId]);
 
-  const colunasFechamentoIds = useMemo(() => colunas.filter((c) => c.fechamento).map((c) => c.id), [colunas]);
+  // Receita total do mês no Marketing = colunas de fechamento + colunas de live
+  // ("Orçamento Live", "Concluído Live"...), pedido da Josy: orçamento e concluído live contam.
+  const colunasFechamentoIds = useMemo(
+    () =>
+      colunas
+        .filter((c) => c.fechamento || c.nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes('live'))
+        .map((c) => c.id),
+    [colunas]
+  );
 
   const resumo = useMemo(
     () => resumoMarketingMes(campanhas, clientes, reservas, colunasFechamentoIds, mesRef),
