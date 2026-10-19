@@ -206,7 +206,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function cadastrar(dados: DadosCadastro) {
-    const cred = await createUserWithEmailAndPassword(auth, dados.email, dados.senha);
+    let cred;
+    try {
+      cred = await createUserWithEmailAndPassword(auth, dados.email, dados.senha);
+    } catch (err) {
+      if ((err as { code?: string })?.code !== 'auth/email-already-in-use') throw err;
+      // O e-mail já tem conta: em vez de bloquear, contrata o novo módulo na MESMA empresa
+      // (confirmando com a senha da conta, que a pessoa digitou no formulário).
+      try {
+        cred = await signInWithEmailAndPassword(auth, dados.email, dados.senha);
+      } catch {
+        throw Object.assign(new Error('senha'), { code: 'fluxa/senha-conta-existente' });
+      }
+      const perfilSnap = await getDoc(doc(db, 'usuarios', cred.user.uid));
+      const perfilExistente = perfilSnap.exists() ? (perfilSnap.data() as UsuarioPerfil) : null;
+      if (!perfilExistente) throw Object.assign(new Error('sem perfil'), { code: 'fluxa/sem-empresa' });
+      const empRef = doc(db, 'empresas', perfilExistente.empresaId);
+      const empSnap = await getDoc(empRef);
+      const emp = { ...(empSnap.data() as Empresa), id: empRef.id };
+      const modulo = (dados.produto ?? 'crm') as NonNullable<Empresa['modulos']>[number];
+      const atuais: NonNullable<Empresa['modulos']> = emp.modulos && emp.modulos.length > 0 ? emp.modulos : emp.produto === 'marketing' ? ['marketing'] : ['crm', 'marketing'];
+      const novos = atuais.includes(modulo) ? atuais : [...atuais, modulo];
+      if (novos !== atuais) await updateDoc(empRef, { modulos: novos });
+      setUsuario(cred.user);
+      setPerfil(perfilExistente);
+      setEmpresa({ ...emp, modulos: novos });
+      return;
+    }
     const empresaRef = doc(db, 'empresas', cred.user.uid); // 1ª empresa = doc com id do próprio admin fundador
     const novaEmpresa: Empresa = {
       id: empresaRef.id,

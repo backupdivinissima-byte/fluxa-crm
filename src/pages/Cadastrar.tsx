@@ -162,12 +162,14 @@ export default function Cadastrar() {
         produto: plataforma ?? 'crm',
         ...(documento ? { documento, documentoTipo: tipoDocumento } : {}),
       });
-      navigate('/dashboard');
+      navigate(plataforma === 'erp' ? '/erp' : plataforma === 'marketing' ? '/marketing' : plataforma === 'chat' ? '/chat' : '/dashboard');
     } catch (err) {
       console.error('Erro ao cadastrar empresa:', err);
       const codigo = (err as { code?: string })?.code;
-      if (codigo === 'auth/email-already-in-use') {
-        setErro('Esse e-mail já tem uma empresa cadastrada. Tente entrar em vez de cadastrar.');
+      if (codigo === 'fluxa/senha-conta-existente') {
+        setErro('Esse e-mail já tem uma conta. Para adicionar este módulo a ela, digite a senha atual dessa conta.');
+      } else if (codigo === 'fluxa/sem-empresa') {
+        setErro('Esse e-mail já existe, mas sem empresa vinculada. Fale com o suporte.');
       } else if (codigo === 'auth/invalid-email') {
         setErro('E-mail inválido. Confira e tente de novo.');
       } else if (codigo === 'auth/weak-password') {
@@ -296,6 +298,7 @@ export default function Cadastrar() {
       )}
       {plataforma === 'erp' && (
         <p className="text-xs text-ink-soft bg-surface rounded-xl p-3 mb-4">
+          Já tem conta com esse e-mail? Use o mesmo e-mail e a senha atual: o ERP é adicionado à sua empresa.{' '}
           O Fluxa ERP funciona sozinho, em uma conta própria. Se depois você contratar o CRM, Chat ou Marketing, a
           ligação entre eles é feita por API, sem misturar os dados.
         </p>
