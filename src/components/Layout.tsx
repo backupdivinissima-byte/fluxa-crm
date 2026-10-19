@@ -1,6 +1,5 @@
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
-import { DONOS_PLATAFORMA } from '../pages/Modulos';
 import { modulosDaEmpresa, moduloDaRota, rotaInicial, type Modulo } from '../lib/modulos';
 import fluxaIcon from '../assets/fluxa-icon.svg';
 import { useAuth } from '../contexts/AuthContext';
@@ -139,11 +138,6 @@ export default function Layout() {
               </div>
               <div className="text-xs text-ink-soft truncate max-w-[160px]">{nomeUsuario}</div>
             </div>
-            {papel === 'admin' && !!perfil?.email && DONOS_PLATAFORMA.includes(perfil.email.toLowerCase()) && (
-              <NavLink to="/modulos" className="text-xs font-bold text-ink-soft hover:text-ink underline shrink-0">
-                Módulos
-              </NavLink>
-            )}
             <button
               onClick={() => sair()}
               className="text-xs font-bold text-ink-soft hover:text-ink transition-colors border border-line rounded-lg px-3 py-1.5 shrink-0"
