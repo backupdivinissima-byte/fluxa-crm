@@ -20,7 +20,7 @@ export interface Empresa {
   // Módulos contratados (cada um tem só as próprias abas). Sem este campo =
   // empresa antiga: segue com tudo liberado (exceto as que se cadastraram só
   // no Marketing, ver src/lib/modulos.ts).
-  modulos?: ('crm' | 'marketing' | 'chat')[];
+  modulos?: ('crm' | 'marketing' | 'chat' | 'erp')[];
   // Com mais de um módulo: true = abas de todos juntas; false = módulos
   // separados (um de cada vez); sem valor = ainda não respondeu à pergunta.
   modulosVinculados?: boolean;
@@ -409,4 +409,34 @@ export interface ConexaoChat {
     ultimaEnviada?: string | null;
     teste?: { ok?: boolean; em?: string; envio?: boolean; noCelular?: boolean; banco?: boolean } | null;
   };
+}
+
+// ===== Fluxa ERP: produtos e estoque =====
+export interface Produto {
+  id: string;
+  sku: string;
+  nome: string;
+  categoria?: string;
+  unidade?: string;
+  preco: number;
+  custo: number;
+  estoque: number;
+  estoqueMinimo: number;
+  ativo: boolean;
+  origem?: 'manual' | 'importado';
+  criadoEm: string;
+  atualizadoEm: string;
+}
+
+export interface MovimentoEstoque {
+  id: string;
+  produtoId: string;
+  produtoNome: string;
+  sku: string;
+  tipo: 'entrada' | 'saida' | 'ajuste';
+  quantidade: number; // variação (+ entra, - sai)
+  saldoApos: number;
+  motivo?: string;
+  usuario?: string;
+  criadoEm: string;
 }

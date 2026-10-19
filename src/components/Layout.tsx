@@ -14,6 +14,7 @@ import {
   IconImportar,
   IconMarketing,
   IconChat,
+  IconEstoque,
 } from './NavIcons';
 
 const itens = [
@@ -30,9 +31,11 @@ const itens = [
   { to: '/marketing', label: 'Marketing', icon: <IconMarketing />, apenasAdmin: true },
   // Atendimento (WhatsApp, Instagram Direct, Messenger): admin e vendedores.
   { to: '/chat', label: 'Chat', icon: <IconChat /> },
+  // Produtos e estoque (Fluxa ERP): só admin.
+  { to: '/erp', label: 'Estoque', icon: <IconEstoque />, apenasAdmin: true },
 ];
 
-const NOME_MODULO: Record<Modulo, string> = { crm: 'CRM', marketing: 'Marketing', chat: 'Chat' };
+const NOME_MODULO: Record<Modulo, string> = { crm: 'CRM', marketing: 'Marketing', chat: 'Chat', erp: 'ERP' };
 const CHAVE_MODULO_ATUAL = 'fluxa_modulo_atual';
 
 /** Nav superior única (marca + abas): nada de menu lateral, todas as abas
@@ -83,7 +86,7 @@ export default function Layout() {
           <div className="flex items-center gap-2 mr-4 shrink-0">
             <img src={fluxaIcon} alt="Fluxa CRM" className="w-8 h-8" />
             <span className="text-lg font-extrabold tracking-tight text-ink">
-              {modulos.length === 1 && modulos[0] === 'marketing' ? 'Fluxa Marketing' : modulos.length === 1 && modulos[0] === 'chat' ? 'Fluxa Chat' : 'Fluxa CRM'}
+              {modulos.length === 1 && modulos[0] === 'marketing' ? 'Fluxa Marketing' : modulos.length === 1 && modulos[0] === 'chat' ? 'Fluxa Chat' : modulos.length === 1 && modulos[0] === 'erp' ? 'Fluxa ERP' : 'Fluxa CRM'}
             </span>
           </div>
 

@@ -164,3 +164,12 @@ export function IconChat(props: { className?: string }) {
     </NavIcon>
   );
 }
+
+export function IconEstoque(props: { className?: string }) {
+  return (
+    <NavIcon {...props}>
+      <path d="M3.5 8 12 3.5 20.5 8v8L12 20.5 3.5 16V8Z" />
+      <path d="M3.5 8 12 12.5 20.5 8M12 12.5v8" />
+    </NavIcon>
+  );
+}

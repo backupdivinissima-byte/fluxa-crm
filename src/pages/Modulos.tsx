@@ -12,6 +12,7 @@ const TODOS: { id: Modulo; nome: string }[] = [
   { id: 'crm', nome: 'CRM' },
   { id: 'marketing', nome: 'Marketing' },
   { id: 'chat', nome: 'Chat' },
+  { id: 'erp', nome: 'ERP' },
 ];
 
 /** Tela do dono da plataforma: liga e desliga o CRM, o Marketing e o Chat de cada empresa. */
