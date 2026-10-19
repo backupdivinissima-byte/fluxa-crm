@@ -1,19 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ouvirConsignacoes, ouvirContas, ouvirPedidosDesde } from '../lib/erpData';
+import { ouvirPedidosDesde } from '../lib/erpData';
 import { formatarMoeda } from '../lib/crmLogic';
-import type { Consignacao, ContaFin, Pedido, Produto } from '../types';
+import type { Pedido, Produto } from '../types';
 
 export type DestinoErp = { aba: 'vendas' | 'estoque' | 'financeiro'; sub?: string };
 
 /** Painel inicial: o que precisa de atenção hoje e os números do mês, sem precisar caçar em cada tela. */
-export default function ErpInicio({ empresaId, produtos, ir }: { empresaId: string; produtos: Produto[]; ir: (d: DestinoErp) => void }) {
+export default function ErpInicio({ empresaId, produtos }: { empresaId: string; produtos: Produto[]; ir?: (d: DestinoErp) => void }) {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
-  const [contas, setContas] = useState<ContaFin[]>([]);
-  const [consig, setConsig] = useState<Consignacao[]>([]);
-  useEffect(() => { const a = ouvirPedidosDesde(empresaId, `${new Date().getFullYear() - 1}-01-01`, setPedidos); const b = ouvirContas(empresaId, setContas); const c = ouvirConsignacoes(empresaId, setConsig); return () => { a(); b(); c(); }; }, [empresaId]);
+  useEffect(() => ouvirPedidosDesde(empresaId, `${new Date().getFullYear() - 1}-01-01`, setPedidos), [empresaId]);
 
   const d = useMemo(() => {
-    const agora = Date.now(); const h = new Date().toISOString().slice(0, 10); const mes = h.slice(0, 7);
+    const h = new Date().toISOString().slice(0, 10); const mes = h.slice(0, 7);
     const vendas = pedidos.filter((p) => p.status !== 'cancelado' && p.status !== 'orcamento' && p.criadoEm.slice(0, 7) === mes);
     const total = vendas.reduce((s, p) => s + p.total, 0);
     const porProduto = new Map<string, { nome: string; qtd: number }>();
@@ -23,27 +21,15 @@ export default function ErpInicio({ empresaId, produtos, ir }: { empresaId: stri
       const soma = (a: number) => pedidos.filter((p) => p.status !== 'cancelado' && p.status !== 'orcamento' && p.criadoEm.slice(0, 7) === `${a}-${String(m + 1).padStart(2, '0')}`).reduce((s, p) => s + p.total, 0);
       return { atual: soma(ano), anterior: soma(ano - 1) };
     });
-    const dias = (iso: string) => (agora - new Date(iso).getTime()) / 86400000;
-    const vencidas = contas.filter((c) => !c.pago && c.vencimento < h);
+    const unidades = Array.from(porProduto.values()).reduce((x, y) => x + y.qtd, 0);
+    const maisIds = new Set(Array.from(porProduto.entries()).sort((x, y) => y[1].qtd - x[1].qtd).slice(0, 5).map(([id]) => id));
+    const menos = produtos.filter((p) => p.ativo && !maisIds.has(p.id) && (p.estoque > 0 || porProduto.has(p.id))).map((p) => ({ nome: p.nome, qtd: porProduto.get(p.id)?.qtd ?? 0 })).sort((x, y) => x.qtd - y.qtd).slice(0, 5);
     return {
       ano, meses, total, qtd: vendas.length, ticket: vendas.length ? total / vendas.length : 0,
       top: Array.from(porProduto.values()).sort((a, b) => b.qtd - a.qtd).slice(0, 5),
-      baixos: produtos.filter((p) => p.ativo && p.estoque <= p.estoqueMinimo),
-      orcParados: pedidos.filter((p) => p.status === 'orcamento' && dias(p.criadoEm) >= 3),
-      vencidasRec: vencidas.filter((c) => c.tipo === 'receber'), vencidasPag: vencidas.filter((c) => c.tipo === 'pagar'),
-      consigAntigas: consig.filter((c) => c.status === 'aberta' && dias(c.criadoEm) >= 30),
-      semGiro: produtos.filter((p) => p.ativo && p.estoque > 0 && !porProduto.has(p.id)).length,
+      unidades, menos,
     };
-  }, [pedidos, contas, consig, produtos]);
-
-  const soma = (l: ContaFin[]) => l.reduce((s, c) => s + c.valor, 0);
-  const alertas: { texto: string; destino: DestinoErp; cor: string }[] = [];
-  if (d.vencidasRec.length) alertas.push({ texto: `${d.vencidasRec.length} conta(s) a receber atrasada(s): ${formatarMoeda(soma(d.vencidasRec))}`, destino: { aba: 'financeiro' }, cor: 'border-red-300 bg-red-50' });
-  if (d.vencidasPag.length) alertas.push({ texto: `${d.vencidasPag.length} conta(s) a pagar atrasada(s): ${formatarMoeda(soma(d.vencidasPag))}`, destino: { aba: 'financeiro' }, cor: 'border-red-300 bg-red-50' });
-  if (d.baixos.length) alertas.push({ texto: `${d.baixos.length} produto(s) com estoque baixo: ${d.baixos.slice(0, 3).map((p) => p.nome).join(', ')}${d.baixos.length > 3 ? '…' : ''}`, destino: { aba: 'estoque' }, cor: 'border-amber-300 bg-amber-50' });
-  if (d.orcParados.length) alertas.push({ texto: `${d.orcParados.length} orçamento(s) parado(s) há 3 dias ou mais. Vale chamar o cliente.`, destino: { aba: 'vendas' }, cor: 'border-violet-300 bg-violet-50' });
-  if (d.consigAntigas.length) alertas.push({ texto: `${d.consigAntigas.length} consignação(ões) aberta(s) há mais de 30 dias. Hora de acertar.`, destino: { aba: 'vendas', sub: 'consignacao' }, cor: 'border-amber-300 bg-amber-50' });
-  if (d.semGiro > 0) alertas.push({ texto: `${d.semGiro} produto(s) com estoque e nenhuma venda neste mês.`, destino: { aba: 'estoque' }, cor: 'border-slate-300 bg-slate-50' });
+  }, [pedidos, produtos]);
 
   return (
     <>
@@ -53,15 +39,9 @@ export default function ErpInicio({ empresaId, produtos, ir }: { empresaId: stri
         <Cartao t="Ticket médio" v={formatarMoeda(d.ticket)} />
       </div>
       <GraficoAnual ano={d.ano} meses={d.meses} />
-      <h2 className="text-sm font-extrabold text-ink mb-2">5 mais vendidos no mês</h2>
-      <div className="rounded-xl border border-line bg-white divide-y divide-line mb-5">
-        {d.top.map((p, i) => <div key={i} className="flex justify-between px-4 py-2 text-sm"><span>{i + 1}. {p.nome}</span><b>{p.qtd} un.</b></div>)}
-        {d.top.length === 0 && <p className="px-4 py-3 text-sm text-ink-soft">Ainda sem vendas neste mês.</p>}
-      </div>
-      <h2 className="text-sm font-extrabold text-ink mb-2">Precisa de atenção</h2>
-      <div className="space-y-2 mb-5">
-        {alertas.map((a, i) => <button key={i} onClick={() => ir(a.destino)} className={`block w-full text-left rounded-xl border px-4 py-3 text-sm ${a.cor}`}>{a.texto}</button>)}
-        {alertas.length === 0 && <p className="text-sm text-ink-soft rounded-xl border border-line bg-white px-4 py-3">Tudo em dia por aqui.</p>}
+      <div className="grid md:grid-cols-2 gap-4">
+        <ListaRanking titulo="5 mais vendidos no mês" itens={d.top} total={d.unidades} />
+        <ListaRanking titulo="5 menos vendidos no mês" itens={d.menos} total={d.unidades} />
       </div>
     </>
   );
@@ -94,6 +74,23 @@ function GraficoAnual({ ano, meses }: { ano: number; meses: { atual: number; ant
             <div className="text-[10px] text-ink-soft hidden lg:block">{m.atual ? formatarMoeda(m.atual).replace('R$ ', '') : ''}</div>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function ListaRanking({ titulo, itens, total }: { titulo: string; itens: { nome: string; qtd: number }[]; total: number }) {
+  return (
+    <div>
+      <h2 className="text-sm font-extrabold text-ink mb-2">{titulo}</h2>
+      <div className="rounded-xl border border-line bg-white divide-y divide-line">
+        {itens.map((p, i) => (
+          <div key={i} className="flex justify-between gap-3 px-4 py-2 text-sm">
+            <span className="truncate">{i + 1}. {p.nome}</span>
+            <span className="shrink-0"><b>{p.qtd} un.</b> <span className="text-ink-soft">· {total ? ((p.qtd / total) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) : '0'}%</span></span>
+          </div>
+        ))}
+        {itens.length === 0 && <p className="px-4 py-3 text-sm text-ink-soft">Ainda sem dados neste mês.</p>}
       </div>
     </div>
   );
