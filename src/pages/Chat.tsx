@@ -23,6 +23,7 @@ import {
   enviarAnexoChat,
   transferirConversa,
   criarContatoChat,
+  validarTelefoneWhatsApp,
   liberarConversa,
   ouvirConexaoWhatsapp,
   ouvirConversas,
@@ -1102,6 +1103,9 @@ export default function Chat() {
                       className="w-44 rounded-lg border border-line px-2 py-1.5 text-sm bg-white"
                     />
                   )}
+                  {editando && telContato.trim() && validarTelefoneWhatsApp(telContato) && (
+                    <span className="text-xs font-bold text-red-600">⚠ {validarTelefoneWhatsApp(telContato)}</span>
+                  )}
                   {aberta.nomeSugerido && nomeContato.trim() !== aberta.nomeSugerido && (
                     <button onClick={() => setNomeContato(aberta.nomeSugerido ?? '')} className="text-ink-soft underline">
                       usar “{aberta.nomeSugerido}”
@@ -1400,13 +1404,16 @@ export default function Chat() {
               placeholder="DDD + número (exterior: +1 508 309 5403)"
               className="w-full rounded-lg border border-line px-3 py-2 text-sm"
             />
+            {novoContato.telefone.trim() && validarTelefoneWhatsApp(novoContato.telefone) && (
+              <p className="mt-1 text-xs font-bold text-red-600">⚠ {validarTelefoneWhatsApp(novoContato.telefone)}</p>
+            )}
             <div className="flex gap-2 mt-4">
               <button onClick={() => setNovoContato(null)} className="flex-1 rounded-xl border border-line text-sm font-bold py-2 hover:bg-surface">
                 Cancelar
               </button>
               <button
                 onClick={() => void cadastrarContato()}
-                disabled={!novoContato.nome.trim() || novoContato.telefone.replace(/\D/g, '').length < 10}
+                disabled={!novoContato.nome.trim() || !!validarTelefoneWhatsApp(novoContato.telefone)}
                 className="flex-1 rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold py-2 disabled:opacity-60"
               >
                 Cadastrar

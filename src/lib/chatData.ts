@@ -300,11 +300,41 @@ export function normalizarTelefone(telefone: string): string {
   return d;
 }
 
+const DDDS_BR = new Set(['11','12','13','14','15','16','17','18','19','21','22','24','27','28','31','32','33','34','35','37','38','41','42','43','44','45','46','47','48','49','51','53','54','55','61','62','63','64','65','66','67','68','69','71','73','74','75','77','79','81','82','83','84','85','86','87','88','89','91','92','93','94','95','96','97','98','99']);
+
+/** Confere se o telefone parece um número de WhatsApp de verdade. Devolve a mensagem de erro, ou null se estiver certo. */
+export function validarTelefoneWhatsApp(telefone: string): string | null {
+  const d = normalizarTelefone(telefone);
+  if (!d) return 'Número inválido. Informe o telefone com DDD.';
+  if (/^(\d)\1+$/.test(d)) return 'Número inválido. Adicione o número correto.';
+  const bruto = telefone.trim();
+  const soDig = bruto.replace(/\D/g, '');
+  const comPais = bruto.startsWith('+') || bruto.startsWith('00');
+  if (!comPais && !soDig.startsWith('55')) {
+    // Sem "+" é número do Brasil: DDD + 8 ou 9 dígitos. Dígito a mais ou a menos costuma ser erro de digitação.
+    if (soDig.length > 11) return 'Número inválido: tem dígitos a mais. Para número de fora do Brasil comece com + e o código do país. Adicione o número correto.';
+    if (soDig.length === 11 && soDig[0] !== '1' && DDDS_BR.has(soDig.slice(0, 2)) && soDig[2] !== '9') return 'Número inválido: celular com DDD precisa do 9 na frente (DDD + 9 + 8 dígitos). Adicione o número correto.';
+  }
+  if (d.startsWith('55') && (d.length === 12 || d.length === 13)) {
+    const ddd = d.slice(2, 4);
+    const num = d.slice(4);
+    if (!DDDS_BR.has(ddd)) return `Número inválido: o DDD ${ddd} não existe. Adicione o número correto.`;
+    if (num.length === 9 && num[0] !== '9') return 'Número inválido: celular com 9 dígitos precisa começar com 9 depois do DDD. Adicione o número correto.';
+    if (num.length === 8 && /^[6-9]/.test(num)) return 'Número inválido: celular precisa do 9 na frente (DDD + 9 + número). Adicione o número correto.';
+    return null;
+  }
+  if (d.startsWith('55')) return 'Número inválido: telefone do Brasil tem DDD + 8 ou 9 dígitos. Adicione o número correto.';
+  if (d.length < 8 || d.length > 15) return 'Número inválido. Informe DDD + número (ou +país para número de fora do Brasil). Adicione o número correto.';
+  if (d.startsWith('0')) return 'Número inválido. Adicione o número correto.';
+  return null;
+}
+
 /** Cria (ou reabre) um contato dentro do Fluxa Chat, já salvo na agenda e no nome de quem cadastrou. */
 export async function criarContatoChat(empresaId: string, nome: string, telefone: string): Promise<ConversaChat> {
   await chatPronto;
   const d = normalizarTelefone(telefone);
-  if (d.length < 10) throw new Error('Telefone inválido. Informe DDD + número (ou +país para número de fora do Brasil).');
+  const erroTel = validarTelefoneWhatsApp(telefone);
+  if (erroTel) throw new Error(erroTel);
   const id = `whatsapp_${d}`;
   const ref = doc(db, 'empresas', empresaId, 'conversas', id);
   const atual = await getDoc(ref);
@@ -411,6 +441,10 @@ export async function editarContatoChat(empresaId: string, conversaId: string, d
   const atual = await getDoc(ref);
   const dadosAtuais = (atual.data() ?? {}) as Partial<ConversaChat>;
   const novo = dados.telefone ? normalizarTelefone(dados.telefone) : '';
+  if (dados.telefone) {
+    const erroTel = validarTelefoneWhatsApp(dados.telefone);
+    if (erroTel) throw new Error(erroTel);
+  }
   const mudou = !!novo && dadosAtuais.canal === 'whatsapp' && novo !== dadosAtuais.contato && `whatsapp_${novo}` !== conversaId;
   if (!mudou) {
     await updateDoc(ref, { nome: dados.nome, salvo: true, ...(novo ? { telefone: novo } : {}) });
