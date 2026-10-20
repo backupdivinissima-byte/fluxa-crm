@@ -1,3 +1,4 @@
+import { IconChat } from '../components/NavIcons';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { ouvirClientes, ouvirEmpresa, ouvirVendedores, atualizarCampoCliente, salvarCliente } from '../lib/crmData';
@@ -741,6 +742,11 @@ export default function Chat() {
 
   return (
     <div className={`${souAdmin ? 'py-6' : 'py-3'} pr-6 pl-2 w-full space-y-3`}>
+      {!souAdmin && (
+        <h1 className="text-base font-extrabold text-ink flex items-center gap-2">
+          <IconChat /> Fluxa Chat
+        </h1>
+      )}
       {souAdmin && (
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
