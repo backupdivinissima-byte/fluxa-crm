@@ -149,6 +149,11 @@ function IconeWhatsApp() {
     </svg>
   );
 }
+/** Só os dois primeiros nomes (ex.: MIRIAM RODRIGUES DOS SANTOS → MIRIAM RODRIGUES). */
+function doisNomes(nome?: string): string {
+  return (nome ?? '').trim().split(/\s+/).slice(0, 2).join(' ');
+}
+
 /** Fluxa Chat: caixa única de atendimento (WhatsApp por QR Code; Instagram
  * Direct e Messenger entram na fase seguinte). O vendedor que abre a conversa
  * e clica em "Assumir" fica responsável por ela e pelo cliente no CRM. */
@@ -979,7 +984,7 @@ export default function Chat() {
                     {c.alertaEntrega && <span className="text-[10px] font-bold text-red-600 shrink-0" title={c.alertaMotivo}>⚠ entrega</span>}
                   </div>
                   <div className="text-[10px] text-ink-soft mt-1">
-                    {NOME_CANAL[c.canal]} · {c.vendedorNome ? `com ${c.vendedorNome}` : 'livre'}
+                    {NOME_CANAL[c.canal]} · {c.vendedorNome ? `com ${doisNomes(c.vendedorNome)}` : 'livre'}
                   </div>
                   <div className="flex flex-wrap gap-1 mt-1">
                     <Etiqueta nome={ORIGENS[origemDe(c)].nome} cor={ORIGENS[origemDe(c)].cor} />
@@ -1009,7 +1014,7 @@ export default function Chat() {
                   {(aberta.telefone || clienteCrm?.telefone) && <div className="text-[11px] text-ink-soft">{aberta.telefone || clienteCrm?.telefone}</div>}
                   <div className="text-[11px] text-ink-soft">
                     {NOME_CANAL[aberta.canal]}
-                    {aberta.vendedorNome ? ` · em atendimento por ${aberta.vendedorNome}` : ' · livre'}
+                    {aberta.vendedorNome ? ` · em atendimento por ${doisNomes(aberta.vendedorNome)}` : ' · livre'}
                   </div>
                 </div>
                 {aberta.canal === 'whatsapp' && (() => {
