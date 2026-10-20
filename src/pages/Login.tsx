@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { auth } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import AuthShell from '../components/AuthShell';
 import CampoSenha from '../components/CampoSenha';
@@ -17,6 +19,18 @@ export default function Login() {
   const [senha, setSenha] = useState('');
   const [erro, setErro] = useState('');
   const [carregando, setCarregando] = useState(false);
+
+  const [aviso, setAviso] = useState('');
+  async function esqueci() {
+    setErro(''); setAviso('');
+    if (!identificador.includes('@')) { setErro('Digite seu e-mail acima e clique de novo em "Esqueci minha senha".'); return; }
+    try {
+      await sendPasswordResetEmail(auth, identificador.trim());
+      setAviso('Se esse e-mail tiver conta, enviamos um link para criar uma nova senha. Olhe também o spam.');
+    } catch {
+      setErro('Não foi possível enviar agora. Confira o e-mail e tente de novo.');
+    }
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -105,6 +119,7 @@ export default function Login() {
         </div>
         <CampoSenha label="Senha" value={senha} onChange={setSenha} required autoComplete="current-password" />
         {erro && <p className="text-xs text-red-500">{erro}</p>}
+        {aviso && <p className="text-xs text-teal-700">{aviso}</p>}
         <button
           type="submit"
           disabled={carregando}
@@ -112,6 +127,11 @@ export default function Login() {
         >
           {carregando ? 'Entrando...' : 'Entrar'}
         </button>
+        {modo === 'admin' && (
+          <button type="button" onClick={() => void esqueci()} className="w-full text-xs font-bold text-blue-600 hover:underline">
+            Esqueci minha senha
+          </button>
+        )}
       </form>
     </AuthShell>
   );
