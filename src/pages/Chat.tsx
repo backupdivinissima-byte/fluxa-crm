@@ -735,7 +735,8 @@ export default function Chat() {
   if (!empresaId) return null;
 
   return (
-    <div className="py-6 pr-6 pl-2 w-full space-y-4">
+    <div className={`${souAdmin ? 'py-6' : 'py-3'} pr-6 pl-2 w-full space-y-3`}>
+      {souAdmin && (
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-base font-extrabold text-ink mb-1">Fluxa Chat</h1>
@@ -775,6 +776,7 @@ export default function Chat() {
           <span className="rounded-full px-3 py-1 bg-surface text-ink-soft border border-line">Messenger: pelo servidor (Cloudflare)</span>
         </div>
       </div>
+      )}
 
       {comAlerta > 0 && (
         <div className="rounded-xl border-2 border-red-400 bg-red-50 px-4 py-3 flex items-center justify-between gap-3 flex-wrap" role="alert">
