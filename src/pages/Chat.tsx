@@ -1000,10 +1000,10 @@ export default function Chat() {
               <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-line">
                 <div>
                   <div className="font-bold text-sm text-ink">
-                    {clienteCrm ? clienteCrm.razao ?? clienteCrm.nome : aberta.nome || aberta.telefone || aberta.contato}
+                    {nomeAgenda || (clienteCrm ? clienteCrm.razao ?? clienteCrm.nome : aberta.telefone || aberta.contato)}
                     {aberta.salvoNaAgenda && <span className="ml-2 text-[10px] font-bold text-emerald-600">📒 Salvo na agenda do celular</span>}
                   </div>
-                  {nomeAgenda && clienteCrm && <div className="text-[11px] text-ink-soft">Agenda: {nomeAgenda}</div>}
+                  {clienteCrm && (clienteCrm.razao ?? clienteCrm.nome) && (clienteCrm.razao ?? clienteCrm.nome) !== nomeAgenda && <div className="text-[11px] text-ink-soft">Razão: {clienteCrm.razao ?? clienteCrm.nome}</div>}
                   {(aberta.telefone || clienteCrm?.telefone) && <div className="text-[11px] text-ink-soft">{aberta.telefone || clienteCrm?.telefone}</div>}
                   <div className="text-[11px] text-ink-soft">
                     {NOME_CANAL[aberta.canal]}
