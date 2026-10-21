@@ -654,16 +654,16 @@ refConexao.onSnapshot(async (snap) => {
 // o formato das mensagens de voz do WhatsApp.
 // AUDIO_FORMATO=ogg volta ao formato Opus; o padrão (m4a/AAC) abre também no WhatsApp do iPhone.
 const FORMATO_AUDIO = (process.env.AUDIO_FORMATO || 'm4a').toLowerCase();
-function paraOggOpus(buf) {
+function paraOggOpus(buf, formato = FORMATO_AUDIO) {
   return new Promise((resolve, reject) => {
     const base = path.join(os.tmpdir(), `fluxa-audio-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     fs.writeFileSync(`${base}.in`, buf);
     const limpar = () => {
       for (const e of ['.in', '.ogg', '.m4a', '.pcm']) fs.rmSync(base + e, { force: true });
     };
-    const saida = FORMATO_AUDIO === 'ogg' ? `${base}.ogg` : `${base}.m4a`;
+    const saida = formato === 'ogg' ? `${base}.ogg` : `${base}.m4a`;
     const argsFmt =
-      FORMATO_AUDIO === 'ogg'
+      formato === 'ogg'
         ? ['-c:a', 'libopus', '-application', 'voip', '-b:a', '24k', '-ar', '16000', '-ac', '1', '-f', 'ogg']
         : ['-c:a', 'aac', '-b:a', '48k', '-ar', '44100', '-ac', '1', '-movflags', '+faststart', '-f', 'ipod'];
     // Mesmo formato da mensagem de voz do próprio WhatsApp: Opus, mono, 16 kHz, dentro de Ogg.
@@ -674,7 +674,7 @@ function paraOggOpus(buf) {
         try {
           if (err) return reject(new Error('Falha ao converter o áudio: ' + err.message));
           const out = fs.readFileSync(saida);
-          if (out.length < 200 || (FORMATO_AUDIO === 'ogg' && out.slice(0, 4).toString() !== 'OggS')) return reject(new Error('Áudio convertido inválido.'));
+          if (out.length < 200 || (formato === 'ogg' && out.slice(0, 4).toString() !== 'OggS')) return reject(new Error('Áudio convertido inválido.'));
           const t = [...String(stderr).matchAll(/time=(\d+):(\d+):(\d+(?:\.\d+)?)/g)].pop();
           const seconds = t ? Math.max(1, Math.round(+t[1] * 3600 + +t[2] * 60 + +t[3])) : 1;
           // Onda do áudio (64 barras de 0 a 100), como o WhatsApp mostra na mensagem de voz.
@@ -724,9 +724,21 @@ async function lerAnexo(dado) {
   throw new Error('Anexo não encontrado.');
 }
 
+const FORMATO_AUDIO_ALTERNATIVO = FORMATO_AUDIO === 'ogg' ? 'm4a' : 'ogg';
+function conteudoDeAudio(conv, formato) {
+  return { audio: conv.buf, mimetype: formato === 'ogg' ? 'audio/ogg; codecs=opus' : 'audio/mp4', ptt: true, seconds: conv.seconds, ...(conv.waveform ? { waveform: conv.waveform } : {}) };
+}
+
 // Reenvio pelo robô: a mesma coisa, de novo, com a sessão renovada. Uma segunda tentativa só (evita mensagem repetida para quem está com o celular desligado).
-function refazerEnvio(destino, conteudo, dado, tentativa) {
+// Áudio: o reenvio troca o formato (ogg/opus <-> m4a/aac), porque o problema mais comum é o aparelho do contato não abrir o formato anterior.
+function refazerEnvio(destino, conteudo, dado, tentativa, audioBruto) {
   return async () => {
+    if (audioBruto && dado.tipo === 'audio') {
+      const fmt = tentativa === 1 ? FORMATO_AUDIO_ALTERNATIVO : FORMATO_AUDIO;
+      const conv = await paraOggOpus(audioBruto, fmt);
+      conteudo = conteudoDeAudio(conv, fmt);
+      console.log(`[robô] reenviando o áudio no formato ${fmt} (${conv.buf.length} bytes)`);
+    }
     const r = await sock.sendMessage(destino, conteudo);
     if (r?.key?.id) {
       enviadasPorNos.add(r.key.id);
@@ -737,7 +749,7 @@ function refazerEnvio(destino, conteudo, dado, tentativa) {
         jid: destino,
         tipo: dado.tipo === 'audio' ? 'audio' : dado.tipo === 'midia' ? 'midia' : 'texto',
         reenvio: true,
-        ...(tentativa < 2 ? { refazer: refazerEnvio(destino, conteudo, dado, tentativa + 1) } : {}),
+        ...(tentativa < 2 ? { refazer: refazerEnvio(destino, conteudo, dado, tentativa + 1, audioBruto) } : {}),
       });
     }
     return r;
@@ -755,12 +767,14 @@ async function enviarSaida(d) {
     if (!aberto || !sock) throw new Error('WhatsApp desconectado');
     const destino = dado.paraJid || `${dado.para}@s.whatsapp.net`;
     let enviada;
+    let audioBruto; // áudio original gravado no navegador (o robô reconverte em outro formato se precisar)
     let conteudo; // o que foi enviado: o robô usa para reenviar sozinho (texto, áudio, foto, vídeo ou arquivo)
     if (dado.tipo === 'audio') {
       const bruto = Buffer.from(String(dado.audioUrl).split(',')[1] ?? '', 'base64');
       const ogg = await paraOggOpus(bruto);
       console.log(`Enviando áudio de voz: ${ogg.buf.length} bytes, ${ogg.seconds}s`);
-      conteudo = { audio: ogg.buf, mimetype: FORMATO_AUDIO === 'ogg' ? 'audio/ogg; codecs=opus' : 'audio/mp4', ptt: true, seconds: ogg.seconds, ...(ogg.waveform ? { waveform: ogg.waveform } : {}) };
+      conteudo = conteudoDeAudio(ogg, FORMATO_AUDIO);
+      audioBruto = bruto;
     } else if (dado.tipo === 'midia') {
       const buf = await lerAnexo(dado);
       const legenda = dado.legenda || undefined;
@@ -804,7 +818,7 @@ async function enviarSaida(d) {
             tipo: dado.tipo === 'audio' ? 'audio' : dado.tipo === 'midia' ? 'midia' : 'texto',
             texto: dado.texto,
             // Reenvio pelo robô: a mesma coisa, de novo, com a sessão renovada.
-            refazer: refazerEnvio(destino, conteudo, dado, 1),
+            refazer: refazerEnvio(destino, conteudo, dado, 1, audioBruto),
           }
         : null
     );
@@ -822,6 +836,10 @@ async function enviarSaida(d) {
           console.log(`Verificação do envio: baixou de volta ${volta.length} bytes. OK.`);
         } catch (e) {
           console.error('Verificação do envio FALHOU (o WhatsApp não guardou o arquivo):', e.message);
+          if (dado.tipo === 'audio' && audioBruto) {
+            console.warn('[robô] áudio não ficou guardado no WhatsApp: reenviando sozinho em outro formato.');
+            try { await refazerEnvio(destino, conteudo, dado, 1, audioBruto)(); } catch (e2) { console.error('[robô] reenvio do áudio falhou:', e2.message); }
+          }
         }
       })();
     }
