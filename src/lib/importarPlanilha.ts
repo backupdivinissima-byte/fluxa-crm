@@ -775,6 +775,27 @@ function extrairClientesRelatorioMovimentacoes(tabela: string[][]): {
       c.produtos ??= {};
       c.produtos[p.nome] = (c.produtos[p.nome] ?? 0) + p.qtd;
     }
+    // Mesma venda, separada pelo MÊS em que aconteceu: arquivo com vários meses grava cada mês no seu lugar.
+    if (dataISO) {
+      const mes = dataISO.slice(0, 7);
+      c.meses ??= {};
+      const m = (c.meses[mes] ??= { totalGeral: 0, porVendedor: [] });
+      m.totalGeral += valorTotal ?? 0;
+      if (!m.dtUltCompra || dataISO > m.dtUltCompra) {
+        m.dtUltCompra = dataISO;
+        if (vendedorInfo.cod) m.cod_vendedor = vendedorInfo.cod;
+        if (vendedorInfo.nome) m.vend_nome = vendedorInfo.nome;
+      }
+      for (const p of produtosDaVenda) {
+        m.produtos ??= {};
+        m.produtos[p.nome] = (m.produtos[p.nome] ?? 0) + p.qtd;
+      }
+      if (valorTotal) {
+        const it = m.porVendedor.find((x) => (x.cod ?? '') === (vendedorInfo.cod ?? '') && (x.nome ?? '') === (vendedorInfo.nome ?? ''));
+        if (it) it.valor += valorTotal;
+        else m.porVendedor.push({ ...(vendedorInfo.cod ? { cod: vendedorInfo.cod } : {}), ...(vendedorInfo.nome ? { nome: vendedorInfo.nome } : {}), valor: valorTotal });
+      }
+    }
   }
 
   return { clientes: ordemCod.map((cod) => acumulado.get(cod)!), vendasCanceladasIgnoradas };
@@ -1088,6 +1109,19 @@ export async function salvarPorArquivo(
       // processarWorkbook/extrairClientesRelatorioMovimentacoes já agregam
       // por código DENTRO de 1 arquivo, então cada cod aparece no máximo 1x
       // em `leitura.clientes` — é seguro só atribuir (não somar) aqui.
+      if (c.meses && Object.keys(c.meses).length > 0) {
+        for (const [mes, m] of Object.entries(c.meses)) {
+          origens[chaveOrigemPorMes(mes)] = {
+            porVendedor: m.porVendedor.map((x) => ({ ...x, valor: Math.round(x.valor * 100) / 100 })),
+            totalGeral: Math.round(m.totalGeral * 100) / 100,
+            produtos: m.produtos,
+            dtUltCompra: m.dtUltCompra,
+            cod_vendedor: m.cod_vendedor,
+            vend_nome: m.vend_nome,
+          };
+        }
+        continue;
+      }
       const chave = c.dtUltCompra ? chaveOrigemPorMes(c.dtUltCompra.slice(0, 7)) : chaveArquivo;
       origens[chave] = {
         ...(c.porVendedor ? { porVendedor: c.porVendedor.map((x) => ({ ...x, valor: Math.round(x.valor * 100) / 100 })) } : {}),
