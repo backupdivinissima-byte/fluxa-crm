@@ -701,6 +701,11 @@ function ehLinhaProdutoRelatorio(cells: string[]): boolean {
  * partir da 3ª célula — a posição exata varia (às vezes tem uma célula em
  * branco a mais antes dela), então procuramos pelo formato em vez de uma
  * posição fixa. */
+/** Valor do item: último "R$" da linha de produto (total do item). */
+function valorDaLinhaProduto(cells: string[]): number {
+  const v = cells.filter((c) => /^R\$/.test(c.trim()));
+  return v.length ? (paraNumero(v[v.length - 1]) ?? 0) : 0;
+}
 function quantidadeDaLinhaProduto(cells: string[]): number {
   for (let i = 2; i < cells.length; i++) {
     if (/^\d+(\.\d+)?$/.test(cells[i].trim())) return paraNumero(cells[i]) ?? 1;
@@ -746,11 +751,11 @@ function extrairClientesRelatorioMovimentacoes(tabela: string[][]): {
     const temVendedor = !!linhaVendedor && ehLinhaVendedorRelatorio(linhaVendedor);
     const vendedorInfo = temVendedor ? partirCodNome(linhaVendedor[2]) : {};
 
-    const produtosDaVenda: Array<{ nome: string; qtd: number }> = [];
+    const produtosDaVenda: Array<{ nome: string; qtd: number; valor: number }> = [];
     let j = i + (temVendedor ? 2 : 1);
     while (j < tabela.length && ehLinhaProdutoRelatorio(tabela[j])) {
       const { nome: nomeProduto } = partirCodNome(tabela[j][1]);
-      if (nomeProduto) produtosDaVenda.push({ nome: nomeProduto, qtd: quantidadeDaLinhaProduto(tabela[j]) });
+      if (nomeProduto) produtosDaVenda.push({ nome: nomeProduto, qtd: quantidadeDaLinhaProduto(tabela[j]), valor: valorDaLinhaProduto(tabela[j]) });
       j++;
     }
 
@@ -799,6 +804,8 @@ function extrairClientesRelatorioMovimentacoes(tabela: string[][]): {
       for (const p of produtosDaVenda) {
         m.produtos ??= {};
         m.produtos[p.nome] = (m.produtos[p.nome] ?? 0) + p.qtd;
+        m.produtosValor ??= {};
+        m.produtosValor[p.nome] = (m.produtosValor[p.nome] ?? 0) + p.valor;
       }
       if (valorTotal) {
         const it = m.porVendedor.find((x) => (x.cod ?? '') === (vendedorInfo.cod ?? '') && (x.nome ?? '') === (vendedorInfo.nome ?? ''));
@@ -981,6 +988,7 @@ export async function salvarClientesEVendedores(
 }
 
 type OrigemContribuicao = {
+  produtosValor?: Record<string, number>;
   liquido?: number;
   pedidos?: number;
   porVendedor?: Array<{ cod?: string; nome?: string; valor: number; pedidos?: number; liquido?: number }>;
@@ -1132,6 +1140,7 @@ export async function salvarPorArquivo(
             pedidos: m.pedidos,
             liquido: Math.round(m.liquido * 100) / 100,
             produtos: m.produtos,
+            produtosValor: m.produtosValor,
             dtUltCompra: m.dtUltCompra,
             cod_vendedor: m.cod_vendedor,
             vend_nome: m.vend_nome,

@@ -383,21 +383,23 @@ export function ticketsMedios(clientes: Cliente[], mesRef?: string): TicketMedio
 
 export const mesReferencia = mesRefRelativo;
 
-export interface ItemProdutoVendido { nome: string; qtd: number; pct: number }
+export interface ItemProdutoVendido { nome: string; qtd: number; pct: number; valor?: number }
 
 /** Produtos mais e menos vendidos (em quantidade) a partir da importação. mesRef undefined = todos os meses. */
 export function produtosMaisMenosVendidos(clientes: Cliente[], mesRef?: string, n = 5): { mais: ItemProdutoVendido[]; menos: ItemProdutoVendido[]; totalPecas: number } {
   const soma = new Map<string, number>();
+  const valores = new Map<string, number>();
   for (const c of clientes) {
     for (const [k, o] of Object.entries(c.origensImportacao ?? {})) {
       const m = /^mes-(\d{4}-\d{2})$/.exec(k);
       if (!m || (mesRef && m[1] !== mesRef)) continue;
       for (const [nome, q] of Object.entries(o.produtos ?? {})) soma.set(nome, (soma.get(nome) ?? 0) + q);
+      for (const [nome, v] of Object.entries(o.produtosValor ?? {})) valores.set(nome, (valores.get(nome) ?? 0) + v);
     }
   }
   const lista = [...soma.entries()].filter(([, q]) => q > 0).sort((a, b) => b[1] - a[1]);
   const totalPecas = lista.reduce((s, [, q]) => s + q, 0);
-  const item = ([nome, qtd]: [string, number]): ItemProdutoVendido => ({ nome, qtd, pct: totalPecas > 0 ? (qtd / totalPecas) * 100 : 0 });
+  const item = ([nome, qtd]: [string, number]): ItemProdutoVendido => ({ nome, qtd, valor: valores.get(nome), pct: totalPecas > 0 ? (qtd / totalPecas) * 100 : 0 });
   return { mais: lista.slice(0, n).map(item), menos: lista.slice(-n).reverse().map(item), totalPecas };
 }
 

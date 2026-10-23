@@ -464,6 +464,7 @@ export default function Dashboard() {
                     <span className="w-5 text-ink-soft font-bold">{i + 1}.</span>
                     <span className="flex-1 min-w-0 truncate font-bold text-ink" title={it.nome}>{it.nome}</span>
                     <span className="tabular-nums text-ink-soft">{it.qtd.toLocaleString('pt-BR')} un.</span>
+                    <span className="tabular-nums text-ink w-24 text-right">{it.valor !== undefined ? formatarMoeda(it.valor) : '—'}</span>
                     <span className="tabular-nums font-extrabold w-14 text-right" style={{ color: cor }}>{it.pct.toFixed(2).replace('.', ',')}%</span>
                   </div>
                 ))}
