@@ -54,3 +54,11 @@ Ela só lê a conversa e sugere; nunca envia nada. Fica desligada até existir a
 
 Opcionais no mesmo `.env`: `SUPERVISORA_MODELO` (padrão `claude-sonnet-5-5`; `claude-haiku-5-5` é mais barato) e `SUPERVISORA_ESPERA_S` (segundos de espera antes de analisar, padrão 8).
 O jeito de vender dela está em `chat-conector/supervisora-base.js` e pode ser ajustado.
+
+### Reserva gratuita (Gemini)
+
+Se a Anthropic falhar (por exemplo, sem crédito), a supervisora tenta o Gemini, que tem plano gratuito:
+1. Gere a chave em aistudio.google.com (Get API key).
+2. No mesmo `.env` do servidor, acrescente: `GEMINI_API_KEY=sua-chave-aqui` (e, se quiser, `GEMINI_MODELO`, padrão `gemini-2.0-flash`).
+3. `git pull && docker compose up -d --build divinissima` (repita para as outras empresas). Não pede novo QR.
+No plano gratuito, o Google pode usar o conteúdo enviado para melhorar os modelos dele — considere isso com conversas de clientes.

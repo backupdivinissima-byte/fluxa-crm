@@ -1,23 +1,62 @@
 // IA supervisora do Fluxa Chat.
 // Só OBSERVA: lê a conversa e grava uma SUGESTÃO de resposta em
 // empresas/{id}/conversas/{conversa}/supervisora/atual. Nunca envia mensagem.
-// Desligada enquanto não houver ANTHROPIC_API_KEY no servidor.
+// Usa a Anthropic como principal e, se ela falhar (ex.: sem crédito), o Gemini (plano gratuito) como reserva.
+// Desligada enquanto não houver ANTHROPIC_API_KEY nem GEMINI_API_KEY no servidor.
 import { BASE_SUPERVISORA } from './supervisora-base.js';
 
 const CHAVE = process.env.ANTHROPIC_API_KEY || '';
+const CHAVE_GEMINI = process.env.GEMINI_API_KEY || '';
+const MODELO_GEMINI = process.env.GEMINI_MODELO || 'gemini-2.0-flash';
 const MODELO = process.env.SUPERVISORA_MODELO || 'claude-sonnet-5-5';
 const ESPERA_MS = Number(process.env.SUPERVISORA_ESPERA_S || 8) * 1000; // espera o cliente terminar de escrever
 const MAX_MSGS = 24;
 
 export function criarSupervisora({ base, agora }) {
-  const ligada = !!CHAVE;
+  const ligada = !!CHAVE || !!CHAVE_GEMINI;
   const timers = new Map();
   const emAnalise = new Set();
 
-  if (ligada) console.log(`[supervisora] ligada (modelo ${MODELO}).`);
-  else console.log('[supervisora] desligada: falta ANTHROPIC_API_KEY.');
+  if (ligada) console.log(`[supervisora] ligada (${CHAVE ? `Anthropic ${MODELO}` : 'sem Anthropic'}${CHAVE_GEMINI ? `; reserva Gemini ${MODELO_GEMINI}` : ''}).`);
+  else console.log('[supervisora] desligada: falta ANTHROPIC_API_KEY ou GEMINI_API_KEY.');
+
+  function extrairJson(texto) {
+    const ini = texto.indexOf('{');
+    const fim = texto.lastIndexOf('}');
+    if (ini < 0 || fim < 0) throw new Error('resposta sem JSON');
+    return JSON.parse(texto.slice(ini, fim + 1));
+  }
+
+  async function chamarGemini(contexto) {
+    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODELO_GEMINI}:generateContent`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': CHAVE_GEMINI },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: BASE_SUPERVISORA }] },
+        contents: [{ role: 'user', parts: [{ text: contexto }] }],
+        generationConfig: { maxOutputTokens: 900, responseMimeType: 'application/json' },
+      }),
+      signal: AbortSignal.timeout(45000),
+    });
+    if (!resp.ok) throw new Error(`Gemini ${resp.status}: ${(await resp.text()).slice(0, 200)}`);
+    const j = await resp.json();
+    const texto = (j.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('');
+    return { dado: extrairJson(texto), uso: { input_tokens: j.usageMetadata?.promptTokenCount, output_tokens: j.usageMetadata?.candidatesTokenCount }, modelo: `gemini:${MODELO_GEMINI}` };
+  }
 
   async function chamarIA(contexto) {
+    if (CHAVE) {
+      try {
+        return { ...(await chamarAnthropic(contexto)), modelo: MODELO };
+      } catch (e) {
+        if (!CHAVE_GEMINI) throw e;
+        console.warn(`[supervisora] Anthropic falhou (${e.message.slice(0, 80)}); usando Gemini.`);
+      }
+    }
+    return chamarGemini(contexto);
+  }
+
+  async function chamarAnthropic(contexto) {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': CHAVE, 'anthropic-version': '2023-06-01' },
@@ -32,10 +71,7 @@ export function criarSupervisora({ base, agora }) {
     if (!resp.ok) throw new Error(`API ${resp.status}: ${(await resp.text()).slice(0, 200)}`);
     const j = await resp.json();
     const texto = (j.content || []).map((p) => p.text || '').join('');
-    const ini = texto.indexOf('{');
-    const fim = texto.lastIndexOf('}');
-    if (ini < 0 || fim < 0) throw new Error('resposta sem JSON');
-    return { dado: JSON.parse(texto.slice(ini, fim + 1)), uso: j.usage };
+    return { dado: extrairJson(texto), uso: j.usage };
   }
 
   async function analisar(conversaId) {
@@ -60,7 +96,7 @@ export function criarSupervisora({ base, agora }) {
         `${conv.primeiroContato ? ' É o PRIMEIRO contato dela.' : ''}\n\n` +
         `Conversa (da mais antiga para a mais nova):\n${linhas.join('\n')}\n\n` +
         'Sugira a próxima resposta da atendente. Responda só com o JSON pedido.';
-      const { dado, uso } = await chamarIA(contexto);
+      const { dado, uso, modelo } = await chamarIA(contexto);
       await ref.collection('supervisora').doc('atual').set({
         estagio: String(dado.estagio || ''),
         leitura: String(dado.leitura || ''),
@@ -70,7 +106,7 @@ export function criarSupervisora({ base, agora }) {
         atencao: String(dado.atencao || ''),
         dica: String(dado.dica || ''),
         paraMensagem: ultima.id,
-        modelo: MODELO,
+        modelo,
         geradoEm: agora(),
         tokensEntrada: uso?.input_tokens ?? null,
         tokensSaida: uso?.output_tokens ?? null,

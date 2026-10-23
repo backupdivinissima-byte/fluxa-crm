@@ -14,6 +14,7 @@ x-conector: &conector
     GOOGLE_APPLICATION_CREDENTIALS: /segredos/conta-servico.json
     # IA supervisora: a chave fica no arquivo servidor/.env (fora do repositório). Sem chave, ela fica desligada.
     ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    GEMINI_API_KEY: ${GEMINI_API_KEY:-}   # reserva gratuita (Google AI Studio) quando a Anthropic falha
   volumes:
     - ./segredos/conta-servico.json:/segredos/conta-servico.json:ro
 
