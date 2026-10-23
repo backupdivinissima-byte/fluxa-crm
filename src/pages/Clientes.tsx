@@ -26,6 +26,8 @@ export default function Clientes() {
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [conversas, setConversas] = useState<ConversaChat[]>([]);
   const [busca, setBusca] = useState('');
+  const [conversaDe, setConversaDe] = useState('');
+  const [conversaAte, setConversaAte] = useState('');
   const [filtro, setFiltro] = useState<FiltroStatus>('todos');
   const [selecionado, setSelecionado] = useState<Cliente | null>(null);
   // Prazo de inatividade configurado pelo admin no Dashboard (30/60/90/
@@ -86,6 +88,16 @@ export default function Clientes() {
     if (filtro === 'risco') lista = lista.filter((c) => diasSemAtend(c) >= inicioRisco && diasSemAtend(c) <= diasInatividade);
     if (filtro === 'at') lista = lista.filter((c) => diasSemAtend(c) < inicioRisco);
 
+    // Período da última conversa (datas no fuso do usuário, inclusive nos dois extremos).
+    if (conversaDe || conversaAte) {
+      lista = lista.filter((c) => {
+        const u = ultimaConversaDe(c);
+        if (!u) return false;
+        const dia = new Date(u).toLocaleDateString('sv-SE');
+        return (!conversaDe || dia >= conversaDe) && (!conversaAte || dia <= conversaAte);
+      });
+    }
+
     if (busca.trim()) {
       const termo = busca.trim().toLowerCase();
       lista = lista.filter(
@@ -96,7 +108,7 @@ export default function Clientes() {
       );
     }
     return lista;
-  }, [listaBase, filtro, busca, diasInatividade, inicioRisco]);
+  }, [listaBase, filtro, busca, diasInatividade, inicioRisco, conversaDe, conversaAte, ultimaConversaDe]);
 
   if (!empresaId) return null;
 
@@ -121,6 +133,23 @@ export default function Clientes() {
             </option>
             <option value="at">Ativos (até {Math.max(0, inicioRisco - 1)} dias)</option>
           </select>
+          <label className="flex items-center gap-1.5 text-xs font-bold text-ink-soft">
+            Última conversa de
+            <input type="date" value={conversaDe} onChange={(e) => setConversaDe(e.target.value)} className="rounded-xl border border-line px-2.5 py-1.5 text-sm text-ink outline-none focus:ring-2 focus:ring-teal-500/30" />
+            até
+            <input type="date" value={conversaAte} onChange={(e) => setConversaAte(e.target.value)} className="rounded-xl border border-line px-2.5 py-1.5 text-sm text-ink outline-none focus:ring-2 focus:ring-teal-500/30" />
+          </label>
+          <button
+            onClick={() => { const h = new Date().toLocaleDateString('sv-SE'); setConversaDe(h); setConversaAte(h); }}
+            className="rounded-xl border border-line px-3 py-1.5 text-xs font-bold text-ink hover:bg-surface"
+          >
+            Hoje
+          </button>
+          {(conversaDe || conversaAte) && (
+            <button onClick={() => { setConversaDe(''); setConversaAte(''); }} className="rounded-xl border border-line px-3 py-1.5 text-xs font-bold text-ink-soft hover:bg-surface">
+              Limpar período
+            </button>
+          )}
           <input
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
