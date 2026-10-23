@@ -779,8 +779,9 @@ function extrairClientesRelatorioMovimentacoes(tabela: string[][]): {
     if (dataISO) {
       const mes = dataISO.slice(0, 7);
       c.meses ??= {};
-      const m = (c.meses[mes] ??= { totalGeral: 0, porVendedor: [] });
+      const m = (c.meses[mes] ??= { totalGeral: 0, pedidos: 0, porVendedor: [] });
       m.totalGeral += valorTotal ?? 0;
+      m.pedidos += 1;
       if (!m.dtUltCompra || dataISO > m.dtUltCompra) {
         m.dtUltCompra = dataISO;
         if (vendedorInfo.cod) m.cod_vendedor = vendedorInfo.cod;
@@ -968,6 +969,7 @@ export async function salvarClientesEVendedores(
 }
 
 type OrigemContribuicao = {
+  pedidos?: number;
   porVendedor?: Array<{ cod?: string; nome?: string; valor: number }>;
   totalGeral?: number;
   produtos?: Record<string, number>;
@@ -1114,6 +1116,7 @@ export async function salvarPorArquivo(
           origens[chaveOrigemPorMes(mes)] = {
             porVendedor: m.porVendedor.map((x) => ({ ...x, valor: Math.round(x.valor * 100) / 100 })),
             totalGeral: Math.round(m.totalGeral * 100) / 100,
+            pedidos: m.pedidos,
             produtos: m.produtos,
             dtUltCompra: m.dtUltCompra,
             cod_vendedor: m.cod_vendedor,

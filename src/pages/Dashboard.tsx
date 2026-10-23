@@ -19,6 +19,8 @@ import {
   vendasImportadasPorMes,
   vendasMesAtualEmpresa,
   vendasTotalEmpresa,
+  ticketsMedios,
+  mesReferencia,
 } from '../lib/crmLogic';
 
 const OPCOES_PRAZO_INATIVIDADE = [30, 60, 90];
@@ -100,6 +102,14 @@ export default function Dashboard() {
   const resumo = useMemo(() => resumoAtendimento(clientes, diasInatividade), [clientes, diasInatividade]);
   const funil = useMemo(() => funilAtendimento(clientes, diasInatividade), [clientes, diasInatividade]);
   const vendasTotal = useMemo(() => vendasTotalEmpresa(clientes), [clientes]);
+  const tickets = useMemo(
+    () => ({
+      total: ticketsMedios(clientes),
+      anterior: ticketsMedios(clientes, mesReferencia(-1)),
+      atual: ticketsMedios(clientes, mesReferencia(0)),
+    }),
+    [clientes]
+  );
   const vendasMes = useMemo(() => vendasMesAtualEmpresa(clientes, colunasFechamentoIds), [clientes, colunasFechamentoIds]);
   // Totais reais vindos da importação, por mês ("AAAA-MM") — ver
   // vendasImportadasPorMes. Sempre que existir um valor importado pra um
@@ -394,6 +404,30 @@ export default function Dashboard() {
               : 'sem mês anterior p/ comparar'}
           </p>
         </div>
+      </div>
+
+      {/* Ticket médio: por pedido e por produto */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        {([
+          ['Ticket médio por pedido', 'ticketPedido', 'pedidos', 'pedidos'],
+          ['Ticket médio por produto', 'ticketProduto', 'pecas', 'peças'],
+        ] as const).map(([titulo, campo, qtdCampo, unidade]) => (
+          <div key={titulo} className="bg-white border border-line rounded-2xl p-4">
+            <p className="text-xs font-bold text-ink-soft uppercase tracking-wide mb-3">{titulo}</p>
+            <div className="grid grid-cols-3 gap-3">
+              {([['Total', tickets.total], ['Mês anterior', tickets.anterior], ['Mês atual', tickets.atual]] as const).map(([rotulo, t]) => (
+                <div key={rotulo}>
+                  <p className="text-[11px] text-ink-soft">{rotulo}</p>
+                  <p className="text-xl font-extrabold text-ink tabular-nums">{t[campo] !== undefined ? formatarMoeda(t[campo]!) : '—'}</p>
+                  <p className="text-[11px] text-ink-soft tabular-nums">{t[qtdCampo].toLocaleString('pt-BR')} {unidade}</p>
+                </div>
+              ))}
+            </div>
+            {tickets.total.mesesSemPedidos > 0 && (
+              <p className="text-[11px] text-ink-soft mt-2">{tickets.total.mesesSemPedidos} mês(es) ainda sem contagem de pedidos — reimporte para incluir.</p>
+            )}
+          </div>
+        ))}
       </div>
 
       {/* Gráfico de evolução de vendas por mês */}

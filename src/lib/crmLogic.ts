@@ -354,6 +354,35 @@ export function vendasTotalEmpresa(clientes: Cliente[]): number {
   return clientes.reduce((soma, c) => soma + (totalGeralReal(c) ?? 0), 0);
 }
 
+export interface TicketMedio {
+  valor: number;
+  pedidos: number;
+  pecas: number;
+  ticketPedido?: number;
+  ticketProduto?: number;
+}
+
+/** Ticket médio por pedido (valor ÷ nº de pedidos) e por produto (valor ÷ peças vendidas) a partir da
+ * importação. mesRef undefined = todos os meses. Só entram meses importados com a contagem de pedidos;
+ * `mesesSemPedidos` indica meses que precisam ser reimportados. */
+export function ticketsMedios(clientes: Cliente[], mesRef?: string): TicketMedio & { mesesSemPedidos: number } {
+  let valor = 0, pedidos = 0, pecas = 0;
+  const semPedidos = new Set<string>();
+  for (const c of clientes) {
+    for (const [k, o] of Object.entries(c.origensImportacao ?? {})) {
+      const m = /^mes-(\d{4}-\d{2})$/.exec(k);
+      if (!m || (mesRef && m[1] !== mesRef)) continue;
+      if (o.pedidos === undefined) { semPedidos.add(m[1]); continue; }
+      valor += o.totalGeral ?? 0;
+      pedidos += o.pedidos;
+      for (const q of Object.values(o.produtos ?? {})) pecas += q;
+    }
+  }
+  return { valor, pedidos, pecas, ticketPedido: pedidos > 0 ? valor / pedidos : undefined, ticketProduto: pecas > 0 ? valor / pecas : undefined, mesesSemPedidos: semPedidos.size };
+}
+
+export const mesReferencia = mesRefRelativo;
+
 /** Total de vendas IMPORTADAS por mês (chave "AAAA-MM"), somando a
  * contribuição de todos os clientes — usa `Cliente.origensImportacao`
  * (ver `salvarPorArquivo`/`chaveOrigemPorMes` em importarPlanilha.ts), que
