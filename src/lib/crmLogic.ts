@@ -367,6 +367,17 @@ export function vendasImportadasPorMes(clientes: Cliente[]): Record<string, numb
   return totais;
 }
 
+/** A venda (código e nome do vendedor como vieram do ERP) é deste vendedor do Fluxa? */
+function vendedorDaVenda(x: { cod?: string; nome?: string }, login: string, nome?: string): boolean {
+  if (x.cod && x.cod === login) return true;
+  if (nome && x.nome) {
+    const a = x.nome.trim().toLowerCase();
+    const b = nome.trim().toLowerCase();
+    if (a && b && (a === b || a.includes(b) || b.includes(a))) return true;
+  }
+  return false;
+}
+
 /** Vendas IMPORTADAS de um vendedor específico num mês de referência
  * ("AAAA-MM") — soma a contribuição daquele mês (`origensImportacao`,
  * chave "mes-AAAA-MM", ver `chaveOrigemPorMes`) de todos os clientes
@@ -383,8 +394,15 @@ export function vendasImportadasMesVendedor(
   const chave = `mes-${mesRef}`;
   let soma = 0;
   for (const c of clientes) {
-    if (!(c.crmVendedorLogin === login || matchVendedor(c, login, nome))) continue;
     const origem = c.origensImportacao?.[chave];
+    if (origem?.porVendedor) {
+      // Importação nova: cada venda conta para o vendedor DAQUELA venda (igual ao relatório do ERP),
+      // seja qual for o dono do cliente no funil.
+      for (const x of origem.porVendedor) if (vendedorDaVenda(x, login, nome)) soma += x.valor;
+      continue;
+    }
+    // Importação antiga (sem detalhe por venda): o cliente inteiro vai para o vendedor ligado a ele.
+    if (!(c.crmVendedorLogin === login || matchVendedor(c, login, nome))) continue;
     if (origem?.totalGeral !== undefined) soma += origem.totalGeral;
   }
   return soma;
@@ -562,18 +580,24 @@ export interface RankingVendedorImportado {
  * de Vendedores ("Total importado por vendedor"). */
 export function rankingVendedoresImportado(clientes: Cliente[]): RankingVendedorImportado[] {
   const mapa = new Map<string, RankingVendedorImportado>();
+  const pegar = (cod: string, nome?: string) => {
+    const atual = mapa.get(cod) ?? { codVendedor: cod, nome: nome ?? cod, clientesCount: 0, totalHistorico: 0 };
+    if (nome) atual.nome = nome;
+    mapa.set(cod, atual);
+    return atual;
+  };
   for (const c of clientes) {
-    if (!c.cod_vendedor) continue;
-    const atual = mapa.get(c.cod_vendedor) ?? {
-      codVendedor: c.cod_vendedor,
-      nome: c.vend_nome ?? c.cod_vendedor,
-      clientesCount: 0,
-      totalHistorico: 0,
-    };
-    atual.totalHistorico += totalGeralReal(c) ?? 0;
-    atual.clientesCount += 1;
-    if (c.vend_nome) atual.nome = c.vend_nome;
-    mapa.set(c.cod_vendedor, atual);
+    if (c.cod_vendedor) pegar(c.cod_vendedor, c.vend_nome).clientesCount += 1;
+    const origens = Object.values(c.origensImportacao ?? {});
+    if (origens.some((o) => o.porVendedor)) {
+      // Cada venda para quem vendeu (igual ao relatório do ERP); meses antigos sem detalhe vão para o dono do cliente.
+      for (const o of origens) {
+        if (o.porVendedor) for (const x of o.porVendedor) pegar(x.cod ?? x.nome ?? '—', x.nome).totalHistorico += x.valor;
+        else if (c.cod_vendedor) pegar(c.cod_vendedor, c.vend_nome).totalHistorico += o.totalGeral ?? 0;
+      }
+    } else if (c.cod_vendedor) {
+      pegar(c.cod_vendedor, c.vend_nome).totalHistorico += totalGeralReal(c) ?? 0;
+    }
   }
   return [...mapa.values()].sort((a, b) => b.totalHistorico - a.totalHistorico);
 }
@@ -635,11 +659,15 @@ export function vendasMensaisDoVendedor(
   const totais: Record<string, number> = {};
   for (const c of clientes) {
     if (!c.origensImportacao) continue;
-    if (!(c.crmVendedorLogin === login || matchVendedor(c, login, nome))) continue;
+    const meu = c.crmVendedorLogin === login || matchVendedor(c, login, nome);
     for (const [chave, origem] of Object.entries(c.origensImportacao)) {
       const m = /^mes-(\d{4}-\d{2})$/.exec(chave);
-      if (!m || origem.totalGeral === undefined) continue;
-      totais[m[1]] = (totais[m[1]] ?? 0) + origem.totalGeral;
+      if (!m) continue;
+      if (origem.porVendedor) {
+        for (const x of origem.porVendedor) if (vendedorDaVenda(x, login, nome)) totais[m[1]] = (totais[m[1]] ?? 0) + x.valor;
+      } else if (meu && origem.totalGeral !== undefined) {
+        totais[m[1]] = (totais[m[1]] ?? 0) + origem.totalGeral;
+      }
     }
   }
   return totais;

@@ -14,7 +14,7 @@
 // aberta e só a biblioteca do formato realmente enviado) em vez de no bundle
 // principal — são pesadas e a imensa maioria das visitas ao site nunca chega
 // a usar importação.
-import { collection, doc, getDoc, getDocs, setDoc, writeBatch } from 'firebase/firestore';
+import { collection, deleteField, doc, getDoc, getDocs, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from './firebase';
 import { idSeguro } from './crmLogic';
 import type { Cliente, Vendedor } from '../types';
@@ -759,6 +759,13 @@ function extrairClientesRelatorioMovimentacoes(tabela: string[][]): {
     }
     c.nome ??= nomeCliente;
     c.totalGeral = (c.totalGeral ?? 0) + (valorTotal ?? 0);
+    // Cada venda conta para o vendedor DAQUELA venda (como no relatório por vendedor do ERP).
+    if (valorTotal) {
+      const lista = (c.porVendedor ??= []);
+      const item = lista.find((x) => (x.cod ?? '') === (vendedorInfo.cod ?? '') && (x.nome ?? '') === (vendedorInfo.nome ?? ''));
+      if (item) item.valor += valorTotal;
+      else lista.push({ ...(vendedorInfo.cod ? { cod: vendedorInfo.cod } : {}), ...(vendedorInfo.nome ? { nome: vendedorInfo.nome } : {}), valor: valorTotal });
+    }
     if (dataISO && (!c.dtUltCompra || dataISO > c.dtUltCompra)) {
       c.dtUltCompra = dataISO;
       if (vendedorInfo.cod) c.cod_vendedor = vendedorInfo.cod;
@@ -940,6 +947,7 @@ export async function salvarClientesEVendedores(
 }
 
 type OrigemContribuicao = {
+  porVendedor?: Array<{ cod?: string; nome?: string; valor: number }>;
   totalGeral?: number;
   produtos?: Record<string, number>;
   dtUltCompra?: string;
@@ -1082,6 +1090,7 @@ export async function salvarPorArquivo(
       // em `leitura.clientes` — é seguro só atribuir (não somar) aqui.
       const chave = c.dtUltCompra ? chaveOrigemPorMes(c.dtUltCompra.slice(0, 7)) : chaveArquivo;
       origens[chave] = {
+        ...(c.porVendedor ? { porVendedor: c.porVendedor.map((x) => ({ ...x, valor: Math.round(x.valor * 100) / 100 })) } : {}),
         totalGeral: c.totalGeral,
         produtos: c.produtos,
         dtUltCompra: c.dtUltCompra,
@@ -1125,6 +1134,30 @@ export async function salvarPorArquivo(
       })
     );
     clientesImportados += lotecods.length;
+  }
+
+  // Reimportar um mês SUBSTITUI o mês inteiro: cliente que tinha venda naquele mês e NÃO está mais no arquivo
+  // (venda cancelada, corrigida ou trocada de cliente no ERP) perde a contribuição antiga daquele mês.
+  const mesesDoArquivo = new Set<string>();
+  for (const origens of origensPorCod.values()) for (const k of Object.keys(origens)) if (/^mes-\d{4}-\d{2}$/.test(k)) mesesDoArquivo.add(k);
+  if (mesesDoArquivo.size > 0) {
+    const todos = await getDocs(clientesCol(empresaId));
+    const codsNoArquivo = new Set(ordemCod.map((c) => idSeguro(c)));
+    for (const d of todos.docs) {
+      if (codsNoArquivo.has(d.id)) continue;
+      const origensCli = (d.data() as Cliente).origensImportacao;
+      if (!origensCli) continue;
+      const apagar = Object.keys(origensCli).filter((k) => mesesDoArquivo.has(k));
+      if (apagar.length === 0) continue;
+      const restantes = Object.fromEntries(Object.entries(origensCli).filter(([k]) => !mesesDoArquivo.has(k)));
+      const ag = recalcularAgregadosDeOrigens(restantes);
+      const upd: Record<string, unknown> = {};
+      for (const k of apagar) upd[`origensImportacao.${k}`] = deleteField();
+      for (const campo of ['totalGeral', 'produtos', 'dtUltCompra', 'cod_vendedor', 'vend_nome'] as const) {
+        upd[campo] = ag[campo] === undefined ? deleteField() : ag[campo];
+      }
+      await updateDoc(d.ref, upd);
+    }
   }
 
   // Vendedores: sem o mesmo problema de soma entre importações (perfil
