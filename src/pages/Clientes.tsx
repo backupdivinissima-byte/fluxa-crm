@@ -11,6 +11,8 @@ import {
   statusInfo,
   totalGeralReal,
 } from '../lib/crmLogic';
+import { ouvirTodasConversas } from '../lib/chatData';
+import type { ConversaChat } from '../types';
 import ClienteDetalheModal from '../components/ClienteDetalheModal';
 import { IconClientes } from '../components/NavIcons';
 
@@ -22,6 +24,7 @@ export default function Clientes() {
   const empresaId = empresa?.id;
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
+  const [conversas, setConversas] = useState<ConversaChat[]>([]);
   const [busca, setBusca] = useState('');
   const [filtro, setFiltro] = useState<FiltroStatus>('todos');
   const [selecionado, setSelecionado] = useState<Cliente | null>(null);
@@ -35,6 +38,7 @@ export default function Clientes() {
     if (!empresaId) return;
     const unsubC = ouvirClientes(empresaId, setClientes);
     const unsubV = ouvirVendedores(empresaId, setVendedores);
+    const unsubChat = ouvirTodasConversas(empresaId, setConversas);
     const unsubE = ouvirEmpresa(empresaId, (emp) => {
       setDiasInatividade(emp?.diasInatividade ?? DIAS_INATIVIDADE_PADRAO);
     });
@@ -42,8 +46,27 @@ export default function Clientes() {
       unsubC();
       unsubV();
       unsubE();
+      unsubChat();
     };
   }, [empresaId]);
+
+  // Última conversa por cliente: vínculo direto (clienteId), telefone (últimos 8 dígitos) ou nome/razão igual.
+  const ultimaConversaDe = useMemo(() => {
+    const norm = (s?: string) => (s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    const fim8 = (s?: string) => { const d = (s ?? '').replace(/\D/g, ''); return d.length >= 8 ? d.slice(-8) : ''; };
+    const porId = new Map<string, string>(), porTel = new Map<string, string>(), porNome = new Map<string, string>();
+    const maior = (m: Map<string, string>, k: string, v: string) => { if (k && v > (m.get(k) ?? '')) m.set(k, v); };
+    for (const cv of conversas) {
+      if (!cv.ultimaEm) continue;
+      if (cv.clienteId) maior(porId, cv.clienteId, cv.ultimaEm);
+      maior(porTel, fim8(cv.telefone ?? cv.contato), cv.ultimaEm);
+      maior(porNome, norm(cv.nome), cv.ultimaEm);
+    }
+    return (c: Cliente): string | undefined => {
+      const cands = [porId.get(c.id), porTel.get(fim8(c.telefone)), porNome.get(norm(c.razao)), porNome.get(norm(c.nome))].filter(Boolean) as string[];
+      return cands.sort().pop();
+    };
+  }, [conversas]);
 
   const ehAdmin = papel === 'admin';
   const loginAtual = ehAdmin ? undefined : sessaoVendedor?.vendedor.login;
@@ -115,6 +138,7 @@ export default function Clientes() {
               <th className="text-left px-4 py-2.5 font-bold">Telefone</th>
               <th className="text-left px-4 py-2.5 font-bold">Status</th>
               <th className="text-left px-4 py-2.5 font-bold">Dias sem compra</th>
+              <th className="text-left px-4 py-2.5 font-bold">Última conversa</th>
               <th className="text-right px-4 py-2.5 font-bold">Total geral</th>
               <th className="text-left px-4 py-2.5 font-bold">Vendedor</th>
             </tr>
@@ -146,6 +170,19 @@ export default function Clientes() {
                   <td className="px-4 py-2.5 font-bold whitespace-nowrap" style={{ color: status.cor }}>
                     {dias >= 9999 ? 'Sem compra' : `${dias} ${dias === 1 ? 'dia' : 'dias'}`}
                   </td>
+                  <td className="px-4 py-2.5 text-ink-soft whitespace-nowrap">
+                    {(() => {
+                      const u = ultimaConversaDe(c);
+                      if (!u) return '—';
+                      const dd = Math.floor((Date.now() - new Date(u).getTime()) / 86400000);
+                      return (
+                        <>
+                          {new Date(u).toLocaleDateString('pt-BR')}
+                          <span className="text-xs block">{dd <= 0 ? 'hoje' : `há ${dd} ${dd === 1 ? 'dia' : 'dias'}`}</span>
+                        </>
+                      );
+                    })()}
+                  </td>
                   <td className="px-4 py-2.5 text-right font-bold text-ink">{formatarMoeda(totalGeralReal(c) ?? 0)}</td>
                   <td className="px-4 py-2.5 text-ink-soft">{vend?.nome ?? c.vend_nome ?? '—'}</td>
                 </tr>
@@ -153,7 +190,7 @@ export default function Clientes() {
             })}
             {listaFiltrada.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-ink-soft text-sm">
+                <td colSpan={7} className="px-4 py-10 text-center text-ink-soft text-sm">
                   Nenhum cliente encontrado.
                 </td>
               </tr>

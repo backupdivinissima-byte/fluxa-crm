@@ -31,6 +31,12 @@ export function chaveTelefone(t?: string): string {
   return d.length > 11 ? d.slice(-11) : d;
 }
 
+/** Todas as conversas (até 5000) — usada para mostrar a data da última conversa de cada cliente. */
+export function ouvirTodasConversas(empresaId: string, cb: (c: ConversaChat[]) => void): Unsubscribe {
+  const q = query(conversasCol(empresaId), orderBy('ultimaEm', 'desc'), limit(5000));
+  return aposChatPronto(() => onSnapshot(q, (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ConversaChat)), () => cb([])));
+}
+
 export function ouvirConversas(empresaId: string, cb: (c: ConversaChat[]) => void): Unsubscribe {
   const q = query(conversasCol(empresaId), orderBy('ultimaEm', 'desc'), limit(300));
   return aposChatPronto(() => onSnapshot(q, (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ConversaChat))));
