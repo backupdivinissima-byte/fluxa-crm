@@ -20,6 +20,7 @@ import {
   vendasMesAtualEmpresa,
   vendasTotalEmpresa,
   ticketsMedios,
+  produtosMaisMenosVendidos,
   vendasImportadasMesVendedor,
   pedidosMesVendedor,
   mesReferencia,
@@ -111,6 +112,11 @@ export default function Dashboard() {
       atual: ticketsMedios(clientes, mesReferencia(0)),
     }),
     [clientes]
+  );
+  const [periodoProdutos, setPeriodoProdutos] = useState<'total' | 'anterior' | 'atual'>('atual');
+  const produtosVend = useMemo(
+    () => produtosMaisMenosVendidos(clientes, periodoProdutos === 'total' ? undefined : mesReferencia(periodoProdutos === 'atual' ? 0 : -1)),
+    [clientes, periodoProdutos]
   );
   const vendasMes = useMemo(() => vendasMesAtualEmpresa(clientes, colunasFechamentoIds), [clientes, colunasFechamentoIds]);
   // Totais reais vindos da importação, por mês ("AAAA-MM") — ver
@@ -430,6 +436,42 @@ export default function Dashboard() {
             )}
           </div>
         ))}
+      </div>
+
+      {/* 5 mais e 5 menos vendidos */}
+      <div className="bg-white border border-line rounded-2xl p-4 mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <p className="text-xs font-bold text-ink-soft uppercase tracking-wide">Produtos mais e menos vendidos</p>
+          <div className="flex gap-1.5">
+            {([['total', 'Total'], ['anterior', 'Mês anterior'], ['atual', 'Mês atual']] as const).map(([k, rot]) => (
+              <button
+                key={k}
+                onClick={() => setPeriodoProdutos(k)}
+                className={`text-xs font-bold px-3 py-1 rounded-full border ${periodoProdutos === k ? 'bg-teal-500 text-white border-teal-500' : 'border-line text-ink-soft hover:bg-surface'}`}
+              >
+                {rot}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {([['5 mais vendidos', produtosVend.mais, '#27AE60'], ['5 menos vendidos', produtosVend.menos, '#C0392B']] as const).map(([titulo, itens, cor]) => (
+            <div key={titulo}>
+              <p className="text-[11px] font-bold text-ink uppercase tracking-wide mb-2">{titulo}</p>
+              <div className="space-y-2">
+                {itens.map((it, i) => (
+                  <div key={it.nome} className="flex items-center gap-2 text-xs">
+                    <span className="w-5 text-ink-soft font-bold">{i + 1}.</span>
+                    <span className="flex-1 min-w-0 truncate font-bold text-ink" title={it.nome}>{it.nome}</span>
+                    <span className="tabular-nums text-ink-soft">{it.qtd.toLocaleString('pt-BR')} un.</span>
+                    <span className="tabular-nums font-extrabold w-14 text-right" style={{ color: cor }}>{it.pct.toFixed(2).replace('.', ',')}%</span>
+                  </div>
+                ))}
+                {itens.length === 0 && <p className="text-xs text-ink-soft">Sem dados importados neste período.</p>}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Gráfico de evolução de vendas por mês */}
