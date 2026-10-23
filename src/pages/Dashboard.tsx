@@ -20,6 +20,7 @@ import {
   vendasMesAtualEmpresa,
   vendasTotalEmpresa,
   ticketsMedios,
+  vendasImportadasMesVendedor,
   mesReferencia,
 } from '../lib/crmLogic';
 
@@ -469,7 +470,7 @@ export default function Dashboard() {
 
         {/* Barras, com valor/variações/clientes ativos abaixo de cada uma */}
         <div className="overflow-x-auto">
-          <div className="flex items-end gap-5 min-w-max h-48 border-b border-line pb-1">
+          <div className="flex items-end gap-5 min-w-max h-56 pt-6 border-b border-line pb-1">
             {MESES.map((mesLabel, mesIdx) => (
               <div key={mesLabel} className="flex items-end gap-1.5 h-full shrink-0">
                 {anosDisponiveis.map((ano, i) => {
@@ -479,9 +480,15 @@ export default function Dashboard() {
                   return (
                     <div key={ano} className="h-full flex items-end justify-center w-16" title={`${ano}: ${formatarMoeda(valor)}`}>
                       <div
-                        className="w-8 rounded-t-sm"
+                        className="w-8 rounded-t-sm relative"
                         style={{ height: `${alturaPct}%`, background: CORES_ANOS[i % CORES_ANOS.length] }}
-                      />
+                      >
+                        {valor > 0 && (
+                          <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[10px] font-bold text-ink whitespace-nowrap tabular-nums">
+                            {formatarCompacto(valor)}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -626,7 +633,7 @@ export default function Dashboard() {
       </div>
 
       {/* Funil de atendimento + Ranking de vendedores, lado a lado */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-6">
         <div className="bg-white border border-line rounded-2xl p-5">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-1">
             <h2 className="text-sm font-extrabold text-ink">Funil de atendimento</h2>
@@ -720,12 +727,20 @@ export default function Dashboard() {
                   )}
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="text-xs font-extrabold tabular-nums" style={{ color: r.vendasMes > 0 ? '#0EA5A0' : undefined }}>
-                    {formatarMoeda(r.vendasMes)}
-                  </p>
-                  <p className="text-[10px] text-ink-soft">
-                    {MESES[mesAtualIdx]}/{anoAtual}
-                  </p>
+                  <div className="flex gap-4 justify-end mb-1">
+                    {[
+                      [`${MESES[mesAtualIdx]}/${anoAtual - 1}`, vendasImportadasMesVendedor(clientes, r.vendedor.login, r.vendedor.nome, mesReferencia(-12)), false],
+                      [`${MESES[(mesAtualIdx + 11) % 12]}/${mesAtualIdx === 0 ? anoAtual - 1 : anoAtual}`, vendasImportadasMesVendedor(clientes, r.vendedor.login, r.vendedor.nome, mesReferencia(-1)), false],
+                      [`${MESES[mesAtualIdx]}/${anoAtual}`, r.vendasMes, true],
+                    ].map(([rot, val, destaque]) => (
+                      <div key={String(rot)}>
+                        <p className="text-xs font-extrabold tabular-nums" style={{ color: destaque ? (r.vendasMes > 0 ? '#0EA5A0' : undefined) : undefined }}>
+                          {formatarMoeda(val as number)}
+                        </p>
+                        <p className="text-[10px] text-ink-soft">{rot as string}</p>
+                      </div>
+                    ))}
+                  </div>
                   <p className="text-[11px] font-bold text-ink-soft mt-0.5 tabular-nums">
                     {formatarMoeda(r.totalHistorico)} · total histórico
                   </p>
