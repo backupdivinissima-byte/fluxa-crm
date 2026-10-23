@@ -81,7 +81,6 @@ export default function ClienteDetalheModal({
 
   const compras = ultimasCompras(cliente);
   const totalCompras = compras.reduce((s, c) => s + c.valor, 0);
-  const anoUltima = cliente.dtUltCompra?.slice(0, 4);
 
   const produtosOrdenados = Object.entries(cliente.produtos ?? {})
     .filter(([, qtd]) => qtd > 0)
@@ -237,18 +236,17 @@ export default function ClienteDetalheModal({
                 <>
                   <div className="grid grid-cols-3 gap-3 mt-1">
                     {compras.map((c, i) => {
-                      const ano = c.data?.slice(0, 4) ?? (i === 0 ? anoUltima : undefined);
+                      const dataCompra = c.data ?? (i === 0 ? cliente.dtUltCompra : undefined);
                       return (
                         <div
                           key={i}
-                          title={c.data ? formatarDataBR(c.data) : undefined}
+                          
                           className={`rounded-xl border px-2 py-3.5 text-center ${
                             i === 0 ? 'border-teal-500 bg-teal-50' : 'border-line bg-white'
                           }`}
                         >
                           <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-soft">
-                            Compra {i + 1}
-                            {ano ? ` · ${ano}` : ''}
+                            {dataCompra ? formatarDataBR(dataCompra) : `Compra ${i + 1}`}
                           </div>
                           <div className="text-base font-extrabold text-ink mt-1.5">{formatarMoeda(c.valor)}</div>
                         </div>
