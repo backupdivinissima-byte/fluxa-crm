@@ -555,7 +555,18 @@ export function rankingVendedores(
   return vendedores
     .map((v) => {
       const meus = clientes.filter((c) => c.crmVendedorLogin === v.login || matchVendedor(c, v.login, v.nome));
-      const totalHistorico = meus.reduce((soma, c) => soma + valorCliente(c), 0);
+      const meusIds = new Set(meus.map((c) => c.id));
+      // Cada venda conta para quem vendeu (igual ao ERP); meses sem detalhe por vendedor vão para o dono atual do cliente.
+      const totalHistorico = clientes.reduce((soma, c) => {
+        const origens = Object.values(c.origensImportacao ?? {});
+        if (!origens.some((o) => o.porVendedor)) return meusIds.has(c.id) ? soma + valorCliente(c) : soma;
+        let t = soma;
+        for (const o of origens) {
+          if (o.porVendedor) for (const x of o.porVendedor) { if (vendedorDaVenda(x, v.login, v.nome)) t += x.valor; }
+          else if (meusIds.has(c.id)) t += o.totalGeral ?? 0;
+        }
+        return t;
+      }, 0);
       const vendasMes = temImportacaoNoMes
         ? vendasImportadasMesVendedor(clientes, v.login, v.nome, mesRefAtual)
         : vendasMesVendedor(clientes, v.login, colunasFechamentoIds);
