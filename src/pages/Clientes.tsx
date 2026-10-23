@@ -177,7 +177,7 @@ export default function Clientes() {
                       const dd = Math.floor((Date.now() - new Date(u).getTime()) / 86400000);
                       return (
                         <>
-                          {new Date(u).toLocaleDateString('pt-BR')}
+                          {new Date(u).toLocaleDateString('pt-BR')} às {new Date(u).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                           <span className="text-xs block">{dd <= 0 ? 'hoje' : `há ${dd} ${dd === 1 ? 'dia' : 'dias'}`}</span>
                         </>
                       );
