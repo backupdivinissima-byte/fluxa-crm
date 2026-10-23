@@ -362,7 +362,7 @@ export interface TicketMedio {
   ticketProduto?: number;
 }
 
-/** Ticket médio por pedido (valor ÷ nº de pedidos) e por produto (valor ÷ peças vendidas) a partir da
+/** Ticket médio por pedido (valor LÍQUIDO ÷ nº de pedidos) e por produto (valor líquido ÷ peças vendidas) a partir da
  * importação. mesRef undefined = todos os meses. Só entram meses importados com a contagem de pedidos;
  * `mesesSemPedidos` indica meses que precisam ser reimportados. */
 export function ticketsMedios(clientes: Cliente[], mesRef?: string): TicketMedio & { mesesSemPedidos: number } {
@@ -372,8 +372,8 @@ export function ticketsMedios(clientes: Cliente[], mesRef?: string): TicketMedio
     for (const [k, o] of Object.entries(c.origensImportacao ?? {})) {
       const m = /^mes-(\d{4}-\d{2})$/.exec(k);
       if (!m || (mesRef && m[1] !== mesRef)) continue;
-      if (o.pedidos === undefined) { semPedidos.add(m[1]); continue; }
-      valor += o.totalGeral ?? 0;
+      if (o.pedidos === undefined || o.liquido === undefined) { semPedidos.add(m[1]); continue; }
+      valor += o.liquido;
       pedidos += o.pedidos;
       for (const q of Object.values(o.produtos ?? {})) pecas += q;
     }

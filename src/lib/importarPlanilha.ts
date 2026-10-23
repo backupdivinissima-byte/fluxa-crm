@@ -678,6 +678,13 @@ function valorTotalDaLinhaCliente(cells: string[]): number | undefined {
   return paraNumero(valoresRs[valoresRs.length - 1]);
 }
 
+/** Vlr. Líquido: o penúltimo "R$" da linha (ordem Desc./Frete/Vlr. Liq./Vlr. Total). */
+function valorLiquidoDaLinhaCliente(cells: string[]): number | undefined {
+  const valoresRs = cells.filter((c) => /^R\$/.test(c.trim()));
+  if (valoresRs.length < 2) return undefined;
+  return paraNumero(valoresRs[valoresRs.length - 2]);
+}
+
 function ehLinhaClienteRelatorio(cells: string[]): boolean {
   return (cells[1] ?? '').trim() === 'Cliente';
 }
@@ -733,6 +740,7 @@ function extrairClientesRelatorioMovimentacoes(tabela: string[][]): {
     const dataMatch = (linha[3] ?? '').match(/(\d{2}\/\d{2}\/\d{4})/);
     const dataISO = dataMatch ? paraDataISO(dataMatch[1]) : undefined;
     const valorTotal = valorTotalDaLinhaCliente(linha);
+    const valorLiquido = valorLiquidoDaLinhaCliente(linha) ?? valorTotal;
 
     const linhaVendedor = tabela[i + 1];
     const temVendedor = !!linhaVendedor && ehLinhaVendedorRelatorio(linhaVendedor);
@@ -779,7 +787,8 @@ function extrairClientesRelatorioMovimentacoes(tabela: string[][]): {
     if (dataISO) {
       const mes = dataISO.slice(0, 7);
       c.meses ??= {};
-      const m = (c.meses[mes] ??= { totalGeral: 0, pedidos: 0, porVendedor: [] });
+      const m = (c.meses[mes] ??= { totalGeral: 0, liquido: 0, pedidos: 0, porVendedor: [] });
+      m.liquido += valorLiquido ?? 0;
       m.totalGeral += valorTotal ?? 0;
       m.pedidos += 1;
       if (!m.dtUltCompra || dataISO > m.dtUltCompra) {
@@ -969,6 +978,7 @@ export async function salvarClientesEVendedores(
 }
 
 type OrigemContribuicao = {
+  liquido?: number;
   pedidos?: number;
   porVendedor?: Array<{ cod?: string; nome?: string; valor: number }>;
   totalGeral?: number;
@@ -1117,6 +1127,7 @@ export async function salvarPorArquivo(
             porVendedor: m.porVendedor.map((x) => ({ ...x, valor: Math.round(x.valor * 100) / 100 })),
             totalGeral: Math.round(m.totalGeral * 100) / 100,
             pedidos: m.pedidos,
+            liquido: Math.round(m.liquido * 100) / 100,
             produtos: m.produtos,
             dtUltCompra: m.dtUltCompra,
             cod_vendedor: m.cod_vendedor,
