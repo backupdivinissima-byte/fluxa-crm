@@ -802,8 +802,11 @@ function extrairClientesRelatorioMovimentacoes(tabela: string[][]): {
       }
       if (valorTotal) {
         const it = m.porVendedor.find((x) => (x.cod ?? '') === (vendedorInfo.cod ?? '') && (x.nome ?? '') === (vendedorInfo.nome ?? ''));
-        if (it) it.valor += valorTotal;
-        else m.porVendedor.push({ ...(vendedorInfo.cod ? { cod: vendedorInfo.cod } : {}), ...(vendedorInfo.nome ? { nome: vendedorInfo.nome } : {}), valor: valorTotal });
+        if (it) {
+          it.valor += valorTotal;
+          it.pedidos = (it.pedidos ?? 0) + 1;
+          it.liquido = (it.liquido ?? 0) + (valorLiquido ?? 0);
+        } else m.porVendedor.push({ ...(vendedorInfo.cod ? { cod: vendedorInfo.cod } : {}), ...(vendedorInfo.nome ? { nome: vendedorInfo.nome } : {}), valor: valorTotal, pedidos: 1, liquido: valorLiquido ?? 0 });
       }
     }
   }
@@ -980,7 +983,7 @@ export async function salvarClientesEVendedores(
 type OrigemContribuicao = {
   liquido?: number;
   pedidos?: number;
-  porVendedor?: Array<{ cod?: string; nome?: string; valor: number }>;
+  porVendedor?: Array<{ cod?: string; nome?: string; valor: number; pedidos?: number; liquido?: number }>;
   totalGeral?: number;
   produtos?: Record<string, number>;
   dtUltCompra?: string;
@@ -1124,7 +1127,7 @@ export async function salvarPorArquivo(
       if (c.meses && Object.keys(c.meses).length > 0) {
         for (const [mes, m] of Object.entries(c.meses)) {
           origens[chaveOrigemPorMes(mes)] = {
-            porVendedor: m.porVendedor.map((x) => ({ ...x, valor: Math.round(x.valor * 100) / 100 })),
+            porVendedor: m.porVendedor.map((x) => ({ ...x, valor: Math.round(x.valor * 100) / 100, ...(x.liquido !== undefined ? { liquido: Math.round(x.liquido * 100) / 100 } : {}) })),
             totalGeral: Math.round(m.totalGeral * 100) / 100,
             pedidos: m.pedidos,
             liquido: Math.round(m.liquido * 100) / 100,

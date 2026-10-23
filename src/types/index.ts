@@ -150,7 +150,7 @@ export interface Cliente {
   c3?: number; // valor da 3ª compra mais recente
   produtos?: Record<string, number>; // categoria -> quantidade comprada
   porVendedor?: Array<{ cod?: string; nome?: string; valor: number }>; // só durante a leitura do arquivo
-  meses?: Record<string, { totalGeral: number; liquido: number; pedidos: number; produtos?: Record<string, number>; dtUltCompra?: string; cod_vendedor?: string; vend_nome?: string; porVendedor: Array<{ cod?: string; nome?: string; valor: number }> }>; // só durante a leitura: o mesmo cliente separado por mês da venda
+  meses?: Record<string, { totalGeral: number; liquido: number; pedidos: number; produtos?: Record<string, number>; dtUltCompra?: string; cod_vendedor?: string; vend_nome?: string; porVendedor: Array<{ cod?: string; nome?: string; valor: number; pedidos?: number; liquido?: number }> }>; // só durante a leitura: o mesmo cliente separado por mês da venda
   cod_vendedor?: string; // vendedor "dono" do cliente (origem cadastral)
   vend_nome?: string;
 
@@ -179,7 +179,7 @@ export interface Cliente {
       vend_nome?: string;
       // Quanto cada vendedor vendeu nesse mês para este cliente (venda a venda, como no relatório do ERP).
       // É uma lista (não um mapa) para que cada reimportação a SUBSTITUA inteira em vez de mesclar com a antiga.
-      porVendedor?: Array<{ cod?: string; nome?: string; valor: number }>;
+      porVendedor?: Array<{ cod?: string; nome?: string; valor: number; pedidos?: number; liquido?: number }>;
     }
   >;
 

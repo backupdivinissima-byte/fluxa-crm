@@ -424,6 +424,17 @@ function vendedorDaVenda(x: { cod?: string; nome?: string }, login: string, nome
  * `crmVendedorLogin` OU `matchVendedor`). Usado pro ranking de vendedores
  * mostrar o valor REAL do mês corrente (antes ficava sempre R$0,00 pra
  * quem só tem vendas importadas, porque dependia só do quadro Kanban). */
+/** Pedidos e ticket médio (valor líquido ÷ pedidos) de um vendedor num mês importado. */
+export function pedidosMesVendedor(clientes: Cliente[], login: string, nome: string | undefined, mesRef: string): { pedidos: number; ticket?: number } {
+  let pedidos = 0, liquido = 0;
+  for (const c of clientes) {
+    for (const x of c.origensImportacao?.[`mes-${mesRef}`]?.porVendedor ?? []) {
+      if (x.pedidos !== undefined && vendedorDaVenda(x, login, nome)) { pedidos += x.pedidos; liquido += x.liquido ?? 0; }
+    }
+  }
+  return { pedidos, ticket: pedidos > 0 ? liquido / pedidos : undefined };
+}
+
 export function vendasImportadasMesVendedor(
   clientes: Cliente[],
   login: string,

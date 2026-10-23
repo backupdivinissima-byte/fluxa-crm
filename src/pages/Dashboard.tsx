@@ -21,6 +21,7 @@ import {
   vendasTotalEmpresa,
   ticketsMedios,
   vendasImportadasMesVendedor,
+  pedidosMesVendedor,
   mesReferencia,
 } from '../lib/crmLogic';
 
@@ -732,14 +733,18 @@ export default function Dashboard() {
                       [`${MESES[mesAtualIdx]}/${anoAtual - 1}`, vendasImportadasMesVendedor(clientes, r.vendedor.login, r.vendedor.nome, mesReferencia(-12)), false],
                       [`${MESES[(mesAtualIdx + 11) % 12]}/${mesAtualIdx === 0 ? anoAtual - 1 : anoAtual}`, vendasImportadasMesVendedor(clientes, r.vendedor.login, r.vendedor.nome, mesReferencia(-1)), false],
                       [`${MESES[mesAtualIdx]}/${anoAtual}`, r.vendasMes, true],
-                    ].map(([rot, val, destaque]) => (
+                    ].map(([rot, val, destaque], idx) => {
+                      const st = pedidosMesVendedor(clientes, r.vendedor.login, r.vendedor.nome, mesReferencia(idx === 0 ? -12 : idx === 1 ? -1 : 0));
+                      return (
                       <div key={String(rot)}>
                         <p className="text-xs font-extrabold tabular-nums" style={{ color: destaque ? (r.vendasMes > 0 ? '#0EA5A0' : undefined) : undefined }}>
                           {formatarMoeda(val as number)}
                         </p>
                         <p className="text-[10px] text-ink-soft">{rot as string}</p>
+                        <p className="text-[10px] text-ink-soft tabular-nums">{st.pedidos > 0 ? `${st.pedidos} ped. · TM ${formatarMoeda(st.ticket ?? 0)}` : '— ped.'}</p>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                   <p className="text-[11px] font-bold text-ink-soft mt-0.5 tabular-nums">
                     {formatarMoeda(r.totalHistorico)} · total histórico
