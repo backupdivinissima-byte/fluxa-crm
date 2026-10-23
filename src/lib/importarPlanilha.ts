@@ -1160,11 +1160,23 @@ export async function salvarPorArquivo(
         const snap = await getDoc(ref);
         const origensExistentes = (snap.exists() ? (snap.data() as Cliente).origensImportacao : undefined) ?? {};
         const origensNovas = origensPorCod.get(cod) ?? {};
-        const origensCompletas = { ...origensExistentes, ...origensNovas };
+        // Regra: a última importação de um MÊS substitui tudo do mesmo mês; um mês nunca mexe em outro.
+        // Origens antigas (chave por nome de arquivo) cuja data cai num mês coberto por este arquivo também saem.
+        const mesesNovos = new Set(Object.keys(origensNovas).map((k) => /^mes-(\d{4}-\d{2})$/.exec(k)?.[1]).filter(Boolean) as string[]);
+        const legadasApagar = Object.entries(origensExistentes)
+          .filter(([k, o]) => !/^mes-\d{4}-\d{2}$/.test(k) && !!o.dtUltCompra && mesesNovos.has(o.dtUltCompra.slice(0, 7)))
+          .map(([k]) => k);
+        const existentesLimpas = Object.fromEntries(Object.entries(origensExistentes).filter(([k]) => !legadasApagar.includes(k)));
+        const origensCompletas = { ...existentesLimpas, ...origensNovas };
         const agregados = recalcularAgregadosDeOrigens(origensCompletas);
         const esc = escalaresPorCod.get(cod)!;
         const dados = { ...esc, ...agregados, origensImportacao: origensCompletas };
         await setDoc(ref, semUndef(dados), { merge: true });
+        if (legadasApagar.length > 0) {
+          const upd: Record<string, unknown> = {};
+          for (const k of legadasApagar) upd[`origensImportacao.${k}`] = deleteField();
+          await updateDoc(ref, upd);
+        }
       })
     );
     clientesImportados += lotecods.length;
@@ -1181,9 +1193,9 @@ export async function salvarPorArquivo(
       if (codsNoArquivo.has(d.id)) continue;
       const origensCli = (d.data() as Cliente).origensImportacao;
       if (!origensCli) continue;
-      const apagar = Object.keys(origensCli).filter((k) => mesesDoArquivo.has(k));
+      const apagar = Object.entries(origensCli).filter(([k, o]) => mesesDoArquivo.has(k) || (!/^mes-/.test(k) && !!o.dtUltCompra && mesesDoArquivo.has(`mes-${o.dtUltCompra.slice(0, 7)}`))).map(([k]) => k);
       if (apagar.length === 0) continue;
-      const restantes = Object.fromEntries(Object.entries(origensCli).filter(([k]) => !mesesDoArquivo.has(k)));
+      const restantes = Object.fromEntries(Object.entries(origensCli).filter(([k]) => !apagar.includes(k)));
       const ag = recalcularAgregadosDeOrigens(restantes);
       const upd: Record<string, unknown> = {};
       for (const k of apagar) upd[`origensImportacao.${k}`] = deleteField();
