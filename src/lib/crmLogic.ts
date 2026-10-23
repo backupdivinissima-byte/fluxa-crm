@@ -184,8 +184,18 @@ export function totalGeralReal(c: Cliente): number | undefined {
   if (!origens || Object.keys(origens).length === 0) return c.totalGeral;
   const maiorPorMes = new Map<string, number>();
   let semData = 0;
-  for (const origem of Object.values(origens)) {
-    if (origem.totalGeral === undefined) continue;
+  // Origem por mês ("mes-AAAA-MM") é a última importação daquele mês: ela prevalece sobre qualquer origem antiga do mesmo mês.
+  const mesesExatos = new Set<string>();
+  for (const [k, o] of Object.entries(origens)) {
+    const m = /^mes-(\d{4}-\d{2})$/.exec(k);
+    if (m && o.totalGeral !== undefined) {
+      mesesExatos.add(m[1]);
+      maiorPorMes.set(m[1], o.totalGeral);
+    }
+  }
+  for (const [k, origem] of Object.entries(origens)) {
+    if (origem.totalGeral === undefined || /^mes-\d{4}-\d{2}$/.test(k)) continue;
+    if (origem.dtUltCompra && mesesExatos.has(origem.dtUltCompra.slice(0, 7))) continue;
     if (origem.dtUltCompra) {
       const mes = origem.dtUltCompra.slice(0, 7);
       const atual = maiorPorMes.get(mes);
@@ -341,7 +351,7 @@ export function vendasMesAtualEmpresa(
 
 /** Soma histórica (todo o período) do valor de todos os clientes da base. */
 export function vendasTotalEmpresa(clientes: Cliente[]): number {
-  return clientes.reduce((soma, c) => soma + valorCliente(c), 0);
+  return clientes.reduce((soma, c) => soma + (totalGeralReal(c) ?? 0), 0);
 }
 
 /** Total de vendas IMPORTADAS por mês (chave "AAAA-MM"), somando a
