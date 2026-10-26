@@ -58,6 +58,7 @@ export default function Agenda() {
   const [vendDestino, setVendDestino] = useState('');
   const [obs, setObs] = useState('');
   const [erro, setErro] = useState('');
+  const [editando, setEditando] = useState<Agendamento | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [concluindo, setConcluindo] = useState<Agendamento | null>(null);
   const [resultado, setResultado] = useState('');
@@ -94,7 +95,7 @@ export default function Agenda() {
   const doDia = porDia.get(dia) ?? [];
   const horariosDia = horariosDoDia(dia);
   const vendDoForm = ehAdmin ? vendDestino : (loginAtual ?? '');
-  const ocupados = new Set(agenda.filter((a) => a.data === dia && a.vendedorLogin === vendDoForm && a.status === 'pendente').map((a) => a.hora));
+  const ocupados = new Set(agenda.filter((a) => a.id !== editando?.id && a.data === dia && a.vendedorLogin === vendDoForm && a.status === 'pendente').map((a) => a.hora));
 
   // Conversa do chat de um cliente (vínculo direto, telefone ou nome).
   function conversaDe(c: Cliente): ConversaChat | undefined {
@@ -130,6 +131,25 @@ export default function Agenda() {
     const v = vendedores.find((x) => x.login === vendDoForm);
     setSalvando(true);
     try {
+      if (editando) {
+        await atualizarAgendamento(empresaId, editando.id, {
+          data: dia,
+          hora,
+          obs: obs.trim(),
+          vendedorLogin: vendDoForm,
+          vendedorNome: v?.nome ?? editando.vendedorNome,
+          status: 'pendente',
+          adiado: false,
+          lembreteEm: lembreteDe(dia, hora),
+        });
+        setEditando(null);
+        setCliente(null);
+        setBusca('');
+        setObs('');
+        setHora('');
+        setAviso({ ok: true, texto: `✅ Contato reagendado para ${formatarDataCurta(dia)} às ${hora}.` });
+        return;
+      }
       await criarAgendamentos(empresaId, [
         {
           data: dia,
@@ -165,6 +185,27 @@ export default function Agenda() {
     await atualizarAgendamento(empresaId, concluindo.id, { status: 'feito', resultado: resultado.trim(), feitoEm: new Date().toISOString() });
     setConcluindo(null);
     setResultado('');
+  }
+
+  /** Clicou num cliente da lista: abre o formulário com os dados dele para anotar e reagendar. */
+  function abrirParaReagendar(a: Agendamento) {
+    const c = clientes.find((x) => x.id === a.clienteId) ?? ({ id: a.clienteId, cod: a.clienteCod, razao: a.clienteNome, telefone: a.telefone } as Cliente);
+    setEditando(a);
+    setCliente(c);
+    setBusca(`${a.clienteCod} - ${a.clienteNome}`);
+    setObs(a.obs ?? '');
+    setHora('');
+    setVendDestino(a.vendedorLogin);
+    setErro('');
+    if (a.data < hoje) setDia(ehDiaUtil(hoje) ? hoje : dia);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  function cancelarEdicao() {
+    setEditando(null);
+    setCliente(null);
+    setBusca('');
+    setObs('');
+    setHora('');
   }
 
   function prepararRodizio() {
@@ -292,7 +333,7 @@ export default function Agenda() {
         <div className="space-y-4">
           <div className="bg-white border border-line rounded-xl p-4">
             <div className="flex items-baseline gap-2 flex-wrap mb-3">
-              <h2 className="text-base font-extrabold text-ink">{nomeDoDia(dia)}, {formatarDataCurta(dia)}</h2>
+              <h2 className="text-base font-extrabold text-ink">{editando ? `Reagendar: ${editando.clienteNome} — ` : ''}{nomeDoDia(dia)}, {formatarDataCurta(dia)}</h2>
               <span className="text-xs text-ink-soft">{doDia.length} agendamento(s)</span>
               {ehAdmin && porVendNoDia.length > 0 && (
                 <span className="text-xs text-ink-soft">· {porVendNoDia.map(([n, q]) => `${n}: ${q}`).join(' · ')}</span>
@@ -363,8 +404,9 @@ export default function Agenda() {
                 </div>
                 <div className="md:col-span-2 flex items-center gap-3">
                   <button disabled={salvando} onClick={() => void salvar()} className="h-10 rounded-lg bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-4 disabled:opacity-60">
-                    {salvando ? 'Salvando…' : 'Agendar contato'}
+                    {salvando ? 'Salvando…' : editando ? 'Salvar e reagendar' : 'Agendar contato'}
                   </button>
+                  {editando && <button onClick={cancelarEdicao} className="h-10 rounded-lg border border-line text-sm font-bold px-3">Cancelar edição</button>}
                   {erro && <span className="text-sm text-red-600 font-semibold">{erro}</span>}
                 </div>
               </div>
@@ -380,7 +422,7 @@ export default function Agenda() {
                 {doDia.map((a) => (
                   <div key={a.id} className="py-2 flex items-start gap-3 flex-wrap">
                     <div className="w-14 font-extrabold text-ink">{a.hora}</div>
-                    <div className="flex-1 min-w-[220px]">
+                    <div className={`flex-1 min-w-[220px] ${a.status === 'pendente' ? 'cursor-pointer hover:bg-surface rounded-lg -m-1 p-1' : ''}`} onClick={() => a.status === 'pendente' && abrirParaReagendar(a)} title={a.status === 'pendente' ? 'Clique para anotar e reagendar' : undefined}>
                       <div className="text-sm font-bold text-ink">{a.clienteNome} <span className="text-xs text-ink-soft font-normal">cód. {a.clienteCod}</span></div>
                       <div className="text-xs text-ink-soft">Vendedor: <b>{a.vendedorNome}</b> · {a.origem === 'rodizio' ? 'rodízio de inativos' : a.origem === 'admin' ? 'agendado pelo admin' : 'agendado pelo vendedor'}</div>
                       {a.obs && <div className="text-xs mt-0.5">📝 {a.obs}</div>}
@@ -400,6 +442,26 @@ export default function Agenda() {
                 ))}
               </div>
             )}
+          </div>
+          <div className="bg-white border border-line rounded-xl p-4">
+            <h3 className="text-sm font-extrabold text-ink mb-1">{ehAdmin ? 'Carteira do rodízio (pendentes)' : 'Minha lista do rodízio'}</h3>
+            <p className="text-xs text-ink-soft mb-2">Clique no cliente para abrir o agendamento, anotar o que foi conversado e reagendar.</p>
+            {(() => {
+              const lista = visiveis.filter((a) => a.origem === 'rodizio' && a.status === 'pendente').sort((a, b) => (a.data + a.hora).localeCompare(b.data + b.hora));
+              if (lista.length === 0) return <p className="text-sm text-ink-soft">Nenhum cliente do rodízio pendente.</p>;
+              return (
+                <div className="max-h-96 overflow-auto divide-y divide-line">
+                  {lista.map((a) => (
+                    <button key={a.id} onClick={() => abrirParaReagendar(a)} className="w-full text-left py-2 px-1 flex items-center gap-3 hover:bg-surface rounded">
+                      <span className="text-xs font-bold text-ink-soft w-28 shrink-0">{formatarDataCurta(a.data)} {a.hora}</span>
+                      <span className="flex-1 text-sm font-semibold text-ink truncate">{a.clienteNome} <span className="text-xs text-ink-soft font-normal">cód. {a.clienteCod}</span></span>
+                      {ehAdmin && <span className="text-xs text-ink-soft truncate max-w-[140px]">{a.vendedorNome}</span>}
+                      {a.data < hoje && <span className="text-[11px] font-bold rounded-full px-2 py-0.5 bg-red-100 text-red-700">Atrasado</span>}
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>
