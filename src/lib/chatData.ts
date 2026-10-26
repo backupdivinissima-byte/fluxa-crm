@@ -119,6 +119,27 @@ export async function solicitarConexaoWhatsapp(empresaId: string, telefoneParear
 }
 
 /** Pega o atendimento da conversa para o vendedor. */
+
+/** "Cofre" de contatos salvos: cópia do que a equipe definiu (nome salvo, vendedor, cliente do CRM, etiquetas), guardada por
+ * telefone. Se a conversa for recriada (reconexão do WhatsApp, troca de identificador), o conector restaura daqui. */
+export async function espelharNoCofre(empresaId: string, conversaId: string): Promise<void> {
+  try {
+    const snap = await getDoc(doc(db, 'empresas', empresaId, 'conversas', conversaId));
+    const c = snap.data() as Partial<ConversaChat> | undefined;
+    const tel = (c?.telefone ?? c?.contato ?? '').replace(/\D/g, '');
+    if (!c || tel.length < 10) return;
+    const dados: Record<string, unknown> = { telefone: tel, atualizadoEm: new Date().toISOString() };
+    if (c.salvo) { dados.salvo = true; dados.nome = c.nome ?? ''; }
+    if (c.vendedorLogin) { dados.vendedorLogin = c.vendedorLogin; dados.vendedorNome = c.vendedorNome ?? ''; dados.atendimentoEm = c.atendimentoEm ?? ''; }
+    else dados.vendedorLogin = '';
+    if (c.clienteId) dados.clienteId = c.clienteId;
+    if (c.tags && c.tags.length > 0) dados.tags = c.tags;
+    await setDoc(doc(db, 'empresas', empresaId, 'contatosSalvos', tel.slice(-11)), dados, { merge: true });
+  } catch (e) {
+    console.warn('[cofre] não consegui guardar o contato', e);
+  }
+}
+
 export async function assumirConversa(empresaId: string, conversaId: string, login: string, nome: string, clienteId?: string) {
   await chatPronto;
   await updateDoc(doc(db, 'empresas', empresaId, 'conversas', conversaId), {
@@ -128,6 +149,7 @@ export async function assumirConversa(empresaId: string, conversaId: string, log
     naoLidas: 0,
     ...(clienteId ? { clienteId } : {}),
   });
+  void espelharNoCofre(empresaId, conversaId);
 }
 
 export async function liberarConversa(empresaId: string, conversaId: string) {
@@ -137,6 +159,7 @@ export async function liberarConversa(empresaId: string, conversaId: string) {
     vendedorNome: null,
     atendimentoEm: null,
   });
+  void espelharNoCofre(empresaId, conversaId);
 }
 
 /** Envia a mensagem agora, ou a deixa agendada (agendarPara = ISO) na fila.
@@ -315,6 +338,7 @@ export async function transferirConversa(
     vendedorNome: para.nome,
     atendimentoEm: agora,
   });
+  void espelharNoCofre(empresaId, conversa.id);
   await addDoc(collection(db, 'empresas', empresaId, 'conversas', conversa.id, 'mensagens'), {
     de: 'equipe',
     texto: `🔁 Atendimento transferido de ${de} para ${para.nome}`,
@@ -448,6 +472,7 @@ export async function excluirTag(empresaId: string, id: string) {
 export async function definirTagsConversa(empresaId: string, conversaId: string, tags: string[]) {
   await chatPronto;
   await updateDoc(doc(db, 'empresas', empresaId, 'conversas', conversaId), { tags });
+  void espelharNoCofre(empresaId, conversaId);
 }
 
 export interface LigacaoChat {
@@ -489,6 +514,7 @@ export async function editarContatoChat(empresaId: string, conversaId: string, d
   const mudou = !!novo && dadosAtuais.canal === 'whatsapp' && novo !== dadosAtuais.contato && `whatsapp_${novo}` !== conversaId;
   if (!mudou) {
     await updateDoc(ref, { nome: dados.nome, salvo: true, ...(novo ? { telefone: novo } : {}) });
+    void espelharNoCofre(empresaId, conversaId);
     return conversaId;
   }
   if (novo.length < 10) throw new Error('Telefone inválido. Informe DDD + número (ou +país para número de fora do Brasil).');
@@ -513,6 +539,7 @@ export async function editarContatoChat(empresaId: string, conversaId: string, d
 export async function salvarContatoChat(empresaId: string, conversaId: string, nome: string) {
   await chatPronto;
   await updateDoc(doc(db, 'empresas', empresaId, 'conversas', conversaId), { nome, salvo: true });
+  void espelharNoCofre(empresaId, conversaId);
 }
 
 /** Quando o telefone salvo no cadastro do cliente bate com uma conversa do Chat,

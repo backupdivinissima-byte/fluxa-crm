@@ -148,6 +148,55 @@ function aprenderDaMensagem(msg) {
   return k.remoteJid?.endsWith('@lid') && alt ? aprenderLid(k.remoteJid, alt) : Promise.resolve();
 }
 
+
+// ---------- Cofre de contatos salvos ----------
+// Nome salvo, vendedor, cliente do CRM e etiquetas ficam copiados por telefone em `contatosSalvos`.
+// Se a conversa for recriada (reconexão, troca de identificador), restauramos daqui — nada se perde.
+const chaveCofre = (numero) => String(numero).replace(/\D/g, '').slice(-11);
+async function restaurarDoCofre(numero) {
+  try {
+    if (chaveCofre(numero).length < 10) return;
+    const c = await base.collection('contatosSalvos').doc(chaveCofre(numero)).get();
+    if (!c.exists) return;
+    const d = c.data() ?? {};
+    const ref = base.collection('conversas').doc(`whatsapp_${numero}`);
+    const atual = (await ref.get()).data() ?? {};
+    const patch = {};
+    if (d.salvo && !atual.salvo) { patch.salvo = true; if (d.nome) patch.nome = d.nome; }
+    if (d.vendedorLogin && !atual.vendedorLogin) { patch.vendedorLogin = d.vendedorLogin; patch.vendedorNome = d.vendedorNome ?? ''; if (d.atendimentoEm) patch.atendimentoEm = d.atendimentoEm; }
+    if (d.clienteId && !atual.clienteId) patch.clienteId = d.clienteId;
+    if (d.tags?.length && !(atual.tags?.length)) patch.tags = d.tags;
+    if (Object.keys(patch).length > 0) {
+      await ref.set(patch, { merge: true });
+      console.log(`[cofre] contato ${numero} restaurado (${Object.keys(patch).join(', ')}).`);
+    }
+  } catch (e) {
+    console.warn('[cofre] restaurar:', e.message);
+  }
+}
+// Uma vez por inicialização: copia para o cofre tudo o que a equipe já definiu nas conversas existentes.
+async function semearCofre() {
+  try {
+    const todas = await base.collection('conversas').get();
+    let n = 0;
+    for (const d of todas.docs) {
+      const c = d.data();
+      const tel = String(c.telefone ?? '').replace(/\D/g, '');
+      if (tel.length < 10 || !(c.salvo || c.vendedorLogin || c.clienteId || c.tags?.length)) continue;
+      const dados = { telefone: tel, atualizadoEm: agora() };
+      if (c.salvo) { dados.salvo = true; dados.nome = c.nome ?? ''; }
+      if (c.vendedorLogin) { dados.vendedorLogin = c.vendedorLogin; dados.vendedorNome = c.vendedorNome ?? ''; dados.atendimentoEm = c.atendimentoEm ?? ''; }
+      if (c.clienteId) dados.clienteId = c.clienteId;
+      if (c.tags?.length) dados.tags = c.tags;
+      await base.collection('contatosSalvos').doc(chaveCofre(tel)).set(dados, { merge: true });
+      n++;
+    }
+    console.log(`[cofre] ${n} contatos salvos guardados no cofre.`);
+  } catch (e) {
+    console.warn('[cofre] semear:', e.message);
+  }
+}
+
 // Move mensagens da conversa antiga (chave @lid) para a conversa do telefone.
 async function mesclarConversas(lid, tel) {
   if (lid === tel) return;
@@ -189,6 +238,7 @@ async function mesclarConversas(lid, tel) {
     { merge: true }
   );
   await de.delete();
+  await restaurarDoCofre(tel);
   console.log(`Conversa ${lid} juntada com ${tel}.`);
 }
 
@@ -326,7 +376,8 @@ async function importarHistorico(lista) {
     try {
       msgs.sort((a, b) => Number(a.messageTimestamp) - Number(b.messageTimestamp));
       const ref = base.collection('conversas').doc(`whatsapp_${numero}`);
-      const atual = (await ref.get()).data() ?? {};
+      const snapAtual = await ref.get();
+      const atual = snapAtual.data() ?? {};
       const mais = msgs[msgs.length - 1];
       const quandoUlt = new Date(Number(mais.messageTimestamp) * 1000).toISOString();
       const nomePush = msgs.find((m) => !m.key.fromMe && m.pushName)?.pushName;
@@ -355,6 +406,7 @@ async function importarHistorico(lista) {
         },
         { merge: true }
       );
+      if (!snapAtual.exists) await restaurarDoCofre(numero);
     } catch (e) {
       console.error('Histórico:', numero, e.message);
     }
@@ -419,6 +471,7 @@ async function guardarMensagem(msg) {
     },
     { merge: true }
   );
+  if (!conversaAntes.exists) await restaurarDoCofre(numero);
   const snap = await conversaRef.get();
   if (!snap.data()?.nome) await conversaRef.set({ nome: msg.pushName || numero }, { merge: true });
   const msgRef = conversaRef.collection('mensagens').doc(msg.key.id);
@@ -561,6 +614,7 @@ async function iniciar() {
         void ensinarMapaBaileys([...lidParaTel.entries()]).then(() => console.log(`[lid] ${lidParaTel.size} contatos ensinados ao WhatsApp.`));
         await refConexao.set({ status: 'conectado', qr: '', codigoPareamento: '', erro: '', telefone: soDigitos(sock.user?.id ?? ''), atualizadoEm: agora() }, { merge: true });
         console.log('WhatsApp conectado.');
+        if (!global.__cofreSemeado) { global.__cofreSemeado = true; void semearCofre(); }
         robo?.conectou();
       }
       if (connection === 'close') {
