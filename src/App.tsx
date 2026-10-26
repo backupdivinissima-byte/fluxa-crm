@@ -15,6 +15,7 @@ import Importar from './pages/Importar';
 import LancarOrcamento from './pages/LancarOrcamento';
 import Marketing from './pages/Marketing';
 import Chat from './pages/Chat';
+import Agenda from './pages/Agenda';
 import Modulos from './pages/Modulos';
 import Erp from './pages/Erp';
 import MetaAds from './pages/marketing/MetaAds';
@@ -59,6 +60,7 @@ function AppRoutes() {
       >
         <Route path="/dashboard" element={<PainelOuDashboard />} />
         <Route path="/crm" element={<Crm />} />
+        <Route path="/agenda" element={<Agenda />} />
         <Route path="/clientes" element={<Clientes />} />
         <Route path="/vendedores" element={<Vendedores />} />
         <Route path="/metas" element={<Metas />} />

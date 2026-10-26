@@ -1,6 +1,7 @@
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { modulosDaEmpresa, moduloDaRota, rotaInicial, type Modulo } from '../lib/modulos';
+import AgendaLembrete from './AgendaLembrete';
 import fluxaIcon from '../assets/fluxa-icon.svg';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -13,6 +14,7 @@ import {
   IconImportar,
   IconMarketing,
   IconChat,
+  IconAgenda,
   IconEstoque,
   IconErpInicio,
   IconErpVendas,
@@ -24,6 +26,7 @@ import {
 const itens = [
   { to: '/dashboard', label: 'Dashboard', labelVendedor: 'Meu painel', icon: <IconDashboard />, fim: true },
   { to: '/crm', label: 'CRM', labelVendedor: 'Meu CRM', icon: <IconCrm /> },
+  { to: '/agenda', label: 'Agenda', labelVendedor: 'Minha agenda', icon: <IconAgenda /> },
   { to: '/clientes', label: 'Clientes', labelVendedor: 'Meus clientes', icon: <IconClientes /> },
   { to: '/vendedores', label: 'Vendedores', icon: <IconVendedores />, apenasAdmin: true },
   { to: '/metas', label: 'Metas & Comissões', icon: <IconMetas /> },
@@ -157,6 +160,8 @@ export default function Layout() {
           </div>
         </div>
       </header>
+
+      {papel === 'vendedor' && <AgendaLembrete />}
 
       {perguntarVinculo && (
         <div className="fixed inset-0 z-50 bg-ink/40 flex items-center justify-center p-4">

@@ -1,5 +1,6 @@
 import { IconChat } from '../components/NavIcons';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ouvirClientes, ouvirEmpresa, ouvirVendedores, atualizarCampoCliente, salvarCliente } from '../lib/crmData';
 import { acaoDaColuna } from '../lib/crmLogic';
@@ -304,6 +305,10 @@ export default function Chat() {
   const [filtroTag, setFiltroTag] = useState<string | null>(null); // 'origem:instagram' ou 'tag:<id>'
   const [filtro, setFiltro] = useState<'todas' | 'novos' | 'minhas' | 'aguardando' | 'atendimento' | 'semresposta' | 'alerta'>('todas');
   const [abertaId, setAbertaId] = useState<string | null>(null);
+  // Vindo da Agenda: /chat?tel=NÚMERO abre a conversa desse telefone.
+  const [params] = useSearchParams();
+  const telParam = params.get('tel');
+  const telAbertoRef = useRef<string | null>(null);
   const [mensagens, setMensagens] = useState<MensagemChat[]>([]);
   const [texto, setTexto] = useState('');
   const [sugSup, setSugSup] = useState<SugestaoSupervisora | null>(null);
@@ -353,6 +358,16 @@ export default function Chat() {
       u6();
     };
   }, [empresaId]);
+
+  useEffect(() => {
+    if (!telParam) return;
+    const fim = telParam.replace(/\D/g, '').slice(-8);
+    const achada = fim.length >= 8 ? conversas.find((c) => (c.telefone ?? c.contato ?? '').replace(/\D/g, '').slice(-8) === fim) : undefined;
+    if (achada && telAbertoRef.current !== telParam) {
+      telAbertoRef.current = telParam;
+      setAbertaId(achada.id);
+    }
+  }, [telParam, conversas]);
 
   useEffect(() => {
     if (!empresaId || !abertaId) return;
