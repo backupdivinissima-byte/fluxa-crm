@@ -1,5 +1,8 @@
 import { useEffect, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { modulosDaEmpresa, rotaInicial, type Modulo } from '../lib/modulos';
+import { DONOS_PLATAFORMA } from './Modulos';
 import fluxaIcon from '../assets/fluxa-icon.svg';
 
 /** Ícones dos cards de recursos — mesmo quadrado arredondado com gradiente
@@ -283,8 +286,22 @@ const passos = [
   },
 ];
 
+const MODULO_DO_PRODUTO: Record<string, Modulo> = { 'Fluxa CRM': 'crm', 'Fluxa Chat': 'chat', 'Fluxa ERP': 'erp', 'Fluxa Marketing': 'marketing' };
+
 export default function Home() {
   const location = useLocation();
+  const { empresa, perfil } = useAuth();
+  // Quem já está logado não precisa se cadastrar de novo: o produto que a empresa já tem abre direto.
+  const dono = !!perfil?.email && DONOS_PLATAFORMA.includes(perfil.email.toLowerCase());
+  const meusModulos = empresa ? modulosDaEmpresa(empresa) : [];
+  function destinoDe(p: (typeof produtos)[number]): { to: string | null; label: string } {
+    const m = MODULO_DO_PRODUTO[p.nome];
+    if (empresa && m) {
+      if (meusModulos.includes(m)) return { to: rotaInicial(m), label: 'Abrir' };
+      if (dono) return { to: '/modulos', label: 'Ativar na empresa' };
+    }
+    return { to: p.ctaTo, label: p.ctaLabel };
+  }
 
   // Links diretos como /produtos e /planos (compartilháveis, ex. em anúncios
   // ou mensagens) abrem a Home já rolada até a seção correspondente.
@@ -332,7 +349,7 @@ export default function Home() {
                   {produtos.map((p) => (
                     <Link
                       key={p.nome}
-                      to={p.ctaTo ?? '/produtos'}
+                      to={destinoDe(p).to ?? '/produtos'}
                       className="flex items-start gap-3 rounded-xl p-3 hover:bg-surface transition-colors"
                     >
                       <div className="shrink-0 scale-[0.7] origin-top-left -mr-2 -mt-1">{p.icon}</div>
@@ -421,12 +438,12 @@ export default function Home() {
                 </span>
                 <h3 className="text-base font-extrabold text-ink mb-2">{p.nome}</h3>
                 <p className="text-sm text-ink-soft leading-relaxed mb-6 flex-1">{p.desc}</p>
-                {p.ctaTo ? (
+                {destinoDe(p).to ? (
                   <Link
-                    to={p.ctaTo}
+                    to={destinoDe(p).to as string}
                     className="inline-flex items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-4 py-2.5 hover:opacity-90 transition-opacity"
                   >
-                    {p.ctaLabel} <span aria-hidden="true" className="ml-1">→</span>
+                    {destinoDe(p).label} <span aria-hidden="true" className="ml-1">→</span>
                   </Link>
                 ) : (
                   <a
