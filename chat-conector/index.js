@@ -500,8 +500,89 @@ async function guardarMensagem(msg) {
       await msgRef.collection('partes').doc(String(i).padStart(4, '0')).set({ n: i, dados: bufPartes.subarray(i * TAM_PARTE, (i + 1) * TAM_PARTE) });
     }
   }
+  // Robô de boas-vindas: no 1º contato de um número novo pergunta se já é cliente.
+  if (deCliente && Date.now() - new Date(quando).getTime() < 5 * 60 * 1000) {
+    void botBoasVindas({ conversaRef, antes: conversaAntes.data(), depois: snap.data(), jid, texto, primeiroContato }).catch((e) => console.error('[bot] erro:', e.message));
+  }
   // IA supervisora: só mensagens novas de cliente (nada de histórico antigo).
   if (deCliente && Date.now() - new Date(quando).getTime() < 10 * 60 * 1000) supervisora?.mensagemDoCliente(`whatsapp_${numero}`);
+}
+
+
+// ---- Robô de boas-vindas (1º contato de número novo) --------------------------------------
+// Pergunta se já é cliente e, conforme a resposta, avisa que a vendedora/equipe já atende.
+// Só fala com número NOVO que ninguém da equipe respondeu; nunca em conversas já existentes ou vinculadas.
+// Desligar sem mexer no código: criar o documento empresas/{id}/chatBot/config com { ativo: false }.
+const BOT_EMPRESAS = ['uVqpWP9nssgfcPCh68uG2zebqA63']; // Divinissima
+const BOT_NOME = 'Robô Divinissima';
+const BOT_TEXTOS = {
+  pergunta:
+    'Olá! Seja muito bem-vinda à *Divinissima Semijoias* ✨\n\nPara te atender melhor, me conta:\n\n*1* - Já sou cliente\n*2* - Ainda não sou cliente\n\nÉ só responder com o número 😊',
+  lembrete: 'Para eu te direcionar certinho, responda *1* se você já é cliente ou *2* se ainda não é cliente 😊',
+  cliente: 'Perfeito! 💛 Já vamos chamar a sua vendedora para continuar o seu atendimento. Só um momentinho, por favor!',
+  novo: 'Que bom ter você por aqui! 💎 Nossa equipe já vai te atender e te apresentar a Divinissima. Só um momentinho, por favor!',
+};
+let botLigado = { em: 0, ok: true };
+async function botEstaLigado() {
+  if (!BOT_EMPRESAS.includes(EMPRESA_ID) || MODO_TESTE) return false;
+  if (Date.now() - botLigado.em < 60000) return botLigado.ok;
+  try {
+    const c = await base.collection('chatBot').doc('config').get();
+    botLigado = { em: Date.now(), ok: c.data()?.ativo !== false };
+  } catch {
+    botLigado = { em: Date.now(), ok: true };
+  }
+  return botLigado.ok;
+}
+function entenderResposta(texto) {
+  const t = String(texto).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  if (/^\W*2\b/.test(t) || /\bnao\b[^.!?]{0,20}\b(sou|e|fui)\b|ainda nao|nunca (comprei|fui)|quero (ser|conhecer|comprar)|primeira vez|novo cliente|\bnova\b/.test(t)) return 'novo';
+  if (/^\W*1\b/.test(t) || /\bja (sou|compro|comprei|fui)\b|\bsou cliente\b|\bcliente\b/.test(t)) return 'cliente';
+  return null;
+}
+async function botEnviar(conversaRef, jid, texto) {
+  try {
+    await sock.sendPresenceUpdate('composing', jid);
+  } catch {
+    /* ignora */
+  }
+  await dormir(1500 + Math.min(2500, texto.length * 8));
+  const enviada = await sock.sendMessage(jid, { text: texto });
+  if (enviada?.key?.id) enviadasPorNos.add(enviada.key.id);
+  lembrarEnviada(enviada?.key?.id, enviada?.message);
+  const em = new Date().toISOString();
+  await conversaRef.collection('mensagens').add({ de: 'equipe', texto, em, autor: BOT_NOME });
+  // Não marca "teveResposta": a conversa continua como contato novo até um humano responder.
+  await conversaRef.set({ ultimaMensagem: texto, ultimaEm: em, ultimaDe: 'equipe', botEm: em }, { merge: true });
+}
+async function botBoasVindas({ conversaRef, antes, depois, jid, texto, primeiroContato }) {
+  if (!(await botEstaLigado()) || !jid || !sock || !aberto) return;
+  const d = depois ?? {};
+  if (d.teveResposta) return; // um humano já respondeu
+  if (primeiroContato && !d.botEstado) {
+    if (d.vendedorLogin || d.clienteId || d.salvo || d.salvoNaAgenda) return; // já é conhecido da equipe
+    await conversaRef.set({ botEstado: 'perguntou', botTentativas: 0 }, { merge: true });
+    console.log(`[bot] boas-vindas para ${jid}`);
+    await botEnviar(conversaRef, jid, BOT_TEXTOS.pergunta);
+    return;
+  }
+  if (antes?.botEstado !== 'perguntou') return;
+  const resp = entenderResposta(texto);
+  if (resp) {
+    await conversaRef.set({ botEstado: 'concluido', botResposta: resp }, { merge: true });
+    console.log(`[bot] ${jid} respondeu: ${resp}`);
+    await botEnviar(conversaRef, jid, BOT_TEXTOS[resp]);
+    return;
+  }
+  // Não entendeu: lembra no máximo uma vez (e só se a última mensagem do robô foi há mais de 20 s); depois deixa para a equipe.
+  const tent = antes.botTentativas ?? 0;
+  if (tent >= 1) {
+    await conversaRef.set({ botEstado: 'concluido', botResposta: 'sem_resposta' }, { merge: true });
+    return;
+  }
+  if (antes.botEm && Date.now() - new Date(antes.botEm).getTime() < 20000) return;
+  await conversaRef.set({ botTentativas: tent + 1 }, { merge: true });
+  await botEnviar(conversaRef, jid, BOT_TEXTOS.lembrete);
 }
 
 // Se a gravação no banco falhar, tenta de novo (5 s, 30 s, 2 min) antes de desistir.
