@@ -18,6 +18,7 @@ import {
   type ResultadoSincronizacaoErp,
 } from '../lib/erpConexao';
 import { IconImportar } from '../components/NavIcons';
+import ConferirMes from '../components/ConferirMes';
 
 // URL fixa da API (região e nome de função previsíveis — ver functions/index.js).
 const API_BASE_URL = 'https://us-central1-fluxa-crm.cloudfunctions.net/api';
@@ -796,6 +797,7 @@ export default function Importar() {
           </button>
         </div>
       </div>
+      {empresaId && <ConferirMes empresaId={empresaId} />}
     </div>
   );
 }
