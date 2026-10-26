@@ -886,9 +886,25 @@ export async function lerPlanilha(arquivo: File): Promise<LeituraPlanilha> {
         (maior, atual) => (atual.length > (maior?.length ?? 0) ? atual : maior),
         null
       );
-      if (maiorTabela && ehRelatorioDeMovimentacoes(maiorTabela)) {
-        const { clientes, vendasCanceladasIgnoradas } = extrairClientesRelatorioMovimentacoes(maiorTabela);
+      // Relatório grande pode vir dividido em VÁRIAS tabelas: lemos todas (antes só a maior, e o resto das vendas se perdia).
+      const tabelasMov = tabelas.filter(ehRelatorioDeMovimentacoes);
+      if (tabelasMov.length > 0) {
+        const tabelaUnica = tabelasMov.flat();
+        const { clientes, vendasCanceladasIgnoradas } = extrairClientesRelatorioMovimentacoes(tabelaUnica);
         const erros: string[] = [];
+        // Confere com o rodapé do próprio relatório (TOTAL VENDAS / TOTAL LIQUIDO), se existir.
+        const todasLinhas = tabelas.flat();
+        const iRodape = todasLinhas.findIndex((l) => (l[0] ?? '').trim().toUpperCase() === 'TOTAL VENDAS');
+        if (iRodape >= 0) {
+          const valores = todasLinhas[iRodape + 1] ?? [];
+          const esperado = paraNumero(valores[4]);
+          const lido = clientes.reduce((soma, c) => soma + (c.totalGeral ?? 0), 0);
+          if (esperado !== undefined && esperado > 0 && Math.abs(lido - esperado) / esperado > 0.005) {
+            erros.push(
+              `ATENÇÃO: o rodapé do relatório diz ${esperado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}, mas o Fluxa leu ${lido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}. Parte das vendas não foi lida — confira o arquivo antes de confiar nos totais.`
+            );
+          }
+        }
         if (vendasCanceladasIgnoradas > 0) {
           erros.push(
             `${vendasCanceladasIgnoradas} venda(s) com situação "Cancelado" foram ignoradas (não contam como compra).`
