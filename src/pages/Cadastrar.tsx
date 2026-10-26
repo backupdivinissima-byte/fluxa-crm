@@ -1,3 +1,4 @@
+import { consultarCnpj } from '../lib/prospectData';
 import { useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -125,6 +126,8 @@ export default function Cadastrar() {
   const [whatsapp, setWhatsapp] = useState('');
   const [tipoDocumento, setTipoDocumento] = useState<'cnpj' | 'cpf'>('cnpj');
   const [documento, setDocumento] = useState('');
+  const [buscandoCnpj, setBuscandoCnpj] = useState(false);
+  const [avisoCnpj, setAvisoCnpj] = useState<{ ok: boolean; texto: string } | null>(null);
   const [segmento, setSegmento] = useState('');
   const [atividadePrincipal, setAtividadePrincipal] = useState('');
   const [sobreEmpresa, setSobreEmpresa] = useState('');
@@ -133,6 +136,24 @@ export default function Cadastrar() {
   const [aceitaTermos, setAceitaTermos] = useState(false);
   const [erro, setErro] = useState('');
   const [carregando, setCarregando] = useState(false);
+
+  async function buscarCnpj() {
+    setAvisoCnpj(null);
+    setBuscandoCnpj(true);
+    try {
+      const r = await consultarCnpj(documento);
+      const nome = r.fantasia || r.razao;
+      if (nome && !nomeEmpresa.trim()) setNomeEmpresa(nome);
+      const tel = (r.telefone ?? '').replace(/\D/g, '');
+      if (tel.length >= 10 && !whatsapp.trim()) setWhatsapp(formatarWhatsapp(tel));
+      if (r.cnae && !atividadePrincipal.trim()) setAtividadePrincipal(r.cnae);
+      setAvisoCnpj({ ok: true, texto: `Encontrado: ${r.razao ?? nome}${r.situacao ? ' · ' + r.situacao : ''}${r.municipio ? ' · ' + r.municipio + '/' + (r.uf ?? '') : ''}. Confira os campos abaixo.` });
+    } catch (e) {
+      setAvisoCnpj({ ok: false, texto: e instanceof Error ? e.message : 'Não consegui consultar agora.' });
+    } finally {
+      setBuscandoCnpj(false);
+    }
+  }
 
   function trocarTipoDocumento(tipo: 'cnpj' | 'cpf') {
     setTipoDocumento(tipo);
@@ -399,9 +420,35 @@ export default function Cadastrar() {
               onChange={(e) =>
                 setDocumento(tipoDocumento === 'cnpj' ? formatarCnpj(e.target.value) : formatarCpf(e.target.value))
               }
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && tipoDocumento === 'cnpj') {
+                  e.preventDefault();
+                  void buscarCnpj();
+                }
+              }}
               className="w-full rounded-xl border border-line px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500"
             />
+            {tipoDocumento === 'cnpj' && (
+              <button
+                type="button"
+                onClick={() => void buscarCnpj()}
+                disabled={buscandoCnpj || documento.replace(/\D/g, '').length !== 14}
+                title="Buscar os dados da empresa pelo CNPJ"
+                aria-label="Buscar dados pelo CNPJ"
+                className="shrink-0 w-11 rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white flex items-center justify-center disabled:opacity-40"
+              >
+                {buscandoCnpj ? (
+                  <span className="text-xs font-bold">…</span>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                    <circle cx="10.5" cy="10.5" r="6.5" />
+                    <path d="M15.5 15.5L21 21" />
+                  </svg>
+                )}
+              </button>
+            )}
           </div>
+          {avisoCnpj && <p className={`text-[11px] mt-1.5 ${avisoCnpj.ok ? 'text-emerald-700' : 'text-red-600'}`}>{avisoCnpj.texto}</p>}
         </div>
 
         <div>

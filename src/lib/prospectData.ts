@@ -18,7 +18,7 @@ export interface Lead {
   aberto?: boolean; // funcionando
   tipos?: string[];
   cnpj?: string;
-  receita?: { razao?: string; fantasia?: string; situacao?: string; cnae?: string; porte?: string; abertura?: string; municipio?: string; uf?: string };
+  receita?: { razao?: string; fantasia?: string; situacao?: string; cnae?: string; porte?: string; abertura?: string; municipio?: string; uf?: string; telefone?: string; email?: string };
   nota: number; // 0–100
   motivos: string[];
   status: StatusLead;
@@ -147,5 +147,7 @@ export async function consultarCnpj(cnpj: string): Promise<NonNullable<Lead['rec
     abertura: j.data_inicio_atividade as string | undefined,
     municipio: j.municipio as string | undefined,
     uf: j.uf as string | undefined,
+    telefone: j.ddd_telefone_1 as string | undefined,
+    email: j.email as string | undefined,
   };
 }
