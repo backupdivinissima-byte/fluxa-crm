@@ -248,7 +248,7 @@ export default function Agenda() {
   const maxDia = Math.max(1, ...celulas.map((d) => (d ? (porDia.get(d)?.length ?? 0) : 0)));
 
   return (
-    <div className="p-5 max-w-[1400px] mx-auto">
+    <div className="p-4 w-full">
       <div className="flex items-center gap-3 flex-wrap mb-4">
         <h1 className="text-xl font-extrabold text-ink">Agenda</h1>
         <span className="text-xs text-ink-soft">Seg–Qui 09h–18h · Sex 09h–17h · almoço 12h–13h</span>
@@ -279,7 +279,7 @@ export default function Agenda() {
         </div>
       )}
 
-      <div className="grid lg:grid-cols-[420px_1fr] gap-4">
+      <div className="grid lg:grid-cols-[380px_minmax(0,1fr)] gap-4">
         {/* Coluna esquerda: dash + calendário */}
         <div className="space-y-4 self-start">
         {/* Dash */}
