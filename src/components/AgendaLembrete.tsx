@@ -15,6 +15,8 @@ export default function AgendaLembrete() {
   const [resultado, setResultado] = useState('');
   const [concluindo, setConcluindo] = useState(false);
   const tocado = useRef<string>('');
+  // Lembrete recolhido (ao abrir o chat) — vira uma barrinha no canto até o vendedor concluir ou voltar a ele.
+  const [recolhidos, setRecolhidos] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!empresaId || !login) return;
@@ -51,6 +53,21 @@ export default function AgendaLembrete() {
   }, [devido]);
 
   if (!devido || !empresaId) return null;
+  const chaveRec = devido.id + devido.lembreteEm;
+  if (recolhidos.has(chaveRec)) {
+    return (
+      <div className="fixed bottom-4 right-4 z-[70] bg-white border-2 border-teal-500 rounded-2xl shadow-2xl p-3 max-w-xs">
+        <div className="text-xs font-extrabold text-teal-600">⏰ Contato pendente</div>
+        <div className="text-sm font-bold text-ink truncate">{devido.clienteNome}</div>
+        <button
+          onClick={() => setRecolhidos((r) => { const n = new Set(r); n.delete(chaveRec); return n; })}
+          className="mt-2 w-full rounded-lg bg-gradient-to-br from-teal-500 to-blue-600 text-white text-xs font-bold py-1.5"
+        >
+          Voltar ao lembrete (concluir / adiar)
+        </button>
+      </div>
+    );
+  }
 
   async function adiar() {
     if (!devido || !empresaId) return;
@@ -87,7 +104,7 @@ export default function AgendaLembrete() {
             <div className="space-y-2 pt-2">
               <div className="flex gap-2">
                 {devido.telefone && (
-                  <button onClick={() => navigate(`/chat?tel=${encodeURIComponent(devido.telefone!.replace(/\D/g, ''))}&nome=${encodeURIComponent(devido.clienteNome)}`)} className="flex-1 rounded-xl border border-teal-500 text-teal-600 text-sm font-bold py-2">Abrir no chat</button>
+                  <button onClick={() => { setRecolhidos((r) => new Set(r).add(chaveRec)); navigate(`/chat?tel=${encodeURIComponent(devido.telefone!.replace(/\D/g, ''))}&nome=${encodeURIComponent(devido.clienteNome)}`); }} className="flex-1 rounded-xl border border-teal-500 text-teal-600 text-sm font-bold py-2">Abrir no chat</button>
                 )}
                 <button onClick={() => setConcluindo(true)} className="flex-1 rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold py-2">Concluir</button>
               </div>
