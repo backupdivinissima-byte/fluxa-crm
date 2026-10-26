@@ -168,10 +168,11 @@ export default function Agenda() {
   }
 
   function prepararRodizio() {
+    if (!ehAdmin) return; // rodízio é só do administrador
     setPlano(planejarRodizio(clientes, vendedores, agenda, diasInatividade, diasRodizio, nomeAtual));
   }
   async function confirmarRodizio() {
-    if (!empresaId || !plano || plano.itens.length === 0) return;
+    if (!ehAdmin || !empresaId || !plano || plano.itens.length === 0) return;
     const p = plano;
     setPlano(null); // fecha a tela na hora; o resultado aparece na faixa de aviso
     setAviso({ ok: true, texto: `⏳ Criando ${p.itens.length} agendamentos…` });
