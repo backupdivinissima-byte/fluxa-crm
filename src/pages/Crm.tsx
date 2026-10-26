@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { ouvirAgenda, type Agendamento } from '../lib/agendaData';
+import { tocarCampainhaVenda } from '../lib/campainha';
 import {
   ouvirClientes,
   ouvirVendedores,
@@ -89,6 +90,9 @@ export default function Crm() {
   const [diasInatividade, setDiasInatividade] = useState<number>(empresa?.diasInatividade ?? DIAS_INATIVIDADE_PADRAO);
 
   const migrouFunil = useRef(false);
+  // Campainha de venda concluída: toca quando um cliente ENTRA numa coluna de fechamento (em tempo real, para todos que estão no CRM).
+  const colunaAnterior = useRef<Map<string, string | undefined> | null>(null);
+  const [avisoVenda, setAvisoVenda] = useState<string | null>(null);
   // Clientes que estão no rodízio de inativos (agendamento pendente) e com qual vendedor.
   const [agendaRodizio, setAgendaRodizio] = useState<Agendamento[]>([]);
   const rodizioPorCliente = useMemo(() => {
@@ -149,6 +153,21 @@ export default function Crm() {
     }
     return mapa;
   }, [clientes, colunas, diasInatividade, ehAdmin, loginAtual, nomeAtual]);
+
+  useEffect(() => {
+    const fechamentos = new Set(colunas.filter((c) => c.fechamento).map((c) => c.id));
+    const atual = new Map(clientes.map((c) => [c.id, c.crmColunaId] as const));
+    const anterior = colunaAnterior.current;
+    colunaAnterior.current = atual;
+    if (!anterior || fechamentos.size === 0) return; // primeira leitura: não toca
+    const vendidos = clientes.filter((c) => c.crmColunaId && fechamentos.has(c.crmColunaId) && anterior.has(c.id) && anterior.get(c.id) !== c.crmColunaId);
+    if (vendidos.length === 0) return;
+    tocarCampainhaVenda();
+    const nomes = vendidos.slice(0, 2).map((c) => c.razao ?? c.nome ?? c.cod).join(', ');
+    setAvisoVenda(`💰 Venda concluída: ${nomes}${vendidos.length > 2 ? ` e mais ${vendidos.length - 2}` : ''}`);
+    const t = setTimeout(() => setAvisoVenda(null), 6000);
+    return () => clearTimeout(t);
+  }, [clientes, colunas]);
 
   const totalEmpresa = useMemo(() => clientes.reduce((s, c) => s + valorCliente(c), 0) || 1, [clientes]);
 
@@ -476,6 +495,9 @@ export default function Crm() {
 
   return (
     <div className="p-6 w-full">
+      {avisoVenda && (
+        <div className="fixed top-16 right-5 z-[60] rounded-xl bg-emerald-600 text-white text-sm font-bold px-4 py-3 shadow-xl">{avisoVenda}</div>
+      )}
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <h1 className="text-base font-extrabold text-ink flex items-center gap-2">
           <IconCrm /> CRM — Funil de vendas
