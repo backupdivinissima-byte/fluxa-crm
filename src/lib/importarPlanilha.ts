@@ -214,6 +214,28 @@ export interface LeituraPlanilha {
   clientesIgnorados: number;
   vendedoresIgnorados: number;
   erros: string[];
+  /** Período do relatório (cabeçalho "DD/MM/AAAA à DD/MM/AAAA"), em ISO. */
+  periodo?: { ini: string; fim: string };
+}
+
+/** Lê o período do cabeçalho do relatório. */
+function lerPeriodoDoTexto(texto: string): { ini: string; fim: string } | undefined {
+  const m = /(\d{2})\/(\d{2})\/(\d{4})\s*(?:à|a|até|-)\s*(\d{2})\/(\d{2})\/(\d{4})/i.exec(texto.replace(/<[^>]*>/g, ' ').replace(/&agrave;|&#224;/gi, 'à'));
+  if (!m) return undefined;
+  return { ini: `${m[3]}-${m[2]}-${m[1]}`, fim: `${m[6]}-${m[5]}-${m[4]}` };
+}
+
+/** O mês (AAAA-MM) está INTEIRO dentro do período do arquivo? Só nesse caso o arquivo pode substituir o mês. */
+function periodoCobreMes(periodo: { ini: string; fim: string } | undefined, mes: string): boolean {
+  if (!periodo) return false;
+  const [a, m] = mes.split('-').map(Number);
+  const primeiro = `${mes}-01`;
+  const ultimoDia = new Date(a, m, 0).getDate();
+  const ultimo = `${mes}-${String(ultimoDia).padStart(2, '0')}`;
+  const hoje = new Date();
+  const hojeISO = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
+  const fimNecessario = ultimo > hojeISO ? hojeISO.slice(0, 8) + '01' : ultimo; // mês corrente: basta começar no dia 1
+  return periodo.ini <= primeiro && periodo.fim >= fimNecessario;
 }
 
 /** Remove acento e caixa alta/baixa pra comparar cabeçalhos de forma
@@ -913,7 +935,7 @@ export async function lerPlanilha(arquivo: File): Promise<LeituraPlanilha> {
         if (clientes.length === 0) {
           erros.push('Não encontrei nenhum cliente com venda válida nesse relatório.');
         }
-        return { clientes, vendedores: [], clientesIgnorados: 0, vendedoresIgnorados: 0, erros };
+        return { clientes, vendedores: [], clientesIgnorados: 0, vendedoresIgnorados: 0, erros, periodo: lerPeriodoDoTexto(textoCompleto) };
       }
       if (maiorTabela) {
         // HTML de outro formato de relatório (não bate com a assinatura do
@@ -1113,6 +1135,7 @@ export async function salvarPorArquivo(
   const escalaresPorCod = new Map<string, EscalaresCliente>();
   const origensPorCod = new Map<string, Record<string, OrigemContribuicao>>();
   const ordemCod: string[] = [];
+  const parciais = new Set<string>();
 
   const acumuladoVendedores = new Map<string, Omit<Vendedor, 'id' | 'ativo'>>();
   const ordemLogin: string[] = [];
@@ -1150,6 +1173,9 @@ export async function salvarPorArquivo(
       // em `leitura.clientes` — é seguro só atribuir (não somar) aqui.
       if (c.meses && Object.keys(c.meses).length > 0) {
         for (const [mes, m] of Object.entries(c.meses)) {
+          // Mês só parcialmente coberto pelo período do arquivo (ex.: relatório de Agosto com algumas vendas de Setembro):
+          // guarda separado e só grava se o cliente ainda não tiver aquele mês (ver bloco abaixo).
+          if (leitura.periodo && !periodoCobreMes(leitura.periodo, mes)) parciais.add(`${c.cod}|${mes}`);
           origens[chaveOrigemPorMes(mes)] = {
             porVendedor: m.porVendedor.map((x) => ({ ...x, valor: Math.round(x.valor * 100) / 100, ...(x.liquido !== undefined ? { liquido: Math.round(x.liquido * 100) / 100 } : {}) })),
             totalGeral: Math.round(m.totalGeral * 100) / 100,
@@ -1201,7 +1227,14 @@ export async function salvarPorArquivo(
         const ref = doc(clientesCol(empresaId), idSeguro(cod));
         const snap = await getDoc(ref);
         const origensExistentes = (snap.exists() ? (snap.data() as Cliente).origensImportacao : undefined) ?? {};
-        const origensNovas = origensPorCod.get(cod) ?? {};
+        const origensNovasTodas = origensPorCod.get(cod) ?? {};
+        // Mês não coberto por inteiro pelo arquivo NÃO substitui o que já existe (só preenche se estiver vazio).
+        const origensNovas = Object.fromEntries(
+          Object.entries(origensNovasTodas).filter(([k]) => {
+            const mes = /^mes-(\d{4}-\d{2})$/.exec(k)?.[1];
+            return !mes || !parciais.has(`${cod}|${mes}`) || !origensExistentes[k];
+          })
+        );
         // Regra: a última importação de um MÊS substitui tudo do mesmo mês; um mês nunca mexe em outro.
         // Origens antigas (chave por nome de arquivo) cuja data cai num mês coberto por este arquivo também saem.
         const mesesNovos = new Set(Object.keys(origensNovas).map((k) => /^mes-(\d{4}-\d{2})$/.exec(k)?.[1]).filter(Boolean) as string[]);
@@ -1227,7 +1260,11 @@ export async function salvarPorArquivo(
   // Reimportar um mês SUBSTITUI o mês inteiro: cliente que tinha venda naquele mês e NÃO está mais no arquivo
   // (venda cancelada, corrigida ou trocada de cliente no ERP) perde a contribuição antiga daquele mês.
   const mesesDoArquivo = new Set<string>();
-  for (const origens of origensPorCod.values()) for (const k of Object.keys(origens)) if (/^mes-\d{4}-\d{2}$/.test(k)) mesesDoArquivo.add(k);
+  for (const origens of origensPorCod.values()) for (const k of Object.keys(origens)) {
+    const mes = /^mes-(\d{4}-\d{2})$/.exec(k)?.[1];
+    // Só limpa o mês nos clientes ausentes se algum arquivo cobre o mês inteiro.
+    if (mes && porArquivo.some((a) => periodoCobreMes(a.leitura.periodo, mes))) mesesDoArquivo.add(k);
+  }
   if (mesesDoArquivo.size > 0) {
     const todos = await getDocs(clientesCol(empresaId));
     const codsNoArquivo = new Set(ordemCod.map((c) => idSeguro(c)));
