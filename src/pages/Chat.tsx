@@ -334,6 +334,7 @@ export default function Chat() {
   const [transferindo, setTransferindo] = useState(false);
   const [novoContato, setNovoContato] = useState<{ nome: string; telefone: string } | null>(null);
   const [anexo, setAnexo] = useState<{ arquivo: File | Blob; nome: string; previa?: string } | null>(null);
+  const [maisAnexos, setMaisAnexos] = useState<Array<{ arquivo: File | Blob; nome: string; previa?: string }>>([]);
   const [enviandoAnexo, setEnviandoAnexo] = useState(false);
   const arquivoRef = useRef<HTMLInputElement>(null);
   const [telContato, setTelContato] = useState('');
@@ -500,6 +501,7 @@ export default function Chat() {
     setTelContato(aberta?.telefone ?? '');
     setEditando(false);
     setAnexo(null);
+    setMaisAnexos([]);
     setTransferindo(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [abertaId]);
@@ -699,7 +701,10 @@ export default function Chat() {
       setErro('Arquivo grande demais (limite de 20 MB).');
       return;
     }
-    setAnexo({ arquivo, nome, previa: arquivo.type.startsWith('image/') ? URL.createObjectURL(arquivo) : undefined });
+    const novo = { arquivo, nome, previa: arquivo.type.startsWith('image/') ? URL.createObjectURL(arquivo) : undefined };
+    // Já tem um anexo escolhido: os próximos entram na fila (vários de uma vez).
+    if (anexo) setMaisAnexos((l) => (l.length < 19 ? [...l, novo] : l));
+    else setAnexo(novo);
   }
 
   // Print colado (Ctrl+V) ou imagem copiada: vira anexo para confirmar.
@@ -717,8 +722,11 @@ export default function Chat() {
     setErro('');
     setEnviandoAnexo(true);
     try {
+      // O primeiro leva a legenda; os demais seguem em sequência, na ordem escolhida.
       await enviarAnexoChat(empresaId, aberta, anexo.arquivo, anexo.nome, texto.trim(), meuNome);
+      for (const extra of maisAnexos) await enviarAnexoChat(empresaId, aberta, extra.arquivo, extra.nome, '', meuNome);
       setAnexo(null);
+      setMaisAnexos([]);
       setTexto('');
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Não foi possível enviar o anexo.');
@@ -1410,19 +1418,35 @@ export default function Chat() {
                           <div className="font-bold text-ink truncate">{anexo.nome}</div>
                           <div className="text-ink-soft">Escreva uma legenda (opcional) e clique em enviar.</div>
                         </div>
-                        <button type="button" onClick={() => setAnexo(null)} className="text-xs font-bold text-ink-soft hover:text-red-600">
-                          Remover
+                        <button type="button" onClick={() => { setAnexo(null); setMaisAnexos([]); }} className="text-xs font-bold text-ink-soft hover:text-red-600">
+                          {maisAnexos.length > 0 ? 'Remover todos' : 'Remover'}
                         </button>
+                      </div>
+                    )}
+                    {anexo && maisAnexos.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2">
+                        <span className="text-xs font-bold text-ink">+{maisAnexos.length} arquivo(s) — {maisAnexos.length + 1} no total:</span>
+                        {maisAnexos.map((x, i) => (
+                          <span key={i} className="relative">
+                            {x.previa ? <img src={x.previa} alt={x.nome} className="h-12 w-12 rounded object-cover" /> : <span className="inline-flex h-12 w-12 items-center justify-center rounded bg-white text-xl" title={x.nome}>📎</span>}
+                            <button type="button" onClick={() => setMaisAnexos((l) => l.filter((_, j) => j !== i))} className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-red-500 text-white text-[10px] leading-4 font-bold" title="Tirar este arquivo">×</button>
+                          </span>
+                        ))}
                       </div>
                     )}
                     <input
                       ref={arquivoRef}
                       type="file"
                       accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
+                      multiple
                       className="hidden"
                       onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) escolherAnexo(f, f.name);
+                        const lista = Array.from(e.target.files ?? []);
+                        // escolherAnexo usa o estado atual: o 1º vira o anexo principal, os demais entram na fila.
+                        lista.forEach((f, i) => {
+                          if (i === 0) escolherAnexo(f, f.name);
+                          else if (f.size <= 20_000_000) setMaisAnexos((l) => (l.length < 19 ? [...l, { arquivo: f, nome: f.name, previa: f.type.startsWith('image/') ? URL.createObjectURL(f) : undefined }] : l));
+                        });
                         e.target.value = '';
                       }}
                     />
