@@ -775,6 +775,12 @@ export default function Chat() {
 
   return (
     <div className={`${souAdmin ? 'py-6' : 'py-3'} pr-6 pl-2 w-full space-y-3`}>
+      {erroAbrir && (
+        <div className="rounded-xl border border-red-300 bg-red-50 text-red-700 text-sm font-semibold px-4 py-3 flex items-start gap-3">
+          <span className="flex-1">❌ {erroAbrir}</span>
+          <button onClick={() => setErroAbrir('')} className="font-bold">×</button>
+        </div>
+      )}
       {!souAdmin && (
         <h1 className="text-base font-extrabold text-ink flex items-center gap-2">
           <IconChat /> Fluxa Chat
