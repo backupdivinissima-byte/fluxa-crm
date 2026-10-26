@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ouvirClientes, ouvirEmpresa, ouvirVendedores } from '../lib/crmData';
-import { ouvirTodasConversas } from '../lib/chatData';
+import { corrigirNonoDigito, ouvirTodasConversas } from '../lib/chatData';
 import {
   atualizarAgendamento,
   criarAgendamentos,
@@ -104,7 +104,7 @@ export default function Agenda() {
     return cands.sort((a, b) => (b.ultimaEm ?? '').localeCompare(a.ultimaEm ?? ''))[0];
   }
   function abrirChat(telefone?: string, nome?: string) {
-    navigate(`/chat?tel=${encodeURIComponent((telefone ?? '').replace(/\D/g, ''))}${nome ? `&nome=${encodeURIComponent(nome)}` : ''}`);
+    navigate(`/chat?tel=${encodeURIComponent(corrigirNonoDigito(telefone ?? ''))}${nome ? `&nome=${encodeURIComponent(nome)}` : ''}`);
   }
 
   const resultados = useMemo(() => {

@@ -309,6 +309,7 @@ export default function Chat() {
   const [params] = useSearchParams();
   const telParam = params.get('tel');
   const telAbertoRef = useRef<string | null>(null);
+  const [erroAbrir, setErroAbrir] = useState('');
   const [mensagens, setMensagens] = useState<MensagemChat[]>([]);
   const [texto, setTexto] = useState('');
   const [sugSup, setSugSup] = useState<SugestaoSupervisora | null>(null);
@@ -377,7 +378,9 @@ export default function Chat() {
         const conv = await criarContatoChat(empresaId, params.get('nome') || telParam, telParam);
         setAbertaId(conv.id);
       } catch (e) {
-        setErro('Não consegui abrir a conversa deste cliente: ' + (e instanceof Error ? e.message : String(e)));
+        const msg = 'Não consegui abrir a conversa deste cliente: ' + (e instanceof Error ? e.message : String(e));
+        setErro(msg);
+        setErroAbrir(msg);
       }
     }, 3000);
     return () => clearTimeout(t);

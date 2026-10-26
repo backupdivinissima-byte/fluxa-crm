@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { corrigirNonoDigito } from '../lib/chatData';
 import { atualizarAgendamento, ouvirAgenda, type Agendamento } from '../lib/agendaData';
 
 /** Lembrete estilo Outlook: abre na hora marcada. O vendedor pode adiar UMA vez (5, 10 ou 15 min, no máximo 15). */
@@ -104,7 +105,7 @@ export default function AgendaLembrete() {
             <div className="space-y-2 pt-2">
               <div className="flex gap-2">
                 {devido.telefone && (
-                  <button onClick={() => { setRecolhidos((r) => new Set(r).add(chaveRec)); navigate(`/chat?tel=${encodeURIComponent(devido.telefone!.replace(/\D/g, ''))}&nome=${encodeURIComponent(devido.clienteNome)}`); }} className="flex-1 rounded-xl border border-teal-500 text-teal-600 text-sm font-bold py-2">Abrir no chat</button>
+                  <button onClick={() => { setRecolhidos((r) => new Set(r).add(chaveRec)); navigate(`/chat?tel=${encodeURIComponent(corrigirNonoDigito(devido.telefone!))}&nome=${encodeURIComponent(devido.clienteNome)}`); }} className="flex-1 rounded-xl border border-teal-500 text-teal-600 text-sm font-bold py-2">Abrir no chat</button>
                 )}
                 <button onClick={() => setConcluindo(true)} className="flex-1 rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold py-2">Concluir</button>
               </div>
