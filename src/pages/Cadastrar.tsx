@@ -127,6 +127,7 @@ export default function Cadastrar() {
   const [documento, setDocumento] = useState('');
   const [segmento, setSegmento] = useState('');
   const [atividadePrincipal, setAtividadePrincipal] = useState('');
+  const [sobreEmpresa, setSobreEmpresa] = useState('');
   const [senha, setSenha] = useState('');
   const [confirmarSenha, setConfirmarSenha] = useState('');
   const [aceitaTermos, setAceitaTermos] = useState(false);
@@ -145,6 +146,10 @@ export default function Cadastrar() {
       setErro('As senhas não coincidem. Confira e tente de novo.');
       return;
     }
+    if (sobreEmpresa.trim().length < 40) {
+      setErro('Conte um pouco mais sobre a sua empresa (o que faz, o que vende e com quem atua) — pelo menos uma ou duas frases.');
+      return;
+    }
     if (!aceitaTermos) {
       setErro('Você precisa aceitar os termos e políticas de serviço pra continuar.');
       return;
@@ -159,6 +164,7 @@ export default function Cadastrar() {
         whatsapp,
         segmento,
         atividadePrincipal,
+        sobreEmpresa,
         produto: plataforma ?? 'crm',
         ...(documento ? { documento, documentoTipo: tipoDocumento } : {}),
       });
@@ -428,6 +434,23 @@ export default function Cadastrar() {
             onChange={(e) => setAtividadePrincipal(e.target.value)}
             className="w-full rounded-xl border border-line px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500"
           />
+        </div>
+
+        <div>
+          <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1.5">
+            Conte um resumo sobre a sua empresa
+          </label>
+          <textarea
+            required
+            rows={4}
+            minLength={40}
+            maxLength={1200}
+            placeholder="Ex: Somos a Divinissima, uma loja de semijoias folheadas que vende no atacado e no varejo, por WhatsApp e Instagram, para lojistas e revendedoras de todo o Brasil."
+            value={sobreEmpresa}
+            onChange={(e) => setSobreEmpresa(e.target.value)}
+            className="w-full rounded-xl border border-line px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500"
+          />
+          <p className="text-[11px] text-ink-soft mt-1">O que a empresa faz, o que vende e com quem atua. O robô de atendimento usa isso para saber quem você é.</p>
         </div>
 
         <CampoSenha

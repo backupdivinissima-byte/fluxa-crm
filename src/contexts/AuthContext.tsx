@@ -28,6 +28,7 @@ export interface DadosCadastro {
   whatsapp: string;
   segmento: string;
   atividadePrincipal: string;
+  sobreEmpresa: string; // resumo da empresa (o que faz, o que vende, com quem atua)
   documento?: string; // CNPJ ou CPF, opcional
   documentoTipo?: 'cnpj' | 'cpf';
   // Qual produto Fluxa a pessoa escolheu na etapa 1 do cadastro (ver
@@ -242,6 +243,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       whatsapp: dados.whatsapp,
       segmento: dados.segmento,
       atividadePrincipal: dados.atividadePrincipal,
+      sobreEmpresa: dados.sobreEmpresa.trim(),
       ...(dados.documento ? { cnpj: dados.documento, documentoTipo: dados.documentoTipo } : {}),
       criadoEm: new Date().toISOString(),
       plano: 'trial',

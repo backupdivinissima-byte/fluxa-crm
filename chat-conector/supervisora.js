@@ -14,6 +14,25 @@ const MAX_MSGS = 24;
 
 export function criarSupervisora({ base, agora }) {
   const ligada = !!CHAVE || !!CHAVE_GEMINI;
+  // Contexto da empresa (nome + resumo do cadastro): cada empresa tem o seu, a base de vendas é a mesma.
+  let ctxEmpresa = { em: 0, texto: '' };
+  async function sistema() {
+    if (Date.now() - ctxEmpresa.em > 600000) {
+      try {
+        const e = (await base.get()).data() ?? {};
+        const linhas = [
+          e.nome && `Nome da empresa: ${e.nome}`,
+          e.segmento && `Segmento: ${e.segmento}`,
+          e.atividadePrincipal && `Atividade principal: ${e.atividadePrincipal}`,
+          e.sobreEmpresa && `Resumo escrito pelo dono: ${e.sobreEmpresa}`,
+        ].filter(Boolean);
+        ctxEmpresa = { em: Date.now(), texto: linhas.length ? `\n\n## Sobre ESTA empresa (vale mais que qualquer exemplo acima)\n${linhas.join('\n')}\nAdapte o tom, os produtos e os exemplos a esta empresa; se ela não vende semijoias, ignore as referências a semijoias.\n` : '' };
+      } catch {
+        /* usa o último contexto conhecido */
+      }
+    }
+    return BASE_SUPERVISORA + ctxEmpresa.texto;
+  }
   const timers = new Map();
   const emAnalise = new Set();
 
@@ -32,7 +51,7 @@ export function criarSupervisora({ base, agora }) {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-goog-api-key': CHAVE_GEMINI },
       body: JSON.stringify({
-        systemInstruction: { parts: [{ text: BASE_SUPERVISORA }] },
+        systemInstruction: { parts: [{ text: await sistema() }] },
         contents: [{ role: 'user', parts: [{ text: contexto }] }],
         generationConfig: { maxOutputTokens: 900, responseMimeType: 'application/json' },
       }),
@@ -63,7 +82,7 @@ export function criarSupervisora({ base, agora }) {
       body: JSON.stringify({
         model: MODELO,
         max_tokens: 900,
-        system: [{ type: 'text', text: BASE_SUPERVISORA, cache_control: { type: 'ephemeral' } }],
+        system: [{ type: 'text', text: await sistema(), cache_control: { type: 'ephemeral' } }],
         messages: [{ role: 'user', content: contexto }],
       }),
       signal: AbortSignal.timeout(45000),

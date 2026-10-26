@@ -10,6 +10,7 @@ export interface Empresa {
   whatsapp?: string;
   segmento?: string; // segmento de trabalho (ex.: Varejo, E-commerce...)
   atividadePrincipal?: string; // atividade principal da empresa, em texto livre
+  sobreEmpresa?: string; // resumo escrito pelo dono no cadastro: o que a empresa faz/vende e com quem atua (o robô e a IA leem)
   criadoEm: string; // ISO date
   plano: 'trial' | 'starter' | 'pro';
   // Qual produto Fluxa a empresa escolheu testar no cadastro (hoje só 'crm'
