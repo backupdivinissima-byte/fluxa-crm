@@ -21,6 +21,30 @@ export default function ConferirMes({ empresaId }: { empresaId: string }) {
   const [mes, setMes] = useState('');
   const [resumo, setResumo] = useState<Resumo | null>(null);
   const [carregando, setCarregando] = useState(false);
+  const [meses, setMeses] = useState<Array<{ mes: string; total: number; clientes: number; pedidos: number; antigos: number }> | null>(null);
+
+  function verTodos() {
+    setCarregando(true);
+    let unsub: (() => void) | undefined;
+    unsub = ouvirClientes(empresaId, (clientes) => {
+      const mapa = new Map<string, { mes: string; total: number; clientes: number; pedidos: number; antigos: number }>();
+      for (const c of clientes) {
+        for (const [k, o] of Object.entries(c.origensImportacao ?? {})) {
+          const m = /^mes-(\d{4}-\d{2})$/.exec(k);
+          if (!m) continue;
+          const a = mapa.get(m[1]) ?? { mes: m[1], total: 0, clientes: 0, pedidos: 0, antigos: 0 };
+          a.total += o.totalGeral ?? 0;
+          a.clientes++;
+          if (o.pedidos === undefined) a.antigos++;
+          else a.pedidos += o.pedidos;
+          mapa.set(m[1], a);
+        }
+      }
+      setMeses([...mapa.values()].sort((a, b) => a.mes.localeCompare(b.mes)));
+      setCarregando(false);
+      unsub?.();
+    });
+  }
 
   function conferir() {
     if (!/^\d{4}-\d{2}$/.test(mes)) return;
@@ -76,7 +100,39 @@ export default function ConferirMes({ empresaId }: { empresaId: string }) {
         >
           {carregando ? 'Lendo...' : 'Conferir'}
         </button>
+        <button type="button" onClick={verTodos} disabled={carregando} className="rounded-xl border border-line text-ink text-sm font-bold px-4 py-2 disabled:opacity-40">
+          Ver todos os meses
+        </button>
       </div>
+      {meses && (
+        <table className="mb-4 text-xs w-full max-w-xl">
+          <thead>
+            <tr className="text-left text-ink-soft">
+              <th className="py-1">Mês</th>
+              <th className="py-1 text-right">Total gravado</th>
+              <th className="py-1 text-right">Clientes</th>
+              <th className="py-1 text-right">Pedidos</th>
+              <th className="py-1 text-right">Formato antigo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {meses.map((m) => (
+              <tr key={m.mes} className="border-t border-line">
+                <td className="py-1">{m.mes.slice(5)}/{m.mes.slice(0, 4)}</td>
+                <td className="py-1 text-right tabular-nums">{formatarMoeda(m.total)}</td>
+                <td className="py-1 text-right tabular-nums">{m.clientes}</td>
+                <td className="py-1 text-right tabular-nums">{m.pedidos}</td>
+                <td className="py-1 text-right tabular-nums" style={{ color: m.antigos > 0 ? '#C0392B' : undefined }}>{m.antigos > 0 ? `${m.antigos} (reimportar)` : '—'}</td>
+              </tr>
+            ))}
+            <tr className="border-t border-line font-bold">
+              <td className="py-1">Soma</td>
+              <td className="py-1 text-right tabular-nums">{formatarMoeda(meses.reduce((a, m) => a + m.total, 0))}</td>
+              <td colSpan={3} />
+            </tr>
+          </tbody>
+        </table>
+      )}
       {resumo && (
         <div className="text-xs text-ink space-y-1">
           <p>
