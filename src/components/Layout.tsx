@@ -2,6 +2,7 @@ import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-route
 import { useState } from 'react';
 import { modulosDaEmpresa, moduloDaRota, rotaInicial, type Modulo } from '../lib/modulos';
 import AgendaLembrete from './AgendaLembrete';
+import CelebracaoMeta from './CelebracaoMeta';
 import fluxaIcon from '../assets/fluxa-icon.svg';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -162,6 +163,7 @@ export default function Layout() {
       </header>
 
       {papel === 'vendedor' && <AgendaLembrete />}
+      {papel === 'vendedor' && <CelebracaoMeta />}
 
       {perguntarVinculo && (
         <div className="fixed inset-0 z-50 bg-ink/40 flex items-center justify-center p-4">
