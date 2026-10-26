@@ -546,7 +546,8 @@ export default function Chat() {
   const clienteCrm = aberta
     ? clientes.find((c) => c.id === aberta.clienteId) ?? (aberta.telefone ? acharClientePorTelefone(clientes, aberta.telefone) : undefined)
     : undefined;
-  const nomeAgenda = aberta ? aberta.nomeSugerido || aberta.nome || '' : '';
+  // Contato salvo no Fluxa Chat: o nome salvo manda (antes o nome sugerido da agenda/perfil do celular passava na frente e o nome "voltava").
+  const nomeAgenda = aberta ? (aberta.salvo ? aberta.nome || aberta.nomeSugerido : aberta.nomeSugerido || aberta.nome) || '' : '';
   const donaDoAtendimento = aberta?.vendedorLogin && aberta.vendedorLogin !== meuLogin ? aberta.vendedorNome : '';
 
   async function assumir(c: ConversaChat) {

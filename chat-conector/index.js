@@ -173,6 +173,8 @@ async function mesclarConversas(lid, tel) {
     {
       ...a,
       ...b,
+      // Nome confirmado pela equipe nunca é trocado ao juntar conversas.
+      ...((a.salvo || b.salvo) ? { salvo: true, nome: (b.salvo ? b.nome : a.nome) ?? b.nome ?? a.nome } : {}),
       canal: 'whatsapp',
       contato: tel,
       telefone: tel,
@@ -347,7 +349,7 @@ async function importarHistorico(lista) {
           contato: numero,
           ...(jidsHist.get(numero)?.endsWith('@lid') ? {} : { telefone: numero }),
           contatoJid: jidsHist.get(numero),
-          ...(agenda.has(numero) ? { nome: agenda.get(numero), nomeSugerido: agenda.get(numero), salvoNaAgenda: true } : !atual.nome ? { nome: nomePush || numero, ...(nomePush ? { nomeSugerido: nomePush } : {}) } : {}),
+          ...(agenda.has(numero) ? { ...(atual.salvo ? {} : { nome: agenda.get(numero) }), nomeSugerido: agenda.get(numero), salvoNaAgenda: true } : !atual.nome ? { nome: nomePush || numero, ...(nomePush ? { nomeSugerido: nomePush } : {}) } : {}),
           ...(novoUlt ? { ultimaMensagem: textoDe(mais), ultimaEm: quandoUlt, ultimaDe: mais.key.fromMe ? 'equipe' : 'cliente' } : {}),
           ...(msgs.some((m) => m.key.fromMe) ? { teveResposta: true } : {}),
         },
