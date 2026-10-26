@@ -821,7 +821,7 @@ async function enviarSaida(d) {
   processando.add(d.id);
   try {
     if (!aberto || !sock) throw new Error('WhatsApp desconectado');
-    const destino = dado.paraJid || `${dado.para}@s.whatsapp.net`;
+    let destino = dado.paraJid || `${dado.para}@s.whatsapp.net`;
     let enviada;
     let audioBruto; // áudio original gravado no navegador (o robô reconverte em outro formato se precisar)
     let conteudo; // o que foi enviado: o robô usa para reenviar sozinho (texto, áudio, foto, vídeo ou arquivo)
@@ -845,15 +845,32 @@ async function enviarSaida(d) {
       const tel0 = destino.split('@')[0];
       const visto = existeNoWhatsApp.get(tel0);
       let existe = visto && Date.now() - visto.em < 10 * 60 * 1000 ? visto.ok : undefined;
+      let jidReal = visto && Date.now() - visto.em < 10 * 60 * 1000 ? visto.jid : undefined;
       if (existe === undefined) {
         try {
           const r = await sock.onWhatsApp(destino);
-          if (Array.isArray(r) && r.length) existe = r[0]?.exists !== false;
-          else if (Array.isArray(r)) existe = false;
-          if (existe !== undefined) existeNoWhatsApp.set(tel0, { ok: existe, em: Date.now() });
+          if (Array.isArray(r) && r.length) {
+            existe = r[0]?.exists !== false;
+            // O WhatsApp devolve o número REAL cadastrado (ex.: sem o 9 extra em vários DDDs): é para ele que se envia.
+            if (existe && typeof r[0]?.jid === 'string' && r[0].jid.endsWith('@s.whatsapp.net')) jidReal = r[0].jid;
+          } else if (Array.isArray(r)) existe = false;
+          if (existe !== undefined) existeNoWhatsApp.set(tel0, { ok: existe, em: Date.now(), jid: jidReal });
         } catch (err) {
           console.warn('[envio] não consegui consultar o número:', err.message);
         }
+      }
+      if (jidReal && jidReal !== destino) {
+        const tel1 = jidReal.split('@')[0];
+        console.log(`[envio] número ${tel0} corrigido para o cadastrado no WhatsApp: ${tel1}.`);
+        if (dado.conversaId === `whatsapp_${tel0}`) {
+          try {
+            await mesclarConversas(tel0, tel1);
+            dado.conversaId = `whatsapp_${tel1}`;
+          } catch (err) {
+            console.warn('[envio] não consegui juntar a conversa com o número correto:', err.message);
+          }
+        }
+        destino = jidReal;
       }
       console.log(`[envio] para ${tel0}: ${existe === undefined ? 'não consultado' : existe ? 'tem WhatsApp' : 'SEM WhatsApp'}`);
       if (existe === false) throw new Error(`O número +${tel0} não tem WhatsApp. Confira o telefone em "Editar contato".`);
