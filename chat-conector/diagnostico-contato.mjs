@@ -8,7 +8,7 @@ for (const id of [...(process.argv.slice(2))]) {
   const r = base.collection('conversas').doc(id);
   const s = await r.get();
   console.log('==', id, s.exists ? JSON.stringify({ nome: s.data().nome, contato: s.data().contato, jid: s.data().contatoJid, ultimaEm: s.data().ultimaEm, ultimaDe: s.data().ultimaDe }) : 'NAO EXISTE');
-  const m = await r.collection('mensagens').orderBy('em', 'desc').limit(8).get();
+  const m = await r.collection('mensagens').orderBy('em', 'desc').limit(Number(process.env.LIMITE || 8)).get();
   for (const d of m.docs) { const x = d.data(); console.log('  ', x.em, x.de, x.autor ?? '-', x.entrega ?? '-', x.erroEnvio ? 'ERRO' : '', (x.texto || '').length + ' chars'); }
 }
 const q = await base.collection('chatSaida').where('para', '==', process.argv[2].replace('whatsapp_','')).get();
