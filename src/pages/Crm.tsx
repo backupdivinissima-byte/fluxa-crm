@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { ouvirAgenda, type Agendamento } from '../lib/agendaData';
 import {
   ouvirClientes,
   ouvirVendedores,
@@ -88,11 +89,19 @@ export default function Crm() {
   const [diasInatividade, setDiasInatividade] = useState<number>(empresa?.diasInatividade ?? DIAS_INATIVIDADE_PADRAO);
 
   const migrouFunil = useRef(false);
+  // Clientes que estão no rodízio de inativos (agendamento pendente) e com qual vendedor.
+  const [agendaRodizio, setAgendaRodizio] = useState<Agendamento[]>([]);
+  const rodizioPorCliente = useMemo(() => {
+    const m = new Map<string, Agendamento>();
+    for (const a of agendaRodizio) if (a.origem === 'rodizio' && a.status === 'pendente') m.set(a.clienteId, a);
+    return m;
+  }, [agendaRodizio]);
 
   useEffect(() => {
     if (!empresaId) return;
     const unsubC = ouvirClientes(empresaId, setClientes);
     const unsubV = ouvirVendedores(empresaId, setVendedores);
+    const unsubAg = ouvirAgenda(empresaId, undefined, setAgendaRodizio);
     const unsubE = ouvirEmpresa(empresaId, (emp) => {
       setFiltros(emp?.crmFiltros ?? []);
       setColunas(emp?.crmColunas && emp.crmColunas.length > 0 ? emp.crmColunas : CRM_COLUNAS_PADRAO);
@@ -111,6 +120,7 @@ export default function Crm() {
     });
     return () => {
       unsubC();
+      unsubAg();
       unsubV();
       unsubE();
     };
@@ -687,6 +697,12 @@ export default function Crm() {
                           {dias >= 9999 ? 'Sem compra' : `${dias} ${dias === 1 ? 'dia' : 'dias'}`}
                         </span>
                       </div>
+                      {rodizioPorCliente.get(c.id) && (
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <span className="text-ink truncate font-semibold">👤 {rodizioPorCliente.get(c.id)!.vendedorNome}</span>
+                          <span className="shrink-0 rounded-full bg-violet-100 text-violet-700 font-bold px-1.5 py-px text-[10px]">Rodízio</span>
+                        </div>
+                      )}
                       {vend && <div className="text-teal-600 truncate">👤 {vend.nome}</div>}
                     </div>
                   );
