@@ -424,7 +424,7 @@ export default function Agenda() {
                     <div className="w-14 font-extrabold text-ink">{a.hora}</div>
                     <div className={`flex-1 min-w-[220px] ${a.status === 'pendente' ? 'cursor-pointer hover:bg-surface rounded-lg -m-1 p-1' : ''}`} onClick={() => a.status === 'pendente' && abrirParaReagendar(a)} title={a.status === 'pendente' ? 'Clique para anotar e reagendar' : undefined}>
                       <div className="text-sm font-bold text-ink">{a.clienteNome} <span className="text-xs text-ink-soft font-normal">cód. {a.clienteCod}</span></div>
-                      <div className="text-xs text-ink-soft">Vendedor: <b>{a.vendedorNome}</b> · {a.origem === 'rodizio' ? 'rodízio de inativos' : a.origem === 'admin' ? 'agendado pelo admin' : 'agendado pelo vendedor'}</div>
+                      <div className="text-xs text-ink-soft">Vendedor: <b>{a.vendedorNome}</b> · {a.origem === 'rodizio' ? 'rodízio de inativos' : a.origem === 'acompanhamento' ? 'acompanhamento (3 dias)' : a.origem === 'admin' ? 'agendado pelo admin' : 'agendado pelo vendedor'}</div>
                       {a.obs && <div className="text-xs mt-0.5">📝 {a.obs}</div>}
                       {a.resultado && <div className="text-xs mt-0.5 text-emerald-700">✅ {a.resultado}</div>}
                     </div>

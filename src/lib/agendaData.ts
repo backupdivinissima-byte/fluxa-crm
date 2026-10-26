@@ -16,7 +16,7 @@ export interface Agendamento {
   vendedorNome: string;
   obs: string; // observação de quem agendou (o que foi conversado / motivo)
   status: 'pendente' | 'feito';
-  origem: 'vendedor' | 'admin' | 'rodizio';
+  origem: 'vendedor' | 'admin' | 'rodizio' | 'acompanhamento';
   criadoEm: string;
   criadoPor?: string;
   lembreteEm: string; // ISO: quando o lembrete deve abrir
