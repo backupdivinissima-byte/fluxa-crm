@@ -247,6 +247,46 @@ export default function Agenda() {
   const celulas: Array<string | null> = [...Array(primeiro.getDay()).fill(null), ...Array.from({ length: diasNoMes }, (_, i) => `${mesISO}-${String(i + 1).padStart(2, '0')}`)];
   const maxDia = Math.max(1, ...celulas.map((d) => (d ? (porDia.get(d)?.length ?? 0) : 0)));
 
+  const pendentesFuturos = visiveis.filter((a) => a.status === 'pendente' && a.data >= hoje).sort((x, y) => (x.data + x.hora).localeCompare(y.data + y.hora));
+  const listaAtrasados = visiveis.filter((a) => a.status === 'pendente' && a.data < hoje).sort((x, y) => (x.data + x.hora).localeCompare(y.data + y.hora));
+  function itemAgenda(a: Agendamento, comData: boolean) {
+    const cli = clientes.find((x) => x.id === a.clienteId);
+    const dias = cli ? diasSemAtend(cli) : undefined;
+    const st = dias !== undefined ? statusInfo(dias, diasInatividade) : undefined;
+    const cv = cli ? conversaDe(cli) : conversas.find((x) => fim8(x.telefone ?? x.contato) === fim8(a.telefone));
+    const diasConv = cv ? Math.floor((Date.now() - new Date(cv.ultimaEm).getTime()) / 86400000) : 0;
+    const clicavel = a.status === 'pendente';
+    return (
+      <div key={a.id} className="py-2">
+        <div className={clicavel ? 'cursor-pointer hover:bg-surface rounded-lg -m-1 p-1' : ''} onClick={() => clicavel && abrirParaReagendar(a)} title={clicavel ? 'Clique para anotar e reagendar' : undefined}>
+          <div className="flex items-start gap-2">
+            <div className="font-extrabold text-ink text-sm whitespace-nowrap">{comData ? `${formatarDataCurta(a.data).slice(0, 5)} ${a.hora}` : a.hora}</div>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-bold text-ink leading-tight">{a.clienteNome} <span className="text-[11px] text-ink-soft font-normal">cód. {a.clienteCod}</span></div>
+              {ehAdmin && <div className="text-[11px] text-ink-soft">Vendedor: <b>{a.vendedorNome}</b></div>}
+            </div>
+            {a.status === 'feito' && <span className="text-[10px] font-bold rounded-full px-2 py-0.5 bg-emerald-100 text-emerald-700">Feito</span>}
+          </div>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1 text-[11px]">
+            {st && <span className="font-extrabold text-white rounded-full px-1.5 py-0.5 uppercase" style={{ background: st.cor }}>{st.label}</span>}
+            {dias !== undefined && <span className="font-bold" style={{ color: st?.cor }}>{dias >= 9999 ? 'sem compra' : `${dias} dias s/ compra`}</span>}
+            <span className="text-ink-soft">💬 {cv ? `${new Date(cv.ultimaEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })} (${diasConv <= 0 ? 'hoje' : `há ${diasConv}d`})` : 'sem conversa'}</span>
+            <span className="text-ink-soft">· {a.origem === 'rodizio' ? 'rodízio' : a.origem === 'acompanhamento' ? 'acompanhamento' : a.origem === 'admin' ? 'admin' : 'vendedor'}</span>
+          </div>
+          {a.obs && <div className="text-xs mt-0.5">📝 {a.obs}</div>}
+          {a.resultado && <div className="text-xs mt-0.5 text-emerald-700">✅ {a.resultado}</div>}
+        </div>
+        <div className="flex gap-1 mt-1">
+          {a.telefone && <button onClick={() => abrirChat(a.telefone, a.clienteNome)} className="text-xs font-bold border border-line rounded-lg px-2 py-0.5">Chat</button>}
+          {a.status === 'pendente' && <button onClick={() => { setConcluindo(a); setResultado(''); }} className="text-xs font-bold border border-emerald-300 text-emerald-700 rounded-lg px-2 py-0.5">Concluir</button>}
+          {(ehAdmin || a.status === 'pendente') && (
+            <button onClick={() => { if (empresaId && window.confirm('Excluir este agendamento?')) void removerAgendamento(empresaId, a.id); }} className="text-xs font-bold border border-line text-ink-soft rounded-lg px-2 py-0.5">Excluir</button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 w-full">
       <div className="flex items-center gap-3 flex-wrap mb-4">
@@ -279,26 +319,25 @@ export default function Agenda() {
         </div>
       )}
 
-      <div className="grid lg:grid-cols-[380px_minmax(0,1fr)] gap-4">
-        {/* Coluna esquerda: dash + calendário */}
-        <div className="space-y-4 self-start">
-        {/* Dash */}
-        <div className="grid grid-cols-2 gap-3">
-          {[
-            { t: 'Hoje', v: hojeLista.length, s: `${hojeLista.filter((a) => a.status === 'feito').length} feitos` },
-            { t: `${MESES[mes.getMonth()]}`, v: doMes.length, s: `${doMes.filter((a) => a.status === 'feito').length} feitos` },
-            { t: 'Pendentes', v: visiveis.filter((a) => a.status === 'pendente').length, s: 'no total' },
-            { t: 'Atrasados', v: atrasados, s: 'pendentes de dias anteriores' },
-          ].map((c) => (
-            <div key={c.t} className="bg-white border border-line rounded-xl p-3">
-              <div className="text-xs font-bold text-ink-soft uppercase">{c.t}</div>
-              <div className="text-2xl font-extrabold text-ink">{c.v}</div>
-              <div className="text-xs text-ink-soft">{c.s}</div>
-            </div>
-          ))}
+    {/* Dash */}
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+      {[
+        { t: 'Hoje', v: hojeLista.length, s: `${hojeLista.filter((a) => a.status === 'feito').length} feitos` },
+        { t: `${MESES[mes.getMonth()]}`, v: doMes.length, s: `${doMes.filter((a) => a.status === 'feito').length} feitos` },
+        { t: 'Pendentes', v: visiveis.filter((a) => a.status === 'pendente').length, s: 'no total' },
+        { t: 'Atrasados', v: atrasados, s: 'pendentes de dias anteriores' },
+      ].map((c) => (
+        <div key={c.t} className="bg-white border border-line rounded-xl p-3">
+          <div className="text-xs font-bold text-ink-soft uppercase">{c.t}</div>
+          <div className="text-2xl font-extrabold text-ink">{c.v}</div>
+          <div className="text-xs text-ink-soft">{c.s}</div>
         </div>
+      ))}
+    </div>
 
-
+      <div className="grid lg:grid-cols-[340px_minmax(0,1fr)] gap-4">
+        {/* Coluna esquerda: calendário */}
+        <div className="space-y-4 self-start">
         {/* Calendário */}
         <div className="bg-white border border-line rounded-xl p-3">
           <div className="flex items-center justify-between mb-2">
@@ -417,76 +456,21 @@ export default function Agenda() {
             )}
           </div>
 
-          <div className="bg-white border border-line rounded-xl p-4">
-            <h3 className="text-sm font-extrabold text-ink mb-2">Contatos do dia</h3>
-            {doDia.length === 0 ? (
-              <p className="text-sm text-ink-soft">Nenhum agendamento neste dia.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-[11px] uppercase text-ink-soft border-b border-line">
-                      <th className="py-1.5 pr-2">Hora</th>
-                      <th className="py-1.5 pr-2">Cliente</th>
-                      {ehAdmin && <th className="py-1.5 pr-2">Vendedor</th>}
-                      <th className="py-1.5 pr-2">Status</th>
-                      <th className="py-1.5 pr-2">Dias sem compra</th>
-                      <th className="py-1.5 pr-2">Última conversa</th>
-                      <th className="py-1.5 pr-2">Agenda</th>
-                      <th className="py-1.5"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-line">
-                    {doDia.map((a) => {
-                      const cli = clientes.find((x) => x.id === a.clienteId);
-                      const dias = cli ? diasSemAtend(cli) : undefined;
-                      const st = dias !== undefined ? statusInfo(dias, diasInatividade) : undefined;
-                      const cv = cli ? conversaDe(cli) : conversas.find((x) => fim8(x.telefone ?? x.contato) === fim8(a.telefone));
-                      const clicavel = a.status === 'pendente';
-                      const diasConv = cv ? Math.floor((Date.now() - new Date(cv.ultimaEm).getTime()) / 86400000) : 0;
-                      return (
-                        <tr key={a.id} className="align-top">
-                          <td className="py-2 pr-2 font-extrabold text-ink whitespace-nowrap">{a.hora}</td>
-                          <td className={`py-2 pr-2 min-w-[200px] ${clicavel ? 'cursor-pointer hover:bg-surface' : ''}`} onClick={() => clicavel && abrirParaReagendar(a)} title={clicavel ? 'Clique para anotar e reagendar' : undefined}>
-                            <div className="font-bold text-ink">{a.clienteNome} <span className="text-xs text-ink-soft font-normal">cód. {a.clienteCod}</span></div>
-                            <div className="text-[11px] text-ink-soft">{a.origem === 'rodizio' ? 'rodízio de inativos' : a.origem === 'acompanhamento' ? 'acompanhamento (3 dias)' : a.origem === 'admin' ? 'agendado pelo admin' : 'agendado pelo vendedor'}</div>
-                            {a.obs && <div className="text-xs mt-0.5">📝 {a.obs}</div>}
-                            {a.resultado && <div className="text-xs mt-0.5 text-emerald-700">✅ {a.resultado}</div>}
-                          </td>
-                          {ehAdmin && <td className="py-2 pr-2 font-semibold text-ink whitespace-nowrap">{a.vendedorNome}</td>}
-                          <td className="py-2 pr-2">
-                            {st ? <span className="text-[11px] font-extrabold text-white rounded-full px-2 py-0.5 uppercase" style={{ background: st.cor }}>{st.label}</span> : <span className="text-ink-soft">—</span>}
-                          </td>
-                          <td className="py-2 pr-2 whitespace-nowrap font-bold" style={{ color: st?.cor }}>{dias === undefined ? '—' : dias >= 9999 ? 'sem compra' : `${dias} dias`}</td>
-                          <td className="py-2 pr-2 whitespace-nowrap text-xs">
-                            {cv ? (
-                              <>
-                                {new Date(cv.ultimaEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
-                                <div className="text-ink-soft">{diasConv <= 0 ? 'hoje' : `há ${diasConv} dias`}</div>
-                              </>
-                            ) : '—'}
-                          </td>
-                          <td className="py-2 pr-2">
-                            <span className={`text-[11px] font-bold rounded-full px-2 py-0.5 ${a.status === 'feito' ? 'bg-emerald-100 text-emerald-700' : a.data < hoje ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
-                              {a.status === 'feito' ? 'Feito' : a.data < hoje ? 'Atrasado' : 'Pendente'}
-                            </span>
-                          </td>
-                          <td className="py-2">
-                            <div className="flex gap-1">
-                              {a.telefone && <button onClick={() => abrirChat(a.telefone, a.clienteNome)} className="text-xs font-bold border border-line rounded-lg px-2 py-1">Chat</button>}
-                              {a.status === 'pendente' && <button onClick={() => { setConcluindo(a); setResultado(''); }} className="text-xs font-bold border border-emerald-300 text-emerald-700 rounded-lg px-2 py-1">Concluir</button>}
-                              {(ehAdmin || a.status === 'pendente') && (
-                                <button onClick={() => { if (empresaId && window.confirm('Excluir este agendamento?')) void removerAgendamento(empresaId, a.id); }} className="text-xs font-bold border border-line text-ink-soft rounded-lg px-2 py-1">Excluir</button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+          <div className="grid md:grid-cols-3 gap-4 items-start">
+            {[
+              { t: `Contatos do dia · ${formatarDataCurta(dia)}`, lista: doDia, vazio: 'Nenhum agendamento neste dia.', data: false, cor: 'text-ink' },
+              { t: 'Pendentes', lista: pendentesFuturos, vazio: 'Nenhum contato pendente.', data: true, cor: 'text-amber-700' },
+              { t: 'Atrasados', lista: listaAtrasados, vazio: 'Nenhum contato atrasado.', data: true, cor: 'text-red-700' },
+            ].map((col) => (
+              <div key={col.t} className="bg-white border border-line rounded-xl p-3 min-w-0">
+                <h3 className={`text-sm font-extrabold mb-2 ${col.cor}`}>{col.t} <span className="text-xs font-bold text-ink-soft">({col.lista.length})</span></h3>
+                {col.lista.length === 0 ? (
+                  <p className="text-sm text-ink-soft">{col.vazio}</p>
+                ) : (
+                  <div className="divide-y divide-line max-h-[640px] overflow-y-auto">{col.lista.map((a) => itemAgenda(a, col.data))}</div>
+                )}
               </div>
-            )}
+            ))}
           </div>
           <div className="bg-white border border-line rounded-xl p-4">
             <h3 className="text-sm font-extrabold text-ink mb-1">{ehAdmin ? 'Carteira do rodízio (pendentes)' : 'Minha lista do rodízio'}</h3>
