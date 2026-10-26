@@ -322,7 +322,7 @@ export default function Chat() {
   const [mostrarEmojis, setMostrarEmojis] = useState(false);
   const [mostrarRelogio, setMostrarRelogio] = useState(false);
   const [quando, setQuando] = useState(''); // datetime-local
-  const campoRef = useRef<HTMLInputElement>(null);
+  const campoRef = useRef<HTMLTextAreaElement>(null);
   const [tags, setTags] = useState<TagChat[]>([]);
   const [gerenciarTags, setGerenciarTags] = useState(false);
   const [novaTag, setNovaTag] = useState('');
@@ -390,6 +390,10 @@ export default function Chat() {
     }, 3000);
     return () => clearTimeout(t);
   }, [telParam, conversas, empresaId, params]);
+
+  useEffect(() => {
+    if (!texto && campoRef.current) campoRef.current.style.height = 'auto';
+  }, [texto]);
 
   useEffect(() => {
     setRespondendo(null); // resposta com citação vale só para a conversa em que foi iniciada
@@ -1460,14 +1464,25 @@ export default function Chat() {
                           📎
                         </button>
                       )}
-                      <input
+                      <textarea
                         ref={campoRef}
+                        rows={1}
                         value={texto}
-                        onChange={(e) => setTexto(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && void enviar()}
+                        onChange={(e) => {
+                          setTexto(e.target.value);
+                          e.target.style.height = 'auto';
+                          e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
+                        }}
+                        onKeyDown={(e) => {
+                          // Enter envia; Shift+Enter pula linha na mesma mensagem.
+                          if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                            e.preventDefault();
+                            void enviar();
+                          }
+                        }}
                         onPaste={aoColar}
-                        placeholder={anexo ? 'Legenda (opcional)…' : mostrarRelogio ? 'Mensagem a agendar…' : 'Escreva sua resposta…'}
-                        className="flex-1 rounded-lg border border-line px-3 py-2 text-sm"
+                        placeholder={anexo ? 'Legenda (opcional)…' : mostrarRelogio ? 'Mensagem a agendar…' : 'Escreva sua resposta…  (Shift+Enter pula linha)'}
+                        className="flex-1 rounded-lg border border-line px-3 py-2 text-sm resize-none max-h-40 leading-5"
                       />
                       <button
                         type="button"
