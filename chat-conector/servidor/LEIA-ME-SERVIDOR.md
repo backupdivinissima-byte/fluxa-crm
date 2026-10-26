@@ -59,6 +59,6 @@ O jeito de vender dela está em `chat-conector/supervisora-base.js` e pode ser a
 
 Se a Anthropic falhar (por exemplo, sem crédito), a supervisora tenta o Gemini, que tem plano gratuito:
 1. Gere a chave em aistudio.google.com (Get API key).
-2. No mesmo `.env` do servidor, acrescente: `GEMINI_API_KEY=sua-chave-aqui` (e, se quiser, `GEMINI_MODELO`, padrão `gemini-2.0-flash`).
+2. No mesmo `.env` do servidor, acrescente: `GEMINI_API_KEY=sua-chave-aqui` (e, se quiser, `GEMINI_MODELO`, padrão `gemini-flash-latest`).
 3. `git pull && docker compose up -d --build divinissima` (repita para as outras empresas). Não pede novo QR.
 No plano gratuito, o Google pode usar o conteúdo enviado para melhorar os modelos dele — considere isso com conversas de clientes.

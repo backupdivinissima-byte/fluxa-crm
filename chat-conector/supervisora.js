@@ -7,7 +7,7 @@ import { BASE_SUPERVISORA } from './supervisora-base.js';
 
 const CHAVE = process.env.ANTHROPIC_API_KEY || '';
 const CHAVE_GEMINI = process.env.GEMINI_API_KEY || '';
-const MODELO_GEMINI = process.env.GEMINI_MODELO || 'gemini-2.0-flash';
+const MODELO_GEMINI = process.env.GEMINI_MODELO || 'gemini-flash-latest';
 const MODELO = process.env.SUPERVISORA_MODELO || 'claude-sonnet-5-5';
 const ESPERA_MS = Number(process.env.SUPERVISORA_ESPERA_S || 8) * 1000; // espera o cliente terminar de escrever
 const MAX_MSGS = 24;
