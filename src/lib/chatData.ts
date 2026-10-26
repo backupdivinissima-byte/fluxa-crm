@@ -43,8 +43,9 @@ export function ouvirConversas(empresaId: string, cb: (c: ConversaChat[]) => voi
 }
 
 export function ouvirMensagens(empresaId: string, conversaId: string, cb: (m: MensagemChat[]) => void): Unsubscribe {
-  const q = query(collection(db, 'empresas', empresaId, 'conversas', conversaId, 'mensagens'), orderBy('em', 'asc'), limit(300));
-  return aposChatPronto(() => onSnapshot(q, (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as MensagemChat))));
+  const q = query(collection(db, 'empresas', empresaId, 'conversas', conversaId, 'mensagens'), orderBy('em', 'desc'), limit(300));
+  // As 300 mais NOVAS (antes eram as 300 mais antigas: conversa longa parava de mostrar mensagem nova), já em ordem cronológica.
+  return aposChatPronto(() => onSnapshot(q, (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as MensagemChat).reverse())));
 }
 
 export interface SugestaoSupervisora {
