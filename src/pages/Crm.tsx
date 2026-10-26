@@ -55,6 +55,7 @@ export default function Crm() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [busca, setBusca] = useState('');
+  const [buscaVendInativos, setBuscaVendInativos] = useState(''); // só a coluna de inativos
   const [detalheCliente, setDetalheCliente] = useState<Cliente | null>(null);
   const [arrastandoSobre, setArrastandoSobre] = useState<string | null>(null);
 
@@ -530,7 +531,20 @@ export default function Crm() {
       >
         {colunas.map((col, i) => {
           const cardsBrutos = cardsPorColuna.get(col.id) ?? [];
-          const cards = filtrar(cardsBrutos);
+          let cards = filtrar(cardsBrutos);
+          // Busca por vendedor: só na coluna de clientes inativos (as demais são pessoais de cada vendedor).
+          const termoVend = col.auto === 'inativos' ? buscaVendInativos.trim().toLowerCase() : '';
+          if (termoVend) {
+            cards = cards.filter((c) => {
+              const nomes = [
+                c.vend_nome,
+                vendedores.find((v) => v.login === c.cod_vendedor)?.nome,
+                vendedores.find((v) => v.login === c.crmVendedorLogin)?.nome,
+                c.cod_vendedor,
+              ];
+              return nomes.some((n) => (n ?? '').toLowerCase().includes(termoVend));
+            });
+          }
           const soma = cardsBrutos.reduce((s, c) => s + valorCliente(c), 0);
           const pct = Math.round((soma / totalEmpresa) * 100);
           const cor = PALETA_CORES[i % PALETA_CORES.length];
@@ -627,8 +641,19 @@ export default function Crm() {
                     Fechamento (conta comissão)
                   </label>
                 )}
+                {col.auto === 'inativos' && (
+                  <input
+                    value={buscaVendInativos}
+                    onChange={(e) => setBuscaVendInativos(e.target.value)}
+                    placeholder="Buscar vendedor..."
+                    title="Filtra os clientes inativos pelo vendedor"
+                    className="mt-1 w-full text-[10px] border border-line rounded px-1.5 py-1 bg-white outline-none focus:border-teal-500"
+                  />
+                )}
                 <div className="flex items-center justify-between mt-1">
-                  <span className="text-[10px] text-ink-soft">{cardsBrutos.length} cliente(s)</span>
+                  <span className="text-[10px] text-ink-soft">
+                    {buscaVendInativos.trim() && col.auto === 'inativos' ? `${cards.length} de ${cardsBrutos.length}` : cardsBrutos.length} cliente(s)
+                  </span>
                   <span className="text-[10px] font-bold text-ink">{pct}%</span>
                 </div>
                 <div className="text-[11px] font-bold text-ink">
