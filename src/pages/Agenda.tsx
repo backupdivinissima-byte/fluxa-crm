@@ -256,8 +256,8 @@ export default function Agenda() {
     const diasConv = cv ? Math.floor((Date.now() - new Date(cv.ultimaEm).getTime()) / 86400000) : 0;
     const clicavel = a.status === 'pendente';
     return (
-      <div key={a.id} className="py-2">
-        <div className={clicavel ? 'cursor-pointer hover:bg-surface rounded-lg -m-1 p-1' : ''} onClick={() => clicavel && abrirParaReagendar(a)} title={clicavel ? 'Clique para anotar e reagendar' : undefined}>
+      <div key={a.id} className="py-2 flex items-start gap-3">
+        <div className={`flex-1 min-w-0 ${clicavel ? 'cursor-pointer hover:bg-surface rounded-lg -m-1 p-1' : ''}`} onClick={() => clicavel && abrirParaReagendar(a)} title={clicavel ? 'Clique para anotar e reagendar' : undefined}>
           <div className="flex items-start gap-2">
             <div className="font-extrabold text-ink text-sm whitespace-nowrap">{comData ? `${formatarDataCurta(a.data).slice(0, 5)} ${a.hora}` : a.hora}</div>
             <div className="min-w-0 flex-1">
@@ -275,11 +275,11 @@ export default function Agenda() {
           {a.obs && <div className="text-xs mt-0.5">📝 {a.obs}</div>}
           {a.resultado && <div className="text-xs mt-0.5 text-emerald-700">✅ {a.resultado}</div>}
         </div>
-        <div className="flex gap-1 mt-1">
-          {a.telefone && <button onClick={() => abrirChat(a.telefone, a.clienteNome)} className="text-xs font-bold border border-line rounded-lg px-2 py-0.5">Chat</button>}
-          {a.status === 'pendente' && <button onClick={() => { setConcluindo(a); setResultado(''); }} className="text-xs font-bold border border-emerald-300 text-emerald-700 rounded-lg px-2 py-0.5">Concluir</button>}
+        <div className="flex flex-col gap-1.5 shrink-0 self-center">
+          {a.telefone && <button onClick={() => abrirChat(a.telefone, a.clienteNome)} className="text-sm font-bold border border-line rounded-lg px-3 py-1.5 hover:bg-surface">Chat</button>}
+          {a.status === 'pendente' && <button onClick={() => { setConcluindo(a); setResultado(''); }} className="text-sm font-bold border border-emerald-300 text-emerald-700 rounded-lg px-3 py-1.5 hover:bg-emerald-50">Concluir</button>}
           {(ehAdmin || a.status === 'pendente') && (
-            <button onClick={() => { if (empresaId && window.confirm('Excluir este agendamento?')) void removerAgendamento(empresaId, a.id); }} className="text-xs font-bold border border-line text-ink-soft rounded-lg px-2 py-0.5">Excluir</button>
+            <button onClick={() => { if (empresaId && window.confirm('Excluir este agendamento?')) void removerAgendamento(empresaId, a.id); }} className="text-sm font-bold border border-line text-ink-soft rounded-lg px-3 py-1.5 hover:bg-surface">Excluir</button>
           )}
         </div>
       </div>
