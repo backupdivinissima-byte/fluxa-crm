@@ -423,7 +423,7 @@ export default function Agenda() {
             <h3 className="font-extrabold text-ink">Rodízio de clientes inativos</h3>
             <p className="text-sm text-ink-soft mt-2">
               Inativos disponíveis (mais de {diasInatividade} dias sem compra, com telefone, sem agendamento pendente): <b>{plano.inativosDisponiveis}</b>.
-              São até {INATIVOS_POR_DIA} por vendedor por dia útil, começando pelos de maior valor histórico. Cliente já contatado no mês descansa até o mês seguinte; se continuar sem comprar, volta ao rodízio para OUTRO vendedor.
+              São até {INATIVOS_POR_DIA} por vendedor por dia útil, começando pelos que compraram mais recentemente, até os mais antigos. Cliente já contatado no mês descansa até o mês seguinte; se continuar sem comprar, volta ao rodízio para OUTRO vendedor.
             </p>
             {plano.itens.length === 0 ? (
               <p className="text-sm mt-3 text-red-600 font-semibold">Nada para agendar (sem inativos disponíveis ou sem vendedores ativos).</p>

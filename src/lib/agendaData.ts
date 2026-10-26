@@ -2,7 +2,7 @@
 import { collection, deleteDoc, doc, onSnapshot, query, updateDoc, where, writeBatch, type Unsubscribe } from 'firebase/firestore';
 import { db } from './firebase';
 import type { Cliente, Vendedor } from '../types';
-import { diasSemAtend, totalGeralReal } from './crmLogic';
+import { diasSemAtend } from './crmLogic';
 
 export interface Agendamento {
   id: string;
@@ -116,7 +116,7 @@ export interface PlanoRodizio {
   reatribuidos: number;
 }
 
-/** Distribui os clientes inativos (maior valor histórico primeiro) entre os vendedores ativos,
+/** Distribui os clientes inativos (do que comprou mais recentemente para o mais antigo) entre os vendedores ativos,
  * `INATIVOS_POR_DIA` por vendedor por dia útil, em horários livres do expediente. */
 export function planejarRodizio(
   clientes: Cliente[],
@@ -147,7 +147,7 @@ export function planejarRodizio(
   }
   const fila = clientes
     .filter((c) => diasSemAtend(c) > diasInatividade && !bloqueados.has(c.id) && (c.telefone ?? '').replace(/\D/g, '').length >= 8)
-    .sort((a, b) => (totalGeralReal(b) ?? 0) - (totalGeralReal(a) ?? 0));
+    .sort((a, b) => (b.dtUltCompra ?? '').localeCompare(a.dtUltCompra ?? '')); // do cliente mais recente para o mais antigo
   const removerIds = new Set<string>();
   let reatribuidos = 0;
   const inativosDisponiveis = fila.length;
