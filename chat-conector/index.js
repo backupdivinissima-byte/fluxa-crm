@@ -513,18 +513,32 @@ async function guardarMensagem(msg) {
 // Pergunta se já é cliente e, conforme a resposta, avisa que a vendedora/equipe já atende.
 // Só fala com número NOVO que ninguém da equipe respondeu; nunca em conversas já existentes ou vinculadas.
 // Desligar sem mexer no código: criar o documento empresas/{id}/chatBot/config com { ativo: false }.
-const BOT_EMPRESAS = ['uVqpWP9nssgfcPCh68uG2zebqA63']; // Divinissima
-const BOT_NOME = 'Robô Divinissima';
+const BOT_NOME = 'Robô';
+// Os textos usam o nome da empresa cadastrado no Fluxa (Divinissima, Carla Fidelis, ...).
 const BOT_TEXTOS = {
-  pergunta:
-    'Olá! Seja muito bem-vinda à *Divinissima Semijoias* ✨\n\nPara te atender melhor, me conta:\n\n*1* - Já sou cliente\n*2* - Ainda não sou cliente\n\nÉ só responder com o número 😊',
-  lembrete: 'Para eu te direcionar certinho, responda *1* se você já é cliente ou *2* se ainda não é cliente 😊',
-  cliente: 'Perfeito! 💛 Já vamos chamar a sua vendedora para continuar o seu atendimento. Só um momentinho, por favor!',
-  novo: 'Que bom ter você por aqui! 💎 Nossa equipe já vai te atender e te apresentar a Divinissima. Só um momentinho, por favor!',
+  pergunta: (n) => `Olá! Seja muito bem-vinda à *${n}* ✨\n\nPara te atender melhor, me conta:\n\n*1* - Já sou cliente\n*2* - Ainda não sou cliente\n\nÉ só responder com o número 😊`,
+  lembrete: () => 'Para eu te direcionar certinho, responda *1* se você já é cliente ou *2* se ainda não é cliente 😊',
+  cliente: () => 'Perfeito! 💛 Já vamos chamar a sua vendedora para continuar o seu atendimento. Só um momentinho, por favor!',
+  novo: (n) => `Que bom ter você por aqui! 💎 Nossa equipe já vai te atender e te apresentar a ${n}. Só um momentinho, por favor!`,
 };
+let nomeEmpresaCache = { em: 0, nome: '' };
+async function nomeDaEmpresa() {
+  if (nomeEmpresaCache.nome && Date.now() - nomeEmpresaCache.em < 600000) return nomeEmpresaCache.nome;
+  let nome = '';
+  try {
+    nome = String((await base.get()).data()?.nome ?? '').trim();
+  } catch {
+    /* usa o último nome conhecido */
+  }
+  if (!nome) return nomeEmpresaCache.nome || 'nossa loja';
+  // Nome todo em maiúsculas vira "Nome Próprio" (DIVINISSIMA SEMIJOIAS -> Divinissima Semijoias).
+  if (nome === nome.toUpperCase()) nome = nome.toLowerCase().replace(/(^|\s)(\p{L})/gu, (m, e, c) => e + c.toUpperCase());
+  nomeEmpresaCache = { em: Date.now(), nome };
+  return nome;
+}
 let botLigado = { em: 0, ok: true };
 async function botEstaLigado() {
-  if (!BOT_EMPRESAS.includes(EMPRESA_ID) || MODO_TESTE) return false;
+  if (MODO_TESTE) return false;
   if (Date.now() - botLigado.em < 60000) return botLigado.ok;
   try {
     const c = await base.collection('chatBot').doc('config').get();
@@ -563,7 +577,7 @@ async function botBoasVindas({ conversaRef, antes, depois, jid, texto, primeiroC
     if (d.vendedorLogin || d.clienteId || d.salvo || d.salvoNaAgenda) return; // já é conhecido da equipe
     await conversaRef.set({ botEstado: 'perguntou', botTentativas: 0 }, { merge: true });
     console.log(`[bot] boas-vindas para ${jid}`);
-    await botEnviar(conversaRef, jid, BOT_TEXTOS.pergunta);
+    await botEnviar(conversaRef, jid, BOT_TEXTOS.pergunta(await nomeDaEmpresa()));
     return;
   }
   if (antes?.botEstado !== 'perguntou') return;
@@ -571,7 +585,7 @@ async function botBoasVindas({ conversaRef, antes, depois, jid, texto, primeiroC
   if (resp) {
     await conversaRef.set({ botEstado: 'concluido', botResposta: resp }, { merge: true });
     console.log(`[bot] ${jid} respondeu: ${resp}`);
-    await botEnviar(conversaRef, jid, BOT_TEXTOS[resp]);
+    await botEnviar(conversaRef, jid, BOT_TEXTOS[resp](await nomeDaEmpresa()));
     return;
   }
   // Não entendeu: lembra no máximo uma vez (e só se a última mensagem do robô foi há mais de 20 s); depois deixa para a equipe.
@@ -582,7 +596,7 @@ async function botBoasVindas({ conversaRef, antes, depois, jid, texto, primeiroC
   }
   if (antes.botEm && Date.now() - new Date(antes.botEm).getTime() < 20000) return;
   await conversaRef.set({ botTentativas: tent + 1 }, { merge: true });
-  await botEnviar(conversaRef, jid, BOT_TEXTOS.lembrete);
+  await botEnviar(conversaRef, jid, BOT_TEXTOS.lembrete());
 }
 
 // Se a gravação no banco falhar, tenta de novo (5 s, 30 s, 2 min) antes de desistir.
