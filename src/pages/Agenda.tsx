@@ -467,30 +467,11 @@ export default function Agenda() {
                 {col.lista.length === 0 ? (
                   <p className="text-sm text-ink-soft">{col.vazio}</p>
                 ) : (
-                  <div className="divide-y divide-line max-h-[640px] overflow-y-auto">{col.lista.map((a) => itemAgenda(a, col.data))}</div>
+                  <div className="divide-y divide-line max-h-[78vh] overflow-y-auto">{col.lista.map((a) => itemAgenda(a, col.data))}</div>
                 )}
               </div>
             ))}
           </div>
-          <div className="bg-white border border-line rounded-xl p-4">
-            <h3 className="text-sm font-extrabold text-ink mb-1">{ehAdmin ? 'Carteira do rodízio (pendentes)' : 'Minha lista do rodízio'}</h3>
-            <p className="text-xs text-ink-soft mb-2">Clique no cliente para abrir o agendamento, anotar o que foi conversado e reagendar.</p>
-            {(() => {
-              const lista = visiveis.filter((a) => a.origem === 'rodizio' && a.status === 'pendente').sort((a, b) => (a.data + a.hora).localeCompare(b.data + b.hora));
-              if (lista.length === 0) return <p className="text-sm text-ink-soft">Nenhum cliente do rodízio pendente.</p>;
-              return (
-                <div className="max-h-96 overflow-auto divide-y divide-line">
-                  {lista.map((a) => (
-                    <button key={a.id} onClick={() => abrirParaReagendar(a)} className="w-full text-left py-2 px-1 flex items-center gap-3 hover:bg-surface rounded">
-                      <span className="text-xs font-bold text-ink-soft w-28 shrink-0">{formatarDataCurta(a.data)} {a.hora}</span>
-                      <span className="flex-1 text-sm font-semibold text-ink truncate">{a.clienteNome} <span className="text-xs text-ink-soft font-normal">cód. {a.clienteCod}</span></span>
-                      {ehAdmin && <span className="text-xs text-ink-soft truncate max-w-[140px]">{a.vendedorNome}</span>}
-                      {a.data < hoje && <span className="text-[11px] font-bold rounded-full px-2 py-0.5 bg-red-100 text-red-700">Atrasado</span>}
-                    </button>
-                  ))}
-                </div>
-              );
-            })()}
           </div>
         </div>
       </div>
