@@ -30,12 +30,15 @@ function col(empresaId: string) {
 }
 
 /** vendedorLogin vazio = tudo (admin). */
-export function ouvirAgenda(empresaId: string, vendedorLogin: string | undefined, cb: (a: Agendamento[]) => void): Unsubscribe {
+export function ouvirAgenda(empresaId: string, vendedorLogin: string | undefined, cb: (a: Agendamento[]) => void, aoErro?: (msg: string) => void): Unsubscribe {
   const q = vendedorLogin ? query(col(empresaId), where('vendedorLogin', '==', vendedorLogin)) : col(empresaId);
   return onSnapshot(
     q,
     (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Agendamento)),
-    () => cb([])
+    (e) => {
+      aoErro?.(e.message);
+      cb([]);
+    }
   );
 }
 

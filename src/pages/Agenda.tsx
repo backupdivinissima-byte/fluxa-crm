@@ -64,6 +64,7 @@ export default function Agenda() {
   const [plano, setPlano] = useState<PlanoRodizio | null>(null);
   const [diasRodizio, setDiasRodizio] = useState(5);
   const [gerando, setGerando] = useState(false);
+  const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null);
 
   useEffect(() => {
     if (!empresaId) return;
@@ -71,7 +72,7 @@ export default function Agenda() {
       ouvirClientes(empresaId, setClientes),
       ouvirVendedores(empresaId, setVendedores),
       ouvirTodasConversas(empresaId, setConversas),
-      ouvirAgenda(empresaId, loginAtual, setAgenda),
+      ouvirAgenda(empresaId, loginAtual, setAgenda, (m) => setAviso({ ok: false, texto: '❌ Não consegui ler a agenda: ' + m })),
       ouvirEmpresa(empresaId, (e) => setDiasInatividade(e?.diasInatividade ?? DIAS_INATIVIDADE_PADRAO)),
     ];
     return () => u.forEach((f) => f());
@@ -175,6 +176,14 @@ export default function Agenda() {
     setGerando(true);
     try {
       await criarAgendamentos(empresaId, plano.itens);
+      const primeiroDia = plano.itens[0].data;
+      const resumo = Object.entries(plano.porVendedor).map(([n, q]) => `${n}: ${q}`).join(' · ');
+      setAviso({ ok: true, texto: `✅ Rodízio criado: ${plano.itens.length} agendamentos de ${formatarDataCurta(plano.dias[0])} a ${formatarDataCurta(plano.dias[plano.dias.length - 1])} (${resumo}).` });
+      setDia(primeiroDia);
+      setMes(dataDeISO(primeiroDia));
+      setPlano(null);
+    } catch (e) {
+      setAviso({ ok: false, texto: '❌ Não consegui criar o rodízio: ' + (e instanceof Error ? e.message : String(e)) + ' (se disser "permission", as regras do banco precisam liberar a coleção agenda).' });
       setPlano(null);
     } finally {
       setGerando(false);
@@ -222,6 +231,13 @@ export default function Agenda() {
           </div>
         )}
       </div>
+
+      {aviso && (
+        <div className={`mb-3 rounded-xl border px-4 py-3 text-sm font-semibold flex items-start gap-3 ${aviso.ok ? 'bg-emerald-50 border-emerald-300 text-emerald-800' : 'bg-red-50 border-red-300 text-red-700'}`}>
+          <span className="flex-1">{aviso.texto}</span>
+          <button onClick={() => setAviso(null)} className="font-bold">×</button>
+        </div>
+      )}
 
       {/* Dash */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
