@@ -335,9 +335,9 @@ export default function Agenda() {
       ))}
     </div>
 
-      <div className="grid lg:grid-cols-[340px_minmax(0,1fr)] gap-4">
+      <div className="grid lg:grid-cols-[280px_minmax(0,1fr)] gap-4">
         {/* Coluna esquerda: calendário */}
-        <div className="space-y-4 self-start">
+        <div className="space-y-4">
         {/* Calendário */}
         <div className="bg-white border border-line rounded-xl p-3">
           <div className="flex items-center justify-between mb-2">
@@ -358,7 +358,7 @@ export default function Agenda() {
                 <button
                   key={d}
                   onClick={() => { setDia(d); setHora(''); }}
-                  className={`h-14 rounded-lg border text-sm font-bold flex flex-col items-center justify-center ${sel ? 'border-teal-500 bg-teal-500/10 text-teal-600' : 'border-line'} ${util ? 'text-ink' : 'text-slate-300 bg-slate-50'} ${d === hoje ? 'ring-2 ring-blue-400' : ''}`}
+                  className={`h-10 rounded-lg border text-xs font-bold flex flex-col items-center justify-center leading-tight ${sel ? 'border-teal-500 bg-teal-500/10 text-teal-600' : 'border-line'} ${util ? 'text-ink' : 'text-slate-300 bg-slate-50'} ${d === hoje ? 'ring-2 ring-blue-400' : ''}`}
                 >
                   <span>{Number(d.slice(8))}</span>
                   {n > 0 && (
@@ -378,8 +378,7 @@ export default function Agenda() {
             <div className="flex items-baseline gap-2 flex-wrap mb-3">
               <h2 className="text-base font-extrabold text-ink">{editando ? `Reagendar: ${editando.clienteNome} — ` : ''}{nomeDoDia(dia)}, {formatarDataCurta(dia)}</h2>
               <span className="text-xs text-ink-soft">{doDia.length} agendamento(s)</span>
-              {ehAdmin && porVendNoDia.length > 0 && (
-                <span className="text-xs text-ink-soft">· {porVendNoDia.map(([n, q]) => `${n}: ${q}`).join(' · ')}</span>
+              </span>
               )}
             </div>
 
@@ -456,25 +455,26 @@ export default function Agenda() {
             )}
           </div>
 
-          <div className="grid md:grid-cols-3 gap-4 items-start">
-            {[
-              { t: `Contatos do dia · ${formatarDataCurta(dia)}`, lista: doDia, vazio: 'Nenhum agendamento neste dia.', data: false, cor: 'text-ink' },
-              { t: 'Pendentes', lista: pendentesFuturos, vazio: 'Nenhum contato pendente.', data: true, cor: 'text-amber-700' },
-              { t: 'Atrasados', lista: listaAtrasados, vazio: 'Nenhum contato atrasado.', data: true, cor: 'text-red-700' },
-            ].map((col) => (
-              <div key={col.t} className="bg-white border border-line rounded-xl p-3 min-w-0">
-                <h3 className={`text-sm font-extrabold mb-2 ${col.cor}`}>{col.t} <span className="text-xs font-bold text-ink-soft">({col.lista.length})</span></h3>
-                {col.lista.length === 0 ? (
-                  <p className="text-sm text-ink-soft">{col.vazio}</p>
-                ) : (
-                  <div className="divide-y divide-line max-h-[78vh] overflow-y-auto">{col.lista.map((a) => itemAgenda(a, col.data))}</div>
-                )}
-              </div>
-            ))}
-          </div>
           </div>
         </div>
       </div>
+
+  <div className="grid lg:grid-cols-3 gap-4 items-start mt-4">
+    {[
+      { t: `Contatos do dia · ${formatarDataCurta(dia)}`, lista: doDia, vazio: 'Nenhum agendamento neste dia.', data: false, cor: 'text-ink' },
+      { t: 'Pendentes', lista: pendentesFuturos, vazio: 'Nenhum contato pendente.', data: true, cor: 'text-amber-700' },
+      { t: 'Atrasados', lista: listaAtrasados, vazio: 'Nenhum contato atrasado.', data: true, cor: 'text-red-700' },
+    ].map((col) => (
+      <div key={col.t} className="bg-white border border-line rounded-xl p-3 min-w-0">
+        <h3 className={`text-sm font-extrabold mb-2 ${col.cor}`}>{col.t} <span className="text-xs font-bold text-ink-soft">({col.lista.length})</span></h3>
+        {col.lista.length === 0 ? (
+          <p className="text-sm text-ink-soft">{col.vazio}</p>
+        ) : (
+          <div className="divide-y divide-line max-h-[80vh] overflow-y-auto">{col.lista.map((a) => itemAgenda(a, col.data))}</div>
+        )}
+      </div>
+    ))}
+  </div>
 
       {concluindo && (
         <div className="fixed inset-0 z-50 bg-ink/40 flex items-center justify-center p-4">
