@@ -764,7 +764,9 @@ function extrairClientesRelatorioMovimentacoes(tabela: string[][]): {
     const { cod: codCliente, nome: nomeCliente } = partirCodNome(linha[2]);
     const cod = codCliente ?? idSeguro(nomeCliente ?? `cliente-linha-${i}`);
     const cancelada = situacaoDaLinha(linha)?.toLowerCase() === 'cancelado';
-    const dataMatch = (linha[3] ?? '').match(/(\d{2}\/\d{2}\/\d{4})/);
+    // O ERP (Curva ABC) conta a venda no mês do PAGAMENTO ("Data | Data Pag"); sem pagamento (aberta), vale a emissão.
+    const datasLinha = (linha[3] ?? '').match(/\d{2}\/\d{2}\/\d{4}/g) ?? [];
+    const dataMatch = datasLinha.length > 0 ? [datasLinha[datasLinha.length - 1], datasLinha[datasLinha.length - 1]] : null;
     const dataISO = dataMatch ? paraDataISO(dataMatch[1]) : undefined;
     const valorTotal = valorTotalDaLinhaCliente(linha);
     const valorLiquido = valorLiquidoDaLinhaCliente(linha) ?? valorTotal;
