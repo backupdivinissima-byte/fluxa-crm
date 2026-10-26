@@ -117,8 +117,8 @@ export default function Login() {
 
   return (
     <AuthShell
-      titulo="Entrar no Fluxa"
-      subtitulo="Acesse a sua empresa."
+      titulo={`Entrar no ${produtoDoLink && NOMES_MODULO[produtoDoLink] ? NOMES_MODULO[produtoDoLink].nome : 'Fluxa'}`}
+      subtitulo={produtoDoLink && NOMES_MODULO[produtoDoLink] ? `Acesse o ${NOMES_MODULO[produtoDoLink].nome.replace('Fluxa ', '')} da sua empresa.` : 'Acesse a sua empresa.'}
       rodape={
         <>
           Ainda não tem uma empresa cadastrada?{' '}
