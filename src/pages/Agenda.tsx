@@ -278,7 +278,7 @@ export default function Agenda() {
         <div className="flex flex-row flex-wrap justify-end gap-2 mt-2">
           {a.telefone && <button onClick={() => abrirChat(a.telefone, a.clienteNome)} className="text-sm font-bold border border-line rounded-lg px-3 py-1.5 hover:bg-surface">Chat</button>}
           {a.status === 'pendente' && <button onClick={() => { setConcluindo(a); setResultado(''); }} className="text-sm font-bold border border-emerald-300 text-emerald-700 rounded-lg px-3 py-1.5 hover:bg-emerald-50">Concluir</button>}
-          {(ehAdmin || a.status === 'pendente') && (
+          {ehAdmin && (
             <button onClick={() => { if (empresaId && window.confirm('Excluir este agendamento?')) void removerAgendamento(empresaId, a.id); }} className="text-sm font-bold border border-line text-ink-soft rounded-lg px-3 py-1.5 hover:bg-surface">Excluir</button>
           )}
         </div>
