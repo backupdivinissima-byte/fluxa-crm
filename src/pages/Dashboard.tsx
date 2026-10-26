@@ -438,6 +438,54 @@ export default function Dashboard() {
         ))}
       </div>
 
+      {/* Projeção do mês e do ano (no ritmo atual) */}
+      {(() => {
+        const hoje = new Date();
+        const diasMes = new Date(anoAtual, mesAtualIdx + 1, 0).getDate();
+        const diaHoje = Math.max(1, hoje.getDate());
+        const mesesAno = mesesDoAno(anoAtual);
+        const vendidoMes = mesesAno[mesAtualIdx] ?? 0;
+        const projMes = vendidoMes / diaHoje * diasMes;
+        // Ano: o que já foi fechado nos meses anteriores + projeção do mês atual + média dos meses fechados para os que faltam.
+        const fechados = mesesAno.slice(0, mesAtualIdx);
+        const somaFechados = fechados.reduce((a, b) => a + b, 0);
+        const mediaFechados = fechados.length > 0 ? somaFechados / fechados.length : projMes;
+        const mesesRestantes = 11 - mesAtualIdx;
+        const projAno = somaFechados + projMes + mediaFechados * mesesRestantes;
+        const vendidoAno = somaFechados + vendidoMes;
+        const mesAnoAnt = mesesDoAno(anoAtual - 1)[mesAtualIdx] ?? 0;
+        const totalAnoAnt = mesesDoAno(anoAtual - 1).reduce((a, b) => a + b, 0);
+        const pct = (v: number, ref: number) => (ref > 0 ? ((v - ref) / ref) * 100 : undefined);
+        const linhaPct = (v: number | undefined, rot: string) =>
+          v === undefined ? null : (
+            <p className="text-[11px] mt-0.5 tabular-nums" style={{ color: v >= 0 ? '#27AE60' : '#C0392B' }}>
+              {v >= 0 ? '▲' : '▼'} {Math.abs(Math.round(v))}% {rot}
+            </p>
+          );
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div className="bg-white border border-line rounded-2xl p-4">
+              <p className="text-xs font-bold text-ink-soft uppercase tracking-wide mb-1">
+                Projeção de {MESES_EXTENSO[mesAtualIdx]}/{anoAtual}
+              </p>
+              <p className="text-2xl font-extrabold text-ink tabular-nums">{formatarMoeda(projMes)}</p>
+              <p className="text-[11px] text-ink-soft mt-1 tabular-nums">
+                Vendido até hoje: {formatarMoeda(vendidoMes)} · dia {diaHoje} de {diasMes}
+              </p>
+              {linhaPct(pct(projMes, mesAnoAnt), `vs ${MESES_EXTENSO[mesAtualIdx]}/${anoAtual - 1} (${formatarMoeda(mesAnoAnt)})`)}
+              {linhaPct(pct(projMes, mesesAno[(mesAtualIdx + 11) % 12] ?? 0), 'vs mês anterior')}
+            </div>
+            <div className="bg-white border border-line rounded-2xl p-4">
+              <p className="text-xs font-bold text-ink-soft uppercase tracking-wide mb-1">Projeção de {anoAtual}</p>
+              <p className="text-2xl font-extrabold text-ink tabular-nums">{formatarMoeda(projAno)}</p>
+              <p className="text-[11px] text-ink-soft mt-1 tabular-nums">Vendido no ano até hoje: {formatarMoeda(vendidoAno)}</p>
+              {linhaPct(pct(projAno, totalAnoAnt), `vs ${anoAtual - 1} (${formatarMoeda(totalAnoAnt)})`)}
+              <p className="text-[10px] text-ink-soft mt-1">Meses fechados + projeção do mês atual + média dos meses fechados para os que faltam.</p>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* 5 mais e 5 menos vendidos */}
       <div className="bg-white border border-line rounded-2xl p-4 mb-6">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
