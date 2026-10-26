@@ -360,14 +360,28 @@ export default function Chat() {
   }, [empresaId]);
 
   useEffect(() => {
-    if (!telParam) return;
+    if (!telParam || !empresaId) return;
+    if (telAbertoRef.current === telParam) return;
     const fim = telParam.replace(/\D/g, '').slice(-8);
     const achada = fim.length >= 8 ? conversas.find((c) => (c.telefone ?? c.contato ?? '').replace(/\D/g, '').slice(-8) === fim) : undefined;
-    if (achada && telAbertoRef.current !== telParam) {
+    if (achada) {
       telAbertoRef.current = telParam;
       setAbertaId(achada.id);
+      return;
     }
-  }, [telParam, conversas]);
+    // Sem conversa na lista (cliente que nunca falou no chat): espera a lista carregar e abre/cria o contato.
+    const t = setTimeout(async () => {
+      if (telAbertoRef.current === telParam) return;
+      telAbertoRef.current = telParam;
+      try {
+        const conv = await criarContatoChat(empresaId, params.get('nome') || telParam, telParam);
+        setAbertaId(conv.id);
+      } catch (e) {
+        setErro('Não consegui abrir a conversa deste cliente: ' + (e instanceof Error ? e.message : String(e)));
+      }
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [telParam, conversas, empresaId, params]);
 
   useEffect(() => {
     if (!empresaId || !abertaId) return;

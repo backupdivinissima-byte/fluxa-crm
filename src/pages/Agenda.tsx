@@ -103,8 +103,8 @@ export default function Agenda() {
     const cands = conversas.filter((cv) => cv.clienteId === c.id || (t && fim8(cv.telefone ?? cv.contato) === t) || (norm(cv.nome) && (norm(cv.nome) === norm(c.razao) || norm(cv.nome) === norm(c.nome))));
     return cands.sort((a, b) => (b.ultimaEm ?? '').localeCompare(a.ultimaEm ?? ''))[0];
   }
-  function abrirChat(telefone?: string) {
-    navigate(`/chat?tel=${encodeURIComponent((telefone ?? '').replace(/\D/g, ''))}`);
+  function abrirChat(telefone?: string, nome?: string) {
+    navigate(`/chat?tel=${encodeURIComponent((telefone ?? '').replace(/\D/g, ''))}${nome ? `&nome=${encodeURIComponent(nome)}` : ''}`);
   }
 
   const resultados = useMemo(() => {
@@ -368,7 +368,7 @@ export default function Agenda() {
                       <div>
                         {conversaCliente ? (
                           <>Chat: encontrado ({conversaCliente.nome}) · última conversa {new Date(conversaCliente.ultimaEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}{' '}
-                            <button onClick={() => abrirChat(conversaCliente.telefone ?? conversaCliente.contato)} className="text-teal-600 font-bold underline">abrir no chat</button></>
+                            <button onClick={() => abrirChat(conversaCliente.telefone ?? conversaCliente.contato, conversaCliente.nome)} className="text-teal-600 font-bold underline">abrir no chat</button></>
                         ) : 'Chat: nenhuma conversa encontrada para este contato.'}
                       </div>
                     </div>
@@ -432,7 +432,7 @@ export default function Agenda() {
                       {a.status === 'feito' ? 'Feito' : a.data < hoje ? 'Atrasado' : 'Pendente'}
                     </span>
                     <div className="flex gap-1">
-                      {a.telefone && <button onClick={() => abrirChat(a.telefone)} className="text-xs font-bold border border-line rounded-lg px-2 py-1">Chat</button>}
+                      {a.telefone && <button onClick={() => abrirChat(a.telefone, a.clienteNome)} className="text-xs font-bold border border-line rounded-lg px-2 py-1">Chat</button>}
                       {a.status === 'pendente' && <button onClick={() => { setConcluindo(a); setResultado(''); }} className="text-xs font-bold border border-emerald-300 text-emerald-700 rounded-lg px-2 py-1">Concluir</button>}
                       {(ehAdmin || a.status === 'pendente') && (
                         <button onClick={() => { if (empresaId && window.confirm('Excluir este agendamento?')) void removerAgendamento(empresaId, a.id); }} className="text-xs font-bold border border-line text-ink-soft rounded-lg px-2 py-1">Excluir</button>
