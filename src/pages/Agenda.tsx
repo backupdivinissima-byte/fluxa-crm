@@ -63,7 +63,6 @@ export default function Agenda() {
   const [resultado, setResultado] = useState('');
   const [plano, setPlano] = useState<PlanoRodizio | null>(null);
   const [diasRodizio, setDiasRodizio] = useState(5);
-  const [gerando, setGerando] = useState(false);
   const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null);
 
   useEffect(() => {
@@ -173,20 +172,18 @@ export default function Agenda() {
   }
   async function confirmarRodizio() {
     if (!empresaId || !plano || plano.itens.length === 0) return;
-    setGerando(true);
+    const p = plano;
+    setPlano(null); // fecha a tela na hora; o resultado aparece na faixa de aviso
+    setAviso({ ok: true, texto: `⏳ Criando ${p.itens.length} agendamentos…` });
+    const primeiroDia = p.itens[0].data;
+    setDia(primeiroDia);
+    setMes(dataDeISO(primeiroDia));
     try {
-      await criarAgendamentos(empresaId, plano.itens);
-      const primeiroDia = plano.itens[0].data;
-      const resumo = Object.entries(plano.porVendedor).map(([n, q]) => `${n}: ${q}`).join(' · ');
-      setAviso({ ok: true, texto: `✅ Rodízio criado: ${plano.itens.length} agendamentos de ${formatarDataCurta(plano.dias[0])} a ${formatarDataCurta(plano.dias[plano.dias.length - 1])} (${resumo}).` });
-      setDia(primeiroDia);
-      setMes(dataDeISO(primeiroDia));
-      setPlano(null);
+      await criarAgendamentos(empresaId, p.itens);
+      const resumo = Object.entries(p.porVendedor).map(([n, q]) => `${n}: ${q}`).join(' · ');
+      setAviso({ ok: true, texto: `✅ Rodízio criado: ${p.itens.length} agendamentos de ${formatarDataCurta(p.dias[0])} a ${formatarDataCurta(p.dias[p.dias.length - 1])} (${resumo}).` });
     } catch (e) {
       setAviso({ ok: false, texto: '❌ Não consegui criar o rodízio: ' + (e instanceof Error ? e.message : String(e)) + ' (se disser "permission", as regras do banco precisam liberar a coleção agenda).' });
-      setPlano(null);
-    } finally {
-      setGerando(false);
     }
   }
 
@@ -438,7 +435,7 @@ export default function Agenda() {
               </>
             )}
             <div className="flex gap-2 mt-4">
-              <button disabled={gerando || plano.itens.length === 0} onClick={() => void confirmarRodizio()} className="flex-1 rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold py-2 disabled:opacity-50">{gerando ? 'Criando…' : 'Confirmar'}</button>
+              <button disabled={plano.itens.length === 0} onClick={() => void confirmarRodizio()} className="flex-1 rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold py-2 disabled:opacity-50">Confirmar</button>
               <button onClick={() => setPlano(null)} className="flex-1 rounded-xl border border-line text-sm font-bold py-2">Cancelar</button>
             </div>
           </div>
