@@ -42,7 +42,19 @@ export default function Login() {
       } else {
         await loginVendedor(identificador, senha, empresaHint);
       }
-      navigate('/dashboard');
+      // Veio de um produto (ex.: "Entrar" no cadastro do ERP): entra direto nele, cada produto é separado.
+      const prod = params.get('plataforma');
+      const m = prod === 'erp' || prod === 'chat' || prod === 'marketing' || prod === 'crm' ? prod : null;
+      if (m && modo === 'admin') {
+        try {
+          sessionStorage.setItem('fluxa_modulo_atual', m);
+        } catch {
+          /* sem armazenamento */
+        }
+        navigate(m === 'erp' ? '/erp/inicio' : m === 'chat' ? '/chat' : m === 'marketing' ? '/marketing' : '/dashboard');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (err) {
       // No modo vendedor, loginVendedor já lança mensagens próprias em
       // português (credenciais inválidas, autenticação indisponível, sem

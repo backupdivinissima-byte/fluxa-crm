@@ -205,7 +205,7 @@ export default function Cadastrar() {
         rodape={
           <>
             Já tem uma empresa cadastrada?{' '}
-            <Link to="/login" className="font-bold text-blue-600">
+            <Link to={plataforma ? `/login?plataforma=${plataforma}` : '/login'} className="font-bold text-blue-600">
               Entrar
             </Link>
           </>
@@ -283,7 +283,7 @@ export default function Cadastrar() {
       rodape={
         <>
           Já tem uma empresa cadastrada?{' '}
-          <Link to="/login" className="font-bold text-blue-600">
+          <Link to={plataforma ? `/login?plataforma=${plataforma}` : '/login'} className="font-bold text-blue-600">
             Entrar
           </Link>
         </>
