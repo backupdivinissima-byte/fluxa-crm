@@ -256,7 +256,7 @@ export default function Agenda() {
     const diasConv = cv ? Math.floor((Date.now() - new Date(cv.ultimaEm).getTime()) / 86400000) : 0;
     const clicavel = a.status === 'pendente';
     return (
-      <div key={a.id} className="py-2 flex items-start gap-3">
+      <div key={a.id} className="py-2">
         <div className={`flex-1 min-w-0 ${clicavel ? 'cursor-pointer hover:bg-surface rounded-lg -m-1 p-1' : ''}`} onClick={() => clicavel && abrirParaReagendar(a)} title={clicavel ? 'Clique para anotar e reagendar' : undefined}>
           <div className="flex items-start gap-2">
             <div className="font-extrabold text-ink text-sm whitespace-nowrap">{comData ? `${formatarDataCurta(a.data).slice(0, 5)} ${a.hora}` : a.hora}</div>
@@ -275,7 +275,7 @@ export default function Agenda() {
           {a.obs && <div className="text-xs mt-0.5">📝 {a.obs}</div>}
           {a.resultado && <div className="text-xs mt-0.5 text-emerald-700">✅ {a.resultado}</div>}
         </div>
-        <div className="flex flex-col gap-1.5 shrink-0 self-center">
+        <div className="flex flex-row flex-wrap justify-end gap-2 mt-2">
           {a.telefone && <button onClick={() => abrirChat(a.telefone, a.clienteNome)} className="text-sm font-bold border border-line rounded-lg px-3 py-1.5 hover:bg-surface">Chat</button>}
           {a.status === 'pendente' && <button onClick={() => { setConcluindo(a); setResultado(''); }} className="text-sm font-bold border border-emerald-300 text-emerald-700 rounded-lg px-3 py-1.5 hover:bg-emerald-50">Concluir</button>}
           {(ehAdmin || a.status === 'pendente') && (
