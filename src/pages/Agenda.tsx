@@ -318,23 +318,7 @@ export default function Agenda() {
         </div>
       )}
 
-    {/* Dash */}
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-      {[
-        { t: 'Hoje', v: hojeLista.length, s: `${hojeLista.filter((a) => a.status === 'feito').length} feitos` },
-        { t: `${MESES[mes.getMonth()]}`, v: doMes.length, s: `${doMes.filter((a) => a.status === 'feito').length} feitos` },
-        { t: 'Pendentes', v: visiveis.filter((a) => a.status === 'pendente').length, s: 'no total' },
-        { t: 'Atrasados', v: atrasados, s: 'pendentes de dias anteriores' },
-      ].map((c) => (
-        <div key={c.t} className="bg-white border border-line rounded-xl p-3">
-          <div className="text-xs font-bold text-ink-soft uppercase">{c.t}</div>
-          <div className="text-2xl font-extrabold text-ink">{c.v}</div>
-          <div className="text-xs text-ink-soft">{c.s}</div>
-        </div>
-      ))}
-    </div>
-
-      <div className="grid lg:grid-cols-[280px_minmax(0,1fr)] gap-4">
+      <div className="grid lg:grid-cols-[340px_minmax(0,1fr)] gap-4">
         {/* Coluna esquerda: calendário */}
         <div className="space-y-4">
         {/* Calendário */}
@@ -357,7 +341,7 @@ export default function Agenda() {
                 <button
                   key={d}
                   onClick={() => { setDia(d); setHora(''); }}
-                  className={`h-10 rounded-lg border text-xs font-bold flex flex-col items-center justify-center leading-tight ${sel ? 'border-teal-500 bg-teal-500/10 text-teal-600' : 'border-line'} ${util ? 'text-ink' : 'text-slate-300 bg-slate-50'} ${d === hoje ? 'ring-2 ring-blue-400' : ''}`}
+                  className={`h-14 rounded-lg border text-sm font-bold flex flex-col items-center justify-center leading-tight ${sel ? 'border-teal-500 bg-teal-500/10 text-teal-600' : 'border-line'} ${util ? 'text-ink' : 'text-slate-300 bg-slate-50'} ${d === hoje ? 'ring-2 ring-blue-400' : ''}`}
                 >
                   <span>{Number(d.slice(8))}</span>
                   {n > 0 && (
@@ -372,7 +356,22 @@ export default function Agenda() {
         </div>
 
         {/* Dia */}
-        <div className="space-y-4">
+        <div className="space-y-0">
+    {/* Dash */}
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+      {[
+        { t: 'Hoje', v: hojeLista.length, s: `${hojeLista.filter((a) => a.status === 'feito').length} feitos` },
+        { t: `${MESES[mes.getMonth()]}`, v: doMes.length, s: `${doMes.filter((a) => a.status === 'feito').length} feitos` },
+        { t: 'Pendentes', v: visiveis.filter((a) => a.status === 'pendente').length, s: 'no total' },
+        { t: 'Atrasados', v: atrasados, s: 'pendentes de dias anteriores' },
+      ].map((c) => (
+        <div key={c.t} className="bg-white border border-line rounded-xl px-3 py-2">
+          <div className="text-xs font-bold text-ink-soft uppercase">{c.t}</div>
+          <div className="text-xl font-extrabold leading-tight text-ink">{c.v}</div>
+          <div className="text-xs text-ink-soft">{c.s}</div>
+        </div>
+      ))}
+    </div>
           <div className="bg-white border border-line rounded-xl p-4">
             <div className="flex items-baseline gap-2 flex-wrap mb-3">
               <h2 className="text-base font-extrabold text-ink">{editando ? `Reagendar: ${editando.clienteNome} — ` : ''}{nomeDoDia(dia)}, {formatarDataCurta(dia)}</h2>
