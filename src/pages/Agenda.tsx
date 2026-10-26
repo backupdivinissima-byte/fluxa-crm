@@ -79,7 +79,11 @@ export default function Agenda() {
   }, [empresaId, loginAtual]);
 
   const vendedoresAtivos = useMemo(() => vendedores.filter((v) => v.ativo), [vendedores]);
-  const visiveis = useMemo(() => (filtroVend ? agenda.filter((a) => a.vendedorLogin === filtroVend) : agenda), [agenda, filtroVend]);
+  const visiveis = useMemo(() => {
+    // Vendedor: só os dele (dia, pendentes e atrasados). Admin: todos, ou os do vendedor filtrado.
+    if (!ehAdmin) return agenda.filter((a) => a.vendedorLogin === loginAtual);
+    return filtroVend ? agenda.filter((a) => a.vendedorLogin === filtroVend) : agenda;
+  }, [agenda, filtroVend, ehAdmin, loginAtual]);
 
   const porDia = useMemo(() => {
     const m = new Map<string, Agendamento[]>();
