@@ -820,12 +820,11 @@ export default function Dashboard() {
                 </div>
                 <div className="text-right shrink-0">
                   <div className="flex gap-4 justify-end mb-1">
-                    {[
-                      [`${MESES[mesAtualIdx]}/${anoAtual - 1}`, vendasImportadasMesVendedor(clientes, r.vendedor.login, r.vendedor.nome, mesReferencia(-12)), false],
-                      [`${MESES[(mesAtualIdx + 11) % 12]}/${mesAtualIdx === 0 ? anoAtual - 1 : anoAtual}`, vendasImportadasMesVendedor(clientes, r.vendedor.login, r.vendedor.nome, mesReferencia(-1)), false],
-                      [`${MESES[mesAtualIdx]}/${anoAtual}`, r.vendasMes, true],
-                    ].map(([rot, val, destaque], idx) => {
-                      const st = pedidosMesVendedor(clientes, r.vendedor.login, r.vendedor.nome, mesReferencia(idx === 0 ? -12 : idx === 1 ? -1 : 0));
+                    {[-2, -1, 0].map((off) => {
+                      const ref = mesReferencia(off);
+                      return [`${MESES[Number(ref.slice(5)) - 1]}/${ref.slice(0, 4)}`, off === 0 ? r.vendasMes : vendasImportadasMesVendedor(clientes, r.vendedor.login, r.vendedor.nome, ref), off === 0, off] as const;
+                    }).map(([rot, val, destaque, off]) => {
+                      const st = pedidosMesVendedor(clientes, r.vendedor.login, r.vendedor.nome, mesReferencia(off));
                       return (
                       <div key={String(rot)}>
                         <p className="text-xs font-extrabold tabular-nums" style={{ color: destaque ? (r.vendasMes > 0 ? '#0EA5A0' : undefined) : undefined }}>
