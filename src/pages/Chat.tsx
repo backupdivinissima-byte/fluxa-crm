@@ -424,7 +424,7 @@ export default function Chat() {
         (filtro === 'novos'
           ? ehNovo(c)
           : filtro === 'minhas'
-            ? c.vendedorLogin === meuLogin
+            ? (souAdmin ? !!c.vendedorLogin : c.vendedorLogin === meuLogin) // admin: soma as "Minhas" de todos os vendedores
             : filtro === 'aguardando'
               ? !c.vendedorLogin && c.ultimaDe === 'cliente'
               : filtro === 'atendimento'
@@ -473,7 +473,7 @@ export default function Chat() {
     if (comAlerta > alertasAntesRef.current) tocarCampainha();
     alertasAntesRef.current = comAlerta;
   }, [comAlerta]);
-  const minhasN = visiveis.filter((c) => c.vendedorLogin === meuLogin).length;
+  const minhasN = visiveis.filter((c) => (souAdmin ? !!c.vendedorLogin : c.vendedorLogin === meuLogin)).length;
   const porOrigem = (Object.keys(ORIGENS) as (keyof typeof ORIGENS)[]).map((k) => ({
     chave: k,
     ...ORIGENS[k],
