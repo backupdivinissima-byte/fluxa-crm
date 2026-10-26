@@ -20,7 +20,7 @@ import {
   type Agendamento,
   type PlanoRodizio,
 } from '../lib/agendaData';
-import { DIAS_INATIVIDADE_PADRAO, diasSemAtend } from '../lib/crmLogic';
+import { DIAS_INATIVIDADE_PADRAO, diasSemAtend, statusInfo } from '../lib/crmLogic';
 import type { Cliente, ConversaChat, Vendedor } from '../types';
 
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
@@ -279,25 +279,28 @@ export default function Agenda() {
         </div>
       )}
 
-      {/* Dash */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        {[
-          { t: 'Hoje', v: hojeLista.length, s: `${hojeLista.filter((a) => a.status === 'feito').length} feitos` },
-          { t: `${MESES[mes.getMonth()]}`, v: doMes.length, s: `${doMes.filter((a) => a.status === 'feito').length} feitos` },
-          { t: 'Pendentes', v: visiveis.filter((a) => a.status === 'pendente').length, s: 'no total' },
-          { t: 'Atrasados', v: atrasados, s: 'pendentes de dias anteriores' },
-        ].map((c) => (
-          <div key={c.t} className="bg-white border border-line rounded-xl p-3">
-            <div className="text-xs font-bold text-ink-soft uppercase">{c.t}</div>
-            <div className="text-2xl font-extrabold text-ink">{c.v}</div>
-            <div className="text-xs text-ink-soft">{c.s}</div>
-          </div>
-        ))}
-      </div>
-
       <div className="grid lg:grid-cols-[420px_1fr] gap-4">
+        {/* Coluna esquerda: dash + calendário */}
+        <div className="space-y-4 self-start">
+        {/* Dash */}
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { t: 'Hoje', v: hojeLista.length, s: `${hojeLista.filter((a) => a.status === 'feito').length} feitos` },
+            { t: `${MESES[mes.getMonth()]}`, v: doMes.length, s: `${doMes.filter((a) => a.status === 'feito').length} feitos` },
+            { t: 'Pendentes', v: visiveis.filter((a) => a.status === 'pendente').length, s: 'no total' },
+            { t: 'Atrasados', v: atrasados, s: 'pendentes de dias anteriores' },
+          ].map((c) => (
+            <div key={c.t} className="bg-white border border-line rounded-xl p-3">
+              <div className="text-xs font-bold text-ink-soft uppercase">{c.t}</div>
+              <div className="text-2xl font-extrabold text-ink">{c.v}</div>
+              <div className="text-xs text-ink-soft">{c.s}</div>
+            </div>
+          ))}
+        </div>
+
+
         {/* Calendário */}
-        <div className="bg-white border border-line rounded-xl p-3 self-start">
+        <div className="bg-white border border-line rounded-xl p-3">
           <div className="flex items-center justify-between mb-2">
             <button onClick={() => setMes(new Date(mes.getFullYear(), mes.getMonth() - 1, 1))} className="w-8 h-8 rounded-lg border border-line font-bold">‹</button>
             <div className="font-extrabold text-ink">{MESES[mes.getMonth()]} {mes.getFullYear()}</div>
@@ -327,6 +330,7 @@ export default function Agenda() {
             })}
           </div>
           <p className="text-[11px] text-ink-soft mt-2">O número em cada dia é a quantidade de contatos agendados.</p>
+        </div>
         </div>
 
         {/* Dia */}
@@ -418,28 +422,69 @@ export default function Agenda() {
             {doDia.length === 0 ? (
               <p className="text-sm text-ink-soft">Nenhum agendamento neste dia.</p>
             ) : (
-              <div className="divide-y divide-line">
-                {doDia.map((a) => (
-                  <div key={a.id} className="py-2 flex items-start gap-3 flex-wrap">
-                    <div className="w-14 font-extrabold text-ink">{a.hora}</div>
-                    <div className={`flex-1 min-w-[220px] ${a.status === 'pendente' ? 'cursor-pointer hover:bg-surface rounded-lg -m-1 p-1' : ''}`} onClick={() => a.status === 'pendente' && abrirParaReagendar(a)} title={a.status === 'pendente' ? 'Clique para anotar e reagendar' : undefined}>
-                      <div className="text-sm font-bold text-ink">{a.clienteNome} <span className="text-xs text-ink-soft font-normal">cód. {a.clienteCod}</span></div>
-                      <div className="text-xs text-ink-soft">Vendedor: <b>{a.vendedorNome}</b> · {a.origem === 'rodizio' ? 'rodízio de inativos' : a.origem === 'acompanhamento' ? 'acompanhamento (3 dias)' : a.origem === 'admin' ? 'agendado pelo admin' : 'agendado pelo vendedor'}</div>
-                      {a.obs && <div className="text-xs mt-0.5">📝 {a.obs}</div>}
-                      {a.resultado && <div className="text-xs mt-0.5 text-emerald-700">✅ {a.resultado}</div>}
-                    </div>
-                    <span className={`text-[11px] font-bold rounded-full px-2 py-0.5 ${a.status === 'feito' ? 'bg-emerald-100 text-emerald-700' : a.data < hoje ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
-                      {a.status === 'feito' ? 'Feito' : a.data < hoje ? 'Atrasado' : 'Pendente'}
-                    </span>
-                    <div className="flex gap-1">
-                      {a.telefone && <button onClick={() => abrirChat(a.telefone, a.clienteNome)} className="text-xs font-bold border border-line rounded-lg px-2 py-1">Chat</button>}
-                      {a.status === 'pendente' && <button onClick={() => { setConcluindo(a); setResultado(''); }} className="text-xs font-bold border border-emerald-300 text-emerald-700 rounded-lg px-2 py-1">Concluir</button>}
-                      {(ehAdmin || a.status === 'pendente') && (
-                        <button onClick={() => { if (empresaId && window.confirm('Excluir este agendamento?')) void removerAgendamento(empresaId, a.id); }} className="text-xs font-bold border border-line text-ink-soft rounded-lg px-2 py-1">Excluir</button>
-                      )}
-                    </div>
-                  </div>
-                ))}
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-[11px] uppercase text-ink-soft border-b border-line">
+                      <th className="py-1.5 pr-2">Hora</th>
+                      <th className="py-1.5 pr-2">Cliente</th>
+                      {ehAdmin && <th className="py-1.5 pr-2">Vendedor</th>}
+                      <th className="py-1.5 pr-2">Status</th>
+                      <th className="py-1.5 pr-2">Dias sem compra</th>
+                      <th className="py-1.5 pr-2">Última conversa</th>
+                      <th className="py-1.5 pr-2">Agenda</th>
+                      <th className="py-1.5"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-line">
+                    {doDia.map((a) => {
+                      const cli = clientes.find((x) => x.id === a.clienteId);
+                      const dias = cli ? diasSemAtend(cli) : undefined;
+                      const st = dias !== undefined ? statusInfo(dias, diasInatividade) : undefined;
+                      const cv = cli ? conversaDe(cli) : conversas.find((x) => fim8(x.telefone ?? x.contato) === fim8(a.telefone));
+                      const clicavel = a.status === 'pendente';
+                      const diasConv = cv ? Math.floor((Date.now() - new Date(cv.ultimaEm).getTime()) / 86400000) : 0;
+                      return (
+                        <tr key={a.id} className="align-top">
+                          <td className="py-2 pr-2 font-extrabold text-ink whitespace-nowrap">{a.hora}</td>
+                          <td className={`py-2 pr-2 min-w-[200px] ${clicavel ? 'cursor-pointer hover:bg-surface' : ''}`} onClick={() => clicavel && abrirParaReagendar(a)} title={clicavel ? 'Clique para anotar e reagendar' : undefined}>
+                            <div className="font-bold text-ink">{a.clienteNome} <span className="text-xs text-ink-soft font-normal">cód. {a.clienteCod}</span></div>
+                            <div className="text-[11px] text-ink-soft">{a.origem === 'rodizio' ? 'rodízio de inativos' : a.origem === 'acompanhamento' ? 'acompanhamento (3 dias)' : a.origem === 'admin' ? 'agendado pelo admin' : 'agendado pelo vendedor'}</div>
+                            {a.obs && <div className="text-xs mt-0.5">📝 {a.obs}</div>}
+                            {a.resultado && <div className="text-xs mt-0.5 text-emerald-700">✅ {a.resultado}</div>}
+                          </td>
+                          {ehAdmin && <td className="py-2 pr-2 font-semibold text-ink whitespace-nowrap">{a.vendedorNome}</td>}
+                          <td className="py-2 pr-2">
+                            {st ? <span className="text-[11px] font-extrabold text-white rounded-full px-2 py-0.5 uppercase" style={{ background: st.cor }}>{st.label}</span> : <span className="text-ink-soft">—</span>}
+                          </td>
+                          <td className="py-2 pr-2 whitespace-nowrap font-bold" style={{ color: st?.cor }}>{dias === undefined ? '—' : dias >= 9999 ? 'sem compra' : `${dias} dias`}</td>
+                          <td className="py-2 pr-2 whitespace-nowrap text-xs">
+                            {cv ? (
+                              <>
+                                {new Date(cv.ultimaEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                                <div className="text-ink-soft">{diasConv <= 0 ? 'hoje' : `há ${diasConv} dias`}</div>
+                              </>
+                            ) : '—'}
+                          </td>
+                          <td className="py-2 pr-2">
+                            <span className={`text-[11px] font-bold rounded-full px-2 py-0.5 ${a.status === 'feito' ? 'bg-emerald-100 text-emerald-700' : a.data < hoje ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                              {a.status === 'feito' ? 'Feito' : a.data < hoje ? 'Atrasado' : 'Pendente'}
+                            </span>
+                          </td>
+                          <td className="py-2">
+                            <div className="flex gap-1">
+                              {a.telefone && <button onClick={() => abrirChat(a.telefone, a.clienteNome)} className="text-xs font-bold border border-line rounded-lg px-2 py-1">Chat</button>}
+                              {a.status === 'pendente' && <button onClick={() => { setConcluindo(a); setResultado(''); }} className="text-xs font-bold border border-emerald-300 text-emerald-700 rounded-lg px-2 py-1">Concluir</button>}
+                              {(ehAdmin || a.status === 'pendente') && (
+                                <button onClick={() => { if (empresaId && window.confirm('Excluir este agendamento?')) void removerAgendamento(empresaId, a.id); }} className="text-xs font-bold border border-line text-ink-soft rounded-lg px-2 py-1">Excluir</button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
