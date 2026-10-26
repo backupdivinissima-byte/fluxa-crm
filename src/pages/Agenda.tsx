@@ -180,6 +180,7 @@ export default function Agenda() {
     setMes(dataDeISO(primeiroDia));
     try {
       await criarAgendamentos(empresaId, p.itens);
+      for (const id of p.remover) await removerAgendamento(empresaId, id);
       const resumo = Object.entries(p.porVendedor).map(([n, q]) => `${n}: ${q}`).join(' · ');
       setAviso({ ok: true, texto: `✅ Rodízio criado: ${p.itens.length} agendamentos de ${formatarDataCurta(p.dias[0])} a ${formatarDataCurta(p.dias[p.dias.length - 1])} (${resumo}).` });
     } catch (e) {
@@ -422,13 +423,14 @@ export default function Agenda() {
             <h3 className="font-extrabold text-ink">Rodízio de clientes inativos</h3>
             <p className="text-sm text-ink-soft mt-2">
               Inativos disponíveis (mais de {diasInatividade} dias sem compra, com telefone, sem agendamento pendente): <b>{plano.inativosDisponiveis}</b>.
-              São {INATIVOS_POR_DIA} por vendedor por dia útil, começando pelos de maior valor histórico.
+              São até {INATIVOS_POR_DIA} por vendedor por dia útil, começando pelos de maior valor histórico. Cliente já contatado no mês descansa até o mês seguinte; se continuar sem comprar, volta ao rodízio para OUTRO vendedor.
             </p>
             {plano.itens.length === 0 ? (
               <p className="text-sm mt-3 text-red-600 font-semibold">Nada para agendar (sem inativos disponíveis ou sem vendedores ativos).</p>
             ) : (
               <>
-                <p className="text-sm mt-3">Serão criados <b>{plano.itens.length}</b> agendamentos em {plano.dias.length} dia(s) útil(eis) ({formatarDataCurta(plano.dias[0])} a {formatarDataCurta(plano.dias[plano.dias.length - 1])}):</p>
+                <p className="text-sm mt-3">Serão criados <b>{plano.itens.length}</b> agendamentos em {plano.dias.length} dia(s) útil(eis)
+                  {plano.reatribuidos > 0 ? `, ${plano.reatribuidos} deles voltando ao rodízio com outro vendedor` : ''} ({formatarDataCurta(plano.dias[0])} a {formatarDataCurta(plano.dias[plano.dias.length - 1])}):</p>
                 <ul className="text-sm mt-1 list-disc pl-5">
                   {Object.entries(plano.porVendedor).map(([n, q]) => <li key={n}>{n}: {q} clientes</li>)}
                 </ul>

@@ -110,6 +110,10 @@ export interface PlanoRodizio {
   inativosDisponiveis: number;
   porVendedor: Record<string, number>;
   dias: string[];
+  /** Agendamentos pendentes e vencidos (vendedor não fez o contato) que saem da carteira antiga ao criar o novo. */
+  remover: string[];
+  /** Clientes que voltaram ao rodízio para OUTRO vendedor (o anterior não efetivou venda). */
+  reatribuidos: number;
 }
 
 /** Distribui os clientes inativos (maior valor histórico primeiro) entre os vendedores ativos,
@@ -124,10 +128,28 @@ export function planejarRodizio(
   agora: Date = new Date()
 ): PlanoRodizio {
   const ativos = vendedores.filter((v) => v.ativo);
-  const jaAgendados = new Set(agenda.filter((a) => a.status === 'pendente').map((a) => a.clienteId));
+  const hojeISO0 = isoLocal(agora);
+  const mesAtual = hojeISO0.slice(0, 7);
+  // Pendente ainda no prazo = cliente já está na carteira de alguém. Pendente VENCIDO = o vendedor não fez o contato: sai da carteira dele.
+  const vencidos = agenda.filter((a) => a.status === 'pendente' && a.data < hojeISO0);
+  const idsVencidos = new Set(vencidos.map((a) => a.id));
+  const bloqueados = new Set(agenda.filter((a) => a.status === 'pendente' && !idsVencidos.has(a.id)).map((a) => a.clienteId));
+  // Contato já feito neste mês: o cliente descansa até o mês seguinte (se continuar sem comprar, volta ao rodízio).
+  for (const a of agenda) if (a.status === 'feito' && a.data.startsWith(mesAtual)) bloqueados.add(a.clienteId);
+  // Quem já tentou esse cliente (últimos 90 dias) — o rodízio entrega o cliente a OUTRO vendedor.
+  const limite = isoLocal(new Date(agora.getTime() - 90 * 86400000));
+  const tentou = new Map<string, Set<string>>();
+  for (const a of agenda) {
+    if (a.origem !== 'rodizio' || a.data < limite) continue;
+    const st = tentou.get(a.clienteId) ?? new Set<string>();
+    st.add(a.vendedorLogin);
+    tentou.set(a.clienteId, st);
+  }
   const fila = clientes
-    .filter((c) => diasSemAtend(c) > diasInatividade && !jaAgendados.has(c.id) && (c.telefone ?? '').replace(/\D/g, '').length >= 8)
+    .filter((c) => diasSemAtend(c) > diasInatividade && !bloqueados.has(c.id) && (c.telefone ?? '').replace(/\D/g, '').length >= 8)
     .sort((a, b) => (totalGeralReal(b) ?? 0) - (totalGeralReal(a) ?? 0));
+  const removerIds = new Set<string>();
+  let reatribuidos = 0;
   const inativosDisponiveis = fila.length;
 
   const minDe = (h: string) => Number(h.slice(0, 2)) * 60 + Number(h.slice(3));
@@ -145,15 +167,19 @@ export function planejarRodizio(
 
   const itens: PlanoRodizio['itens'] = [];
   const porVendedor: Record<string, number> = {};
-  let i = 0;
   for (const iso of dias) {
     const slots = slotsDe(iso);
     for (const v of ativos) {
       const ocupados = new Set(agenda.filter((a) => a.vendedorLogin === v.login && a.data === iso && a.status === 'pendente').map((a) => a.hora));
       const livres = slots.filter((h) => !ocupados.has(h));
       const qtd = Math.min(INATIVOS_POR_DIA, livres.length);
-      for (let k = 0; k < qtd && i < fila.length; k++, i++) {
-        const c = fila[i];
+      for (let k = 0; k < qtd && fila.length > 0; k++) {
+        // primeiro cliente da fila que ESTE vendedor ainda não tentou (se todos já tentou, pega o primeiro mesmo)
+        let idx = fila.findIndex((x) => !tentou.get(x.id)?.has(v.login));
+        if (idx < 0) idx = 0;
+        const c = fila.splice(idx, 1)[0];
+        if (tentou.get(c.id) && tentou.get(c.id)!.size > 0) reatribuidos++;
+        for (const vv of vencidos) if (vv.clienteId === c.id) removerIds.add(vv.id);
         const dias_ = diasSemAtend(c);
         itens.push({
           data: iso,
@@ -175,5 +201,5 @@ export function planejarRodizio(
       }
     }
   }
-  return { itens, inativosDisponiveis, porVendedor, dias };
+  return { itens, inativosDisponiveis, porVendedor, dias, remover: [...removerIds], reatribuidos };
 }
