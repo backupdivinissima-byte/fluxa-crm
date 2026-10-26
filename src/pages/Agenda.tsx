@@ -239,11 +239,6 @@ export default function Agenda() {
   const doMes = visiveis.filter((a) => a.data.startsWith(mesISO));
   const hojeLista = visiveis.filter((a) => a.data === hoje);
   const atrasados = visiveis.filter((a) => a.status === 'pendente' && a.data < hoje).length;
-  const porVendNoDia = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const a of doDia) m.set(a.vendedorNome, (m.get(a.vendedorNome) ?? 0) + 1);
-    return [...m.entries()].sort((a, b) => b[1] - a[1]);
-  }, [doDia]);
 
   // grade do calendário
   const primeiro = new Date(mes.getFullYear(), mes.getMonth(), 1);
@@ -382,8 +377,6 @@ export default function Agenda() {
             <div className="flex items-baseline gap-2 flex-wrap mb-3">
               <h2 className="text-base font-extrabold text-ink">{editando ? `Reagendar: ${editando.clienteNome} — ` : ''}{nomeDoDia(dia)}, {formatarDataCurta(dia)}</h2>
               <span className="text-xs text-ink-soft">{doDia.length} agendamento(s)</span>
-              </span>
-              )}
             </div>
 
             {!ehDiaUtil(dia) ? (
@@ -460,7 +453,6 @@ export default function Agenda() {
           </div>
 
           </div>
-        </div>
       </div>
 
   <div className="grid lg:grid-cols-3 gap-4 items-start mt-4">
