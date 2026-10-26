@@ -18,6 +18,7 @@ import Chat from './pages/Chat';
 import Agenda from './pages/Agenda';
 import Modulos from './pages/Modulos';
 import Erp from './pages/Erp';
+import Prospect from './pages/Prospect';
 import MetaAds from './pages/marketing/MetaAds';
 import Live from './pages/marketing/Live';
 import AnaliseMarketing from './pages/marketing/AnaliseMarketing';
@@ -70,6 +71,7 @@ function AppRoutes() {
         <Route path="/chat" element={<Chat />} />
         <Route path="/modulos" element={<Modulos />} />
         <Route path="/erp/:aba?" element={<Erp />} />
+        <Route path="/prospect" element={<Prospect />} />
         <Route path="/marketing" element={<Marketing />}>
           <Route index element={null} />
           <Route path="meta" element={<MetaAds />} />

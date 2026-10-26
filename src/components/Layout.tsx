@@ -1,6 +1,6 @@
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
-import { modulosDaEmpresa, moduloDaRota, rotaInicial, type Modulo } from '../lib/modulos';
+import { modulosDaEmpresa, moduloDaRota, rotaInicial, MODULOS_SEPARADOS, type Modulo } from '../lib/modulos';
 import AgendaLembrete from './AgendaLembrete';
 import AcompanhamentoCarteira from './AcompanhamentoCarteira';
 import CelebracaoMeta from './CelebracaoMeta';
@@ -47,9 +47,11 @@ const itens = [
   { to: '/erp/financeiro', label: 'Financeiro', icon: <IconErpFinanceiro />, apenasAdmin: true },
   { to: '/erp/cadastros', label: 'Cadastros', icon: <IconErpCadastros />, apenasAdmin: true },
   { to: '/erp/integracoes', label: 'Integrações', icon: <IconErpIntegracoes />, apenasAdmin: true },
+  // Encontrar e qualificar novos clientes (Fluxa Prospect): só admin.
+  { to: '/prospect', label: 'Prospecção', icon: <IconClientes />, apenasAdmin: true },
 ];
 
-const NOME_MODULO: Record<Modulo, string> = { crm: 'CRM', marketing: 'Marketing', chat: 'Chat', erp: 'ERP' };
+const NOME_MODULO: Record<Modulo, string> = { crm: 'CRM', marketing: 'Marketing', chat: 'Chat', erp: 'ERP', prospect: 'Prospect' };
 const CHAVE_MODULO_ATUAL = 'fluxa_modulo_atual';
 
 /** Nav superior única (marca + abas): nada de menu lateral, todas as abas
@@ -65,7 +67,8 @@ export default function Layout() {
   const modulos = modulosDaEmpresa(empresa);
   // O ERP é um módulo individual: nunca entra no "vincular tudo" (não mistura abas nem dados com os outros).
   // A ligação dele com CRM/Marketing/Chat será só por API.
-  const vinculaveis = modulos.filter((m) => m !== 'erp');
+  const vinculaveis = modulos.filter((m) => !MODULOS_SEPARADOS.includes(m));
+  const separados = modulos.filter((m) => MODULOS_SEPARADOS.includes(m));
   const varios = modulos.length > 1;
   const variosVinculaveis = vinculaveis.length > 1;
   const vinculados = variosVinculaveis && empresa?.modulosVinculados === true;
@@ -77,7 +80,7 @@ export default function Layout() {
     }
   });
   const moduloAtual: Modulo = moduloEscolhido && modulos.includes(moduloEscolhido) ? moduloEscolhido : modulos[0];
-  const visiveis: Modulo[] = !varios ? modulos : moduloAtual === 'erp' ? ['erp'] : vinculados ? vinculaveis : [moduloAtual];
+  const visiveis: Modulo[] = !varios ? modulos : MODULOS_SEPARADOS.includes(moduloAtual) ? [moduloAtual] : vinculados ? vinculaveis : [moduloAtual];
   const perguntarVinculo = papel === 'admin' && variosVinculaveis && empresa?.modulosVinculados === undefined;
 
   function trocarModulo(m: Modulo) {
@@ -104,15 +107,15 @@ export default function Layout() {
           <div className="flex items-center gap-2 mr-4 shrink-0">
             <img src={fluxaIcon} alt="Fluxa CRM" className="w-8 h-8" />
             <span className="text-lg font-extrabold tracking-tight text-ink">
-              {modulos.length === 1 && modulos[0] === 'marketing' ? 'Fluxa Marketing' : modulos.length === 1 && modulos[0] === 'chat' ? 'Fluxa Chat' : modulos.length === 1 && modulos[0] === 'erp' ? 'Fluxa ERP' : 'Fluxa CRM'}
+              {modulos.length === 1 && modulos[0] === 'marketing' ? 'Fluxa Marketing' : modulos.length === 1 && modulos[0] === 'chat' ? 'Fluxa Chat' : modulos.length === 1 && modulos[0] === 'erp' ? 'Fluxa ERP' : modulos.length === 1 && modulos[0] === 'prospect' ? 'Fluxa Prospect' : 'Fluxa CRM'}
             </span>
           </div>
 
-          {varios && (!vinculados || modulos.includes('erp')) && !perguntarVinculo && (
+          {varios && (!vinculados || separados.length > 0) && !perguntarVinculo && (
             <div className="flex bg-slate-100 rounded-lg p-0.5 mr-2 shrink-0">
-              {(vinculados ? [vinculaveis[0], 'erp' as Modulo] : modulos).map((m) => {
-                const grupo = vinculados && m !== 'erp';
-                const ativo = grupo ? moduloAtual !== 'erp' : m === moduloAtual;
+              {(vinculados ? [vinculaveis[0], ...separados] : modulos).map((m) => {
+                const grupo = vinculados && !MODULOS_SEPARADOS.includes(m);
+                const ativo = grupo ? !MODULOS_SEPARADOS.includes(moduloAtual) : m === moduloAtual;
                 return (
                   <button
                     key={m}

@@ -1,0 +1,255 @@
+import { useEffect, useMemo, useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { ouvirClientes } from '../lib/crmData';
+import {
+  atualizarLead,
+  buscarLugares,
+  consultarCnpj,
+  googleConfigurado,
+  notaDoLead,
+  ouvirLeads,
+  removerLead,
+  salvarLead,
+  type Lead,
+  type StatusLead,
+} from '../lib/prospectData';
+import type { Cliente } from '../types';
+
+const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
+const STATUS: Array<{ id: StatusLead; nome: string; cor: string }> = [
+  { id: 'novo', nome: 'Novo', cor: 'bg-blue-100 text-blue-700' },
+  { id: 'contatado', nome: 'Contatado', cor: 'bg-amber-100 text-amber-700' },
+  { id: 'interessado', nome: 'Interessado', cor: 'bg-emerald-100 text-emerald-700' },
+  { id: 'descartado', nome: 'Descartado', cor: 'bg-slate-100 text-slate-500' },
+];
+const fim9 = (s?: string) => (s ?? '').replace(/\D/g, '').slice(-9);
+const corNota = (n: number) => (n >= 70 ? '#27AE60' : n >= 45 ? '#E67E22' : '#C0392B');
+
+function Nota({ lead }: { lead: Lead }) {
+  return (
+    <span title={lead.motivos.join('\n')} className="inline-flex items-center justify-center min-w-[44px] h-7 rounded-full text-white text-xs font-extrabold px-2 cursor-help" style={{ background: corNota(lead.nota) }}>
+      {lead.nota}
+    </span>
+  );
+}
+
+export default function Prospect() {
+  const { empresa } = useAuth();
+  const empresaId = empresa?.id;
+  const [aba, setAba] = useState<'buscar' | 'leads'>('buscar');
+  const [termo, setTermo] = useState('loja de semijoias');
+  const [cidade, setCidade] = useState('');
+  const [uf, setUf] = useState('');
+  const [buscando, setBuscando] = useState(false);
+  const [erro, setErro] = useState('');
+  const [resultados, setResultados] = useState<Lead[]>([]);
+  const [proxima, setProxima] = useState<string | undefined>();
+  const [salvos, setSalvos] = useState<Lead[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [filtro, setFiltro] = useState<StatusLead | 'todos'>('todos');
+  const [aberto, setAberto] = useState<string | null>(null);
+  const [cnpjTxt, setCnpjTxt] = useState('');
+  const [msg, setMsg] = useState('');
+
+  useEffect(() => {
+    if (!empresaId) return;
+    const a = ouvirLeads(empresaId, setSalvos, (m) => setErro('Não consegui ler os leads salvos: ' + m));
+    const b = ouvirClientes(empresaId, setClientes);
+    return () => {
+      a();
+      b();
+    };
+  }, [empresaId]);
+
+  const telefonesClientes = useMemo(() => new Set(clientes.map((c) => fim9(c.telefone)).filter((t) => t.length === 9)), [clientes]);
+  const idsSalvos = useMemo(() => new Set(salvos.map((l) => l.id)), [salvos]);
+  const jaCliente = (l: Lead) => !!l.telefone && telefonesClientes.has(fim9(l.telefone));
+
+  async function buscar(mais = false) {
+    if (!termo.trim() || !cidade.trim()) {
+      setErro('Diga o que procura e a cidade.');
+      return;
+    }
+    setErro('');
+    setBuscando(true);
+    try {
+      const r = await buscarLugares(termo.trim(), cidade.trim(), uf, mais ? proxima : undefined);
+      setResultados((atual) => (mais ? [...atual, ...r.leads] : r.leads).sort((a, b) => b.nota - a.nota));
+      setProxima(r.proxima);
+      if (!mais && r.leads.length === 0) setErro('O Google não achou nada com essa busca. Tente outro termo ou cidade.');
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Não consegui buscar agora.');
+    } finally {
+      setBuscando(false);
+    }
+  }
+
+  async function guardar(l: Lead) {
+    if (!empresaId) return;
+    await salvarLead(empresaId, l);
+    setMsg(`"${l.nome}" salvo em Meus leads.`);
+  }
+  async function guardarTodos() {
+    if (!empresaId) return;
+    const novos = resultados.filter((l) => !idsSalvos.has(l.id) && !jaCliente(l));
+    for (const l of novos) await salvarLead(empresaId, l);
+    setMsg(`${novos.length} leads salvos (quem já é cliente ficou de fora).`);
+  }
+  async function mudarStatus(l: Lead, status: StatusLead) {
+    if (empresaId) await atualizarLead(empresaId, l.id, { status });
+  }
+  async function consultarReceita(l: Lead) {
+    if (!empresaId) return;
+    setErro('');
+    try {
+      const receita = await consultarCnpj(cnpjTxt);
+      const { nota, motivos } = notaDoLead({ ...l, receita });
+      await atualizarLead(empresaId, l.id, { cnpj: cnpjTxt.replace(/\D/g, ''), receita, nota, motivos });
+      setMsg('Dados da Receita adicionados e nota recalculada.');
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Falha ao consultar o CNPJ.');
+    }
+  }
+
+  const lista = salvos.filter((l) => filtro === 'todos' || l.status === filtro).sort((a, b) => b.nota - a.nota);
+
+  function renderLinha(l: Lead, salvo: boolean) {
+    const cli = jaCliente(l);
+    const st = STATUS.find((s) => s.id === l.status)!;
+    return (
+      <div key={l.id} className={`py-3 flex gap-3 items-start ${cli ? 'opacity-60' : ''}`}>
+        <Nota lead={l} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-extrabold text-ink">{l.nome}</span>
+            {cli && <span className="text-[10px] font-bold uppercase rounded-full px-2 py-0.5 bg-violet-100 text-violet-700">Já é cliente</span>}
+            {salvo && <span className={`text-[10px] font-bold uppercase rounded-full px-2 py-0.5 ${st.cor}`}>{st.nome}</span>}
+          </div>
+          <div className="text-xs text-ink-soft">{l.endereco}</div>
+          <div className="text-xs mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
+            {l.telefone && <span>📞 {l.telefone}{l.whatsapp ? ' (WhatsApp)' : ' (fixo)'}</span>}
+            {l.site && <a href={l.site} target="_blank" rel="noreferrer" className="text-blue-600 underline">site</a>}
+            {l.mapaUrl && <a href={l.mapaUrl} target="_blank" rel="noreferrer" className="text-blue-600 underline">mapa</a>}
+            {l.avaliacao && <span>⭐ {l.avaliacao} ({l.avaliacoes})</span>}
+            {l.aberto === false && <span className="text-red-600 font-bold">fechada no Google</span>}
+          </div>
+          {l.receita && (
+            <div className="text-[11px] text-ink-soft mt-0.5">
+              Receita: {l.receita.razao} · {l.receita.situacao} · {l.receita.cnae} · {l.receita.porte}
+            </div>
+          )}
+          {salvo && aberto === l.id && (
+            <div className="mt-2 space-y-2 bg-surface rounded-lg p-2">
+              <div className="flex gap-2 flex-wrap items-center">
+                <input value={cnpjTxt} onChange={(e) => setCnpjTxt(e.target.value)} placeholder="CNPJ (14 números)" className="h-8 rounded-lg border border-line px-2 text-xs w-48" />
+                <button onClick={() => void consultarReceita(l)} className="h-8 rounded-lg border border-line text-xs font-bold px-3 bg-white">Consultar na Receita</button>
+              </div>
+              <textarea
+                defaultValue={l.obs ?? ''}
+                onBlur={(e) => empresaId && e.target.value !== (l.obs ?? '') && void atualizarLead(empresaId, l.id, { obs: e.target.value })}
+                rows={2}
+                placeholder="Anotações sobre este lead…"
+                className="w-full rounded-lg border border-line px-2 py-1 text-xs"
+              />
+              <div className="text-[11px] text-ink-soft">Nota: {l.motivos.join(' · ')}</div>
+            </div>
+          )}
+        </div>
+        <div className="flex flex-col gap-1.5 shrink-0 items-end">
+          {l.whatsapp && !cli && (
+            <a href={`https://wa.me/${l.whatsapp}`} target="_blank" rel="noreferrer" className="text-xs font-bold border border-emerald-300 text-emerald-700 rounded-lg px-3 py-1.5">WhatsApp</a>
+          )}
+          {!salvo ? (
+            !cli && !idsSalvos.has(l.id) ? (
+              <button onClick={() => void guardar(l)} className="text-xs font-bold rounded-lg px-3 py-1.5 bg-gradient-to-br from-teal-500 to-blue-600 text-white">Salvar lead</button>
+            ) : (
+              idsSalvos.has(l.id) && <span className="text-[11px] text-ink-soft">salvo</span>
+            )
+          ) : (
+            <>
+              <select value={l.status} onChange={(e) => void mudarStatus(l, e.target.value as StatusLead)} className="h-8 rounded-lg border border-line px-1 text-xs bg-white">
+                {STATUS.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}
+              </select>
+              <div className="flex gap-1">
+                <button onClick={() => { setAberto(aberto === l.id ? null : l.id); setCnpjTxt(l.cnpj ?? ''); }} className="text-xs font-bold border border-line rounded-lg px-2 py-1">Detalhes</button>
+                <button onClick={() => { if (empresaId && window.confirm('Remover este lead?')) void removerLead(empresaId, l.id); }} className="text-xs font-bold border border-line text-ink-soft rounded-lg px-2 py-1">Remover</button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-4 w-full max-w-[1200px] mx-auto">
+      <div className="flex items-center gap-3 mb-3 flex-wrap">
+        <h1 className="text-xl font-extrabold text-ink">Prospecção</h1>
+        <span className="text-xs text-ink-soft">Encontre lojas, veja a nota de cada uma e salve as melhores como leads.</span>
+        <div className="ml-auto flex bg-slate-100 rounded-lg p-0.5">
+          {(['buscar', 'leads'] as const).map((a) => (
+            <button key={a} onClick={() => setAba(a)} className={`px-3 h-8 rounded-md text-xs font-bold uppercase ${aba === a ? 'bg-white text-ink shadow-sm' : 'text-ink-soft'}`}>
+              {a === 'buscar' ? 'Buscar' : `Meus leads (${salvos.length})`}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {!googleConfigurado && (
+        <div className="mb-3 rounded-xl border border-amber-300 bg-amber-50 text-amber-800 text-sm px-4 py-3">
+          A busca no Google ainda não foi ativada neste sistema (falta a chave do Google Places). Os leads já salvos continuam disponíveis.
+        </div>
+      )}
+      {msg && <div className="mb-3 rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-800 text-sm px-4 py-2 flex"><span className="flex-1">{msg}</span><button onClick={() => setMsg('')} className="font-bold">×</button></div>}
+      {erro && <div className="mb-3 rounded-xl border border-red-300 bg-red-50 text-red-700 text-sm px-4 py-2 flex"><span className="flex-1">{erro}</span><button onClick={() => setErro('')} className="font-bold">×</button></div>}
+
+      {aba === 'buscar' ? (
+        <>
+          <div className="bg-white border border-line rounded-xl p-4 mb-4 grid md:grid-cols-[2fr_2fr_90px_auto] gap-3 items-end">
+            <div>
+              <label className="text-xs font-bold text-ink-soft">O que procurar</label>
+              <input value={termo} onChange={(e) => setTermo(e.target.value)} className="w-full h-10 rounded-lg border border-line px-3 text-sm" placeholder="Ex.: loja de semijoias" />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-ink-soft">Cidade</label>
+              <input value={cidade} onChange={(e) => setCidade(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void buscar()} className="w-full h-10 rounded-lg border border-line px-3 text-sm" placeholder="Ex.: Belo Horizonte" />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-ink-soft">UF</label>
+              <select value={uf} onChange={(e) => setUf(e.target.value)} className="w-full h-10 rounded-lg border border-line px-2 text-sm bg-white">
+                <option value="">—</option>
+                {UFS.map((u) => <option key={u}>{u}</option>)}
+              </select>
+            </div>
+            <button disabled={buscando || !googleConfigurado} onClick={() => void buscar()} className="h-10 rounded-lg bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-5 disabled:opacity-50">
+              {buscando ? 'Buscando…' : 'Buscar'}
+            </button>
+          </div>
+          {resultados.length > 0 && (
+            <div className="bg-white border border-line rounded-xl p-4">
+              <div className="flex items-center gap-3 mb-1 flex-wrap">
+                <h2 className="text-sm font-extrabold text-ink">{resultados.length} resultados (da maior para a menor nota)</h2>
+                <button onClick={() => void guardarTodos()} className="ml-auto text-xs font-bold border border-teal-500 text-teal-600 rounded-lg px-3 py-1.5">Salvar todos</button>
+              </div>
+              <div className="divide-y divide-line">{resultados.map((l) => renderLinha(idsSalvos.has(l.id) ? salvos.find((s) => s.id === l.id) ?? l : l, false))}</div>
+              {proxima && (
+                <button disabled={buscando} onClick={() => void buscar(true)} className="mt-3 w-full h-10 rounded-lg border border-line text-sm font-bold">{buscando ? 'Buscando…' : 'Carregar mais 20'}</button>
+              )}
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="bg-white border border-line rounded-xl p-4">
+          <div className="flex gap-1 mb-2 flex-wrap">
+            {(['todos', ...STATUS.map((s) => s.id)] as const).map((f) => (
+              <button key={f} onClick={() => setFiltro(f)} className={`px-3 h-8 rounded-lg text-xs font-bold ${filtro === f ? 'bg-teal-500/10 text-teal-600' : 'text-ink-soft border border-line'}`}>
+                {f === 'todos' ? 'Todos' : STATUS.find((s) => s.id === f)!.nome} ({f === 'todos' ? salvos.length : salvos.filter((l) => l.status === f).length})
+              </button>
+            ))}
+          </div>
+          {lista.length === 0 ? <p className="text-sm text-ink-soft">Nenhum lead aqui ainda. Faça uma busca e salve os melhores.</p> : <div className="divide-y divide-line">{lista.map((l) => renderLinha(l, true))}</div>}
+        </div>
+      )}
+    </div>
+  );
+}

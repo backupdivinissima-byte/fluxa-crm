@@ -21,7 +21,7 @@ export interface Empresa {
   // Módulos contratados (cada um tem só as próprias abas). Sem este campo =
   // empresa antiga: segue com tudo liberado (exceto as que se cadastraram só
   // no Marketing, ver src/lib/modulos.ts).
-  modulos?: ('crm' | 'marketing' | 'chat' | 'erp')[];
+  modulos?: ('crm' | 'marketing' | 'chat' | 'erp' | 'prospect')[];
   // Com mais de um módulo: true = abas de todos juntas; false = módulos
   // separados (um de cada vez); sem valor = ainda não respondeu à pergunta.
   modulosVinculados?: boolean;

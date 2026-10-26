@@ -1,6 +1,9 @@
 import type { Empresa } from '../types';
 
-export type Modulo = 'crm' | 'marketing' | 'chat' | 'erp';
+export type Modulo = 'crm' | 'marketing' | 'chat' | 'erp' | 'prospect';
+
+/** Módulos individuais: nunca entram no "vincular tudo" (não misturam abas nem dados com os outros). */
+export const MODULOS_SEPARADOS: Modulo[] = ['erp', 'prospect'];
 
 /** Módulos que a empresa contratou. Empresas antigas (sem o campo) seguem
  * com tudo liberado, exceto as cadastradas só no Marketing. */
@@ -15,11 +18,12 @@ export function modulosDaEmpresa(e: Empresa | null | undefined): Modulo[] {
 export function moduloDaRota(caminho: string, modulos: Modulo[] = []): Modulo {
   if (caminho.startsWith('/marketing')) return 'marketing';
   if (caminho.startsWith('/erp')) return 'erp';
+  if (caminho.startsWith('/prospect')) return 'prospect';
   if (caminho.startsWith('/chat')) return modulos.includes('chat') ? 'chat' : 'crm';
   return 'crm';
 }
 
 /** Tela inicial de cada módulo. */
 export function rotaInicial(m: Modulo): string {
-  return m === 'marketing' ? '/marketing' : m === 'chat' ? '/chat' : m === 'erp' ? '/erp/inicio' : '/dashboard';
+  return m === 'marketing' ? '/marketing' : m === 'chat' ? '/chat' : m === 'erp' ? '/erp/inicio' : m === 'prospect' ? '/prospect' : '/dashboard';
 }

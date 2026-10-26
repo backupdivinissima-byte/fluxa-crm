@@ -286,7 +286,7 @@ const passos = [
   },
 ];
 
-const MODULO_DO_PRODUTO: Record<string, Modulo> = { 'Fluxa CRM': 'crm', 'Fluxa Chat': 'chat', 'Fluxa ERP': 'erp', 'Fluxa Marketing': 'marketing' };
+const MODULO_DO_PRODUTO: Record<string, Modulo> = { 'Fluxa CRM': 'crm', 'Fluxa Chat': 'chat', 'Fluxa ERP': 'erp', 'Fluxa Marketing': 'marketing', 'Fluxa Prospect': 'prospect' };
 
 export default function Home() {
   const location = useLocation();

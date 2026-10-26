@@ -11,6 +11,7 @@ const NOMES_MODULO: Record<Modulo, { nome: string; desc: string }> = {
   crm: { nome: 'Fluxa CRM', desc: 'Funil de vendas, clientes, vendedores, metas e agenda.' },
   chat: { nome: 'Fluxa Chat', desc: 'Atendimento por WhatsApp, Instagram e Messenger.' },
   erp: { nome: 'Fluxa ERP', desc: 'Produtos, estoque, pedidos, trocas e financeiro.' },
+  prospect: { nome: 'Fluxa Prospect', desc: 'Encontrar e qualificar novos clientes em potencial.' },
   marketing: { nome: 'Fluxa Marketing', desc: 'Anúncios, lives e ROI cruzados com o funil.' },
 };
 const CHAVE_MODULO = 'fluxa_modulo_atual';
