@@ -393,6 +393,7 @@ export interface MensagemChat {
   midiaPartes?: number; // vídeo/áudio longo guardado em partes no banco
   midiaMime?: string;
   midiaNome?: string; // nome do arquivo (documentos)
+  citada?: { id?: string; texto: string; de?: 'cliente' | 'equipe'; autor?: string }; // mensagem respondida (resposta com citação)
   erroEnvio?: string; // o conector não conseguiu entregar ao cliente
   entrega?: 'enviada' | 'entregue' | 'lida' | 'sem_confirmacao' | 'reenviada_pelo_robo' | 'reenviada_entregue'; // acompanhamento do robô
 }

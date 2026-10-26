@@ -169,7 +169,8 @@ export async function enviarMensagemChat(
   conversa: ConversaChat,
   texto: string,
   autor: string,
-  agendarPara?: string
+  agendarPara?: string,
+  citada?: { id: string; texto: string; de: 'cliente' | 'equipe'; autor?: string }
 ) {
   const agora = new Date().toISOString();
   let msgId: string | undefined;
@@ -179,6 +180,7 @@ export async function enviarMensagemChat(
       texto,
       em: agora,
       autor,
+      ...(citada ? { citada: { id: citada.id, texto: citada.texto.slice(0, 200), de: citada.de, ...(citada.autor ? { autor: citada.autor } : {}) } } : {}),
     });
     msgId = ref.id;
     await updateDoc(doc(db, 'empresas', empresaId, 'conversas', conversa.id), {
@@ -199,8 +201,32 @@ export async function enviarMensagemChat(
     enviada: false,
     jaRegistrada: !agendarPara, // imediata: o app já gravou a mensagem na conversa
     ...(msgId ? { msgId } : {}),
+    ...(citada ? { citadaId: citada.id, citadaTexto: citada.texto.slice(0, 200), citadaDe: citada.de } : {}),
     ...(agendarPara ? { agendadaPara: agendarPara } : {}),
   });
+}
+
+/** Encaminha uma mensagem para outra conversa: texto, foto e áudio seguem como estão; vídeo/arquivo seguem como link do Drive. */
+export async function encaminharMensagem(empresaId: string, msg: MensagemChat, destino: ConversaChat, autor: string): Promise<void> {
+  const ehRotulo = !!msg.texto && msg.texto.startsWith('[');
+  const legenda = ehRotulo ? '' : msg.texto;
+  if (msg.midiaUrl && !msg.midiaPartes && msg.midiaTipo === 'imagem') {
+    const blob = await (await fetch(msg.midiaUrl)).blob();
+    await enviarAnexoChat(empresaId, destino, blob, msg.midiaNome || 'foto.jpg', legenda, autor);
+    return;
+  }
+  if (msg.midiaUrl && !msg.midiaPartes && msg.midiaTipo === 'audio') {
+    await enviarAudioChat(empresaId, destino, msg.midiaUrl, autor);
+    return;
+  }
+  if (msg.midiaTipo) {
+    if (msg.midiaLink) {
+      await enviarMensagemChat(empresaId, destino, `${legenda ? legenda + '\n' : ''}${msg.midiaLink}`, autor);
+      return;
+    }
+    throw new Error('Esta mídia não pode ser encaminhada (só existe no celular). Reenvie o arquivo pelo celular.');
+  }
+  await enviarMensagemChat(empresaId, destino, msg.texto, autor);
 }
 
 /** Envia um áudio (data URL gravado no navegador) pelo WhatsApp. O conector converte

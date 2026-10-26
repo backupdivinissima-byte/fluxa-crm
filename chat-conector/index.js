@@ -197,6 +197,22 @@ async function semearCofre() {
   }
 }
 
+
+// Mensagem respondida pelo cliente (citação): guardamos um resumo para mostrar no chat.
+function extrairCitada(msg) {
+  try {
+    const m = normalizeMessageContent(msg.message) ?? {};
+    const ci = (m.extendedTextMessage ?? m.imageMessage ?? m.videoMessage ?? m.audioMessage ?? m.documentMessage ?? m.stickerMessage)?.contextInfo;
+    if (!ci?.quotedMessage) return undefined;
+    const q = normalizeMessageContent(ci.quotedMessage) ?? {};
+    const texto = q.conversation ?? q.extendedTextMessage?.text ?? q.imageMessage?.caption ?? q.videoMessage?.caption ?? q.documentMessage?.caption
+      ?? (q.imageMessage ? '📷 Foto' : q.audioMessage ? '🎤 Áudio' : q.videoMessage ? '🎥 Vídeo' : q.documentMessage ? '📄 Documento' : 'Mensagem');
+    return { id: ci.stanzaId ?? '', texto: String(texto).slice(0, 200) };
+  } catch {
+    return undefined;
+  }
+}
+
 // Move mensagens da conversa antiga (chave @lid) para a conversa do telefone.
 async function mesclarConversas(lid, tel) {
   if (lid === tel) return;
@@ -475,7 +491,8 @@ async function guardarMensagem(msg) {
   const snap = await conversaRef.get();
   if (!snap.data()?.nome) await conversaRef.set({ nome: msg.pushName || numero }, { merge: true });
   const msgRef = conversaRef.collection('mensagens').doc(msg.key.id);
-  await msgRef.set({ de: deCliente ? 'cliente' : 'equipe', texto, em: quando, ...(deCliente ? {} : { autor: 'Celular' }), ...(midia ?? {}) });
+  const citada = extrairCitada(msg);
+  await msgRef.set({ de: deCliente ? 'cliente' : 'equipe', texto, em: quando, ...(deCliente ? {} : { autor: 'Celular' }), ...(midia ?? {}), ...(citada ? { citada } : {}) });
   const bufPartes = partesPendentes.get(msg.key.id);
   if (bufPartes) {
     partesPendentes.delete(msg.key.id);
@@ -878,7 +895,11 @@ async function enviarSaida(d) {
       const par = [...lidParaTel.entries()].find(([, t]) => t === tel);
       if (par) await ensinarMapaBaileys([par]);
     }
-    enviada = await sock.sendMessage(destino, conteudo);
+    // Resposta com citação: o WhatsApp mostra a mensagem original acima da resposta.
+    const opcoesEnvio = dado.citadaId
+      ? { quoted: { key: { remoteJid: destino, fromMe: dado.citadaDe === 'equipe', id: dado.citadaId }, message: { conversation: dado.citadaTexto ?? '' } } }
+      : undefined;
+    enviada = await sock.sendMessage(destino, conteudo, opcoesEnvio);
     if (enviada?.key?.id) enviadasPorNos.add(enviada.key.id);
     lembrarEnviada(enviada?.key?.id, enviada?.message);
     robo?.enviada(

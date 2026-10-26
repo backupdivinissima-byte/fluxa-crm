@@ -20,6 +20,7 @@ import {
   type MensagemAgendada,
   chaveTelefone,
   enviarMensagemChat,
+  encaminharMensagem,
   enviarAudioChat,
   carregarMidiaPartes,
   enviarAnexoChat,
@@ -305,6 +306,10 @@ export default function Chat() {
   const [filtroTag, setFiltroTag] = useState<string | null>(null); // 'origem:instagram' ou 'tag:<id>'
   const [filtro, setFiltro] = useState<'todas' | 'novos' | 'minhas' | 'aguardando' | 'atendimento' | 'semresposta' | 'alerta'>('todas');
   const [abertaId, setAbertaId] = useState<string | null>(null);
+  const [respondendo, setRespondendo] = useState<MensagemChat | null>(null);
+  const [encaminhando, setEncaminhando] = useState<MensagemChat | null>(null);
+  const [buscaEnc, setBuscaEnc] = useState('');
+  const [avisoEnc, setAvisoEnc] = useState<{ ok: boolean; texto: string } | null>(null);
   // Vindo da Agenda: /chat?tel=NÚMERO abre a conversa desse telefone.
   const [params] = useSearchParams();
   const telParam = params.get('tel');
@@ -385,6 +390,10 @@ export default function Chat() {
     }, 3000);
     return () => clearTimeout(t);
   }, [telParam, conversas, empresaId, params]);
+
+  useEffect(() => {
+    setRespondendo(null); // resposta com citação vale só para a conversa em que foi iniciada
+  }, [abertaId]);
 
   useEffect(() => {
     if (!empresaId || !abertaId) return;
@@ -765,7 +774,9 @@ export default function Chat() {
     setQuando('');
     setMostrarEmojis(false);
     try {
-      await enviarMensagemChat(empresaId, aberta, t, meuNome, agendarPara);
+      const cit = respondendo ? { id: respondendo.id, texto: respondendo.texto && !respondendo.texto.startsWith('[') ? respondendo.texto : respondendo.midiaTipo === 'imagem' ? '📷 Foto' : respondendo.midiaTipo === 'audio' ? '🎤 Áudio' : respondendo.midiaTipo === 'video' ? '🎥 Vídeo' : respondendo.midiaTipo ? '📄 Arquivo' : respondendo.texto, de: respondendo.de, autor: respondendo.autor } : undefined;
+      setRespondendo(null);
+      await enviarMensagemChat(empresaId, aberta, t, meuNome, agendarPara, cit);
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Não foi possível enviar.');
     }
@@ -775,6 +786,46 @@ export default function Chat() {
 
   return (
     <div className={`${souAdmin ? 'py-6' : 'py-3'} pr-6 pl-2 w-full space-y-3`}>
+      {encaminhando && (
+        <div className="fixed inset-0 z-[60] bg-ink/40 flex items-center justify-center p-4" onClick={() => setEncaminhando(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-md p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-extrabold text-ink">Encaminhar mensagem</h3>
+            <div className="mt-2 rounded-lg bg-surface px-3 py-2 text-xs text-ink-soft line-clamp-3 whitespace-pre-wrap">{encaminhando.texto && !encaminhando.texto.startsWith('[') ? encaminhando.texto : encaminhando.midiaTipo ? `(${encaminhando.midiaTipo})` : encaminhando.texto}</div>
+            <input value={buscaEnc} onChange={(e) => setBuscaEnc(e.target.value)} placeholder="Buscar conversa por nome ou telefone" className="mt-3 w-full h-10 rounded-lg border border-line px-3 text-sm" autoFocus />
+            {avisoEnc && <div className={`mt-2 text-xs font-bold ${avisoEnc.ok ? 'text-emerald-700' : 'text-red-600'}`}>{avisoEnc.texto}</div>}
+            <div className="mt-2 max-h-72 overflow-auto divide-y divide-line">
+              {visiveis
+                .filter((c) => c.id !== aberta?.id)
+                .filter((c) => {
+                  const q = buscaEnc.trim().toLowerCase();
+                  const dig = q.replace(/\D/g, '');
+                  return !q || (c.nome ?? '').toLowerCase().includes(q) || (dig.length >= 3 && (c.telefone ?? c.contato ?? '').replace(/\D/g, '').includes(dig));
+                })
+                .slice(0, 30)
+                .map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={async () => {
+                      if (!empresaId || !encaminhando) return;
+                      try {
+                        await encaminharMensagem(empresaId, encaminhando, c, meuNome);
+                        setAvisoEnc({ ok: true, texto: `✅ Encaminhada para ${c.nome || c.contato}.` });
+                        setTimeout(() => setEncaminhando(null), 900);
+                      } catch (e) {
+                        setAvisoEnc({ ok: false, texto: e instanceof Error ? e.message : 'Não consegui encaminhar.' });
+                      }
+                    }}
+                    className="w-full text-left py-2 px-1 hover:bg-surface text-sm"
+                  >
+                    <b>{c.nome || c.contato}</b> <span className="text-xs text-ink-soft">{c.telefone ?? c.contato}</span>
+                  </button>
+                ))}
+            </div>
+            <button onClick={() => setEncaminhando(null)} className="mt-3 w-full rounded-xl border border-line text-sm font-bold py-2">Fechar</button>
+          </div>
+        </div>
+      )}
       {erroAbrir && (
         <div className="rounded-xl border border-red-300 bg-red-50 text-red-700 text-sm font-semibold px-4 py-3 flex items-start gap-3">
           <span className="flex-1">❌ {erroAbrir}</span>
@@ -1196,12 +1247,24 @@ export default function Chat() {
               </div>
               <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-2">
                 {mensagens.map((m) => (
-                  <div key={m.id} className={`flex ${m.de === 'equipe' ? 'justify-end' : 'justify-start'}`}>
+                  <div key={m.id} className={`group flex items-start gap-1 ${m.de === 'equipe' ? 'justify-end' : 'justify-start'}`}>
+                    {m.de === 'equipe' && (
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity pt-1 shrink-0">
+                        <button type="button" title="Responder esta mensagem" onClick={() => { setRespondendo(m); campoRef.current?.focus(); }} className="text-[11px] font-bold border border-line rounded-lg px-1.5 py-0.5 bg-white">↩ Responder</button>
+                        <button type="button" title="Encaminhar para outra conversa" onClick={() => { setEncaminhando(m); setBuscaEnc(''); setAvisoEnc(null); }} className="text-[11px] font-bold border border-line rounded-lg px-1.5 py-0.5 bg-white">➡ Encaminhar</button>
+                      </div>
+                    )}
                     <div
                       className={`max-w-[75%] rounded-2xl px-3 py-2 text-sm ${
                         m.de === 'equipe' ? 'bg-teal-500/10 text-ink' : 'bg-surface text-ink'
                       }`}
                     >
+                      {m.citada && (
+                        <div className="mb-1 rounded-lg border-l-4 border-teal-500 bg-white/70 px-2 py-1 text-[11px] text-ink-soft">
+                          <div className="font-bold text-teal-700">{m.citada.de === 'equipe' ? (m.citada.autor || 'Equipe') : 'Cliente'}</div>
+                          <div className="line-clamp-2 whitespace-pre-wrap break-words">{m.citada.texto}</div>
+                        </div>
+                      )}
                       {m.midiaPartes && empresaId && aberta ? (
                         <MidiaPartes empresaId={empresaId} conversaId={aberta.id} msg={m} />
                       ) : null}
@@ -1256,6 +1319,12 @@ export default function Chat() {
                         )}
                       </div>
                     </div>
+                    {m.de !== 'equipe' && (
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity pt-1 shrink-0">
+                        <button type="button" title="Responder esta mensagem" onClick={() => { setRespondendo(m); campoRef.current?.focus(); }} className="text-[11px] font-bold border border-line rounded-lg px-1.5 py-0.5 bg-white">↩ Responder</button>
+                        <button type="button" title="Encaminhar para outra conversa" onClick={() => { setEncaminhando(m); setBuscaEnc(''); setAvisoEnc(null); }} className="text-[11px] font-bold border border-line rounded-lg px-1.5 py-0.5 bg-white">➡ Encaminhar</button>
+                      </div>
+                    )}
                   </div>
                 ))}
                 <div ref={fimRef} />
@@ -1269,6 +1338,15 @@ export default function Chat() {
                   <div className="space-y-2">
                     {texto.trim() && (
                       <div className="text-[11px] text-teal-700 font-bold">✍️ {meuNome} está respondendo este cliente…</div>
+                    )}
+                    {respondendo && (
+                      <div className="flex items-start gap-2 rounded-lg border-l-4 border-teal-500 bg-surface px-3 py-1.5 text-[11px]">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-bold text-teal-700">Respondendo a {respondendo.de === 'equipe' ? (respondendo.autor || 'equipe') : 'cliente'}</div>
+                          <div className="truncate text-ink-soft">{respondendo.texto && !respondendo.texto.startsWith('[') ? respondendo.texto : respondendo.midiaTipo ? `(${respondendo.midiaTipo})` : respondendo.texto}</div>
+                        </div>
+                        <button type="button" onClick={() => setRespondendo(null)} className="font-bold text-ink-soft" title="Cancelar resposta">×</button>
+                      </div>
                     )}
                     {agendadas.length > 0 && (
                       <ul className="space-y-1">
