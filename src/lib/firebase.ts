@@ -68,6 +68,14 @@ export const chatPronto: Promise<void> = (async () => {
     console.error('Login anônimo do Chat falhou', e);
   }
 })();
+/** Refaz o login anônimo do chat se tiver caído (usado na reconexão automática). */
+export async function garantirLoginChat(): Promise<void> {
+  try {
+    if (!authChat.currentUser) await signInAnonymously(authChat);
+  } catch (e) {
+    console.error('Relogin do Chat falhou', e);
+  }
+}
 /** Roda o `iniciar` (que abre um listener) só depois do login do chat. */
 export function aposChatPronto(iniciar: () => () => void): () => void {
   let cancelado = false;

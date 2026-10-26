@@ -8,6 +8,8 @@ import {
   getDocs,
   limit,
   onSnapshot,
+  type Query,
+  type QuerySnapshot,
   orderBy,
   query,
   setDoc,
@@ -17,7 +19,7 @@ import {
   Bytes,
   type Unsubscribe,
 } from 'firebase/firestore';
-import { db as dbCrm, dbChat as db, chatPronto, aposChatPronto } from './firebase';
+import { db as dbCrm, dbChat as db, chatPronto, aposChatPronto, garantirLoginChat } from './firebase';
 import { acaoDaColuna } from './crmLogic';
 import { atualizarCampoCliente } from './crmData';
 import { CRM_COLUNAS_PADRAO } from '../types';
@@ -31,21 +33,53 @@ export function chaveTelefone(t?: string): string {
   return d.length > 11 ? d.slice(-11) : d;
 }
 
+/** onSnapshot que se recupera sozinho: se o listener cair (erro de rede/quota/token), reconecta com espera crescente;
+ * ao voltar o foco da aba ou a internet, reconecta na hora — mensagem nunca fica "presa" sem o usuário perceber. */
+function ouvirResiliente<T>(q: Query, mapear: (snap: QuerySnapshot) => T, cb: (v: T) => void, aoErro?: () => void): Unsubscribe {
+  let cancelado = false;
+  let unsub: (() => void) | null = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let tentativa = 0;
+  const parar = () => { if (unsub) { unsub(); unsub = null; } };
+  const iniciar = () => {
+    if (cancelado) return;
+    parar();
+    unsub = aposChatPronto(() => onSnapshot(q, (snap) => { tentativa = 0; cb(mapear(snap)); }, (err) => {
+      console.warn('[chat] listener caiu, reconectando', err?.code ?? err);
+      aoErro?.();
+      parar();
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => { void garantirLoginChat().then(iniciar); }, Math.min(30000, 2000 * 2 ** tentativa++));
+    }));
+  };
+  const reviver = () => { if (!cancelado && document.visibilityState !== 'hidden') iniciar(); };
+  window.addEventListener('online', reviver);
+  document.addEventListener('visibilitychange', reviver);
+  iniciar();
+  return () => {
+    cancelado = true;
+    if (timer) clearTimeout(timer);
+    window.removeEventListener('online', reviver);
+    document.removeEventListener('visibilitychange', reviver);
+    parar();
+  };
+}
+
 /** Todas as conversas (até 5000) — usada para mostrar a data da última conversa de cada cliente. */
 export function ouvirTodasConversas(empresaId: string, cb: (c: ConversaChat[]) => void): Unsubscribe {
   const q = query(conversasCol(empresaId), orderBy('ultimaEm', 'desc'), limit(5000));
-  return aposChatPronto(() => onSnapshot(q, (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ConversaChat)), () => cb([])));
+  return ouvirResiliente(q, (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ConversaChat), cb);
 }
 
 export function ouvirConversas(empresaId: string, cb: (c: ConversaChat[]) => void): Unsubscribe {
   const q = query(conversasCol(empresaId), orderBy('ultimaEm', 'desc'), limit(300));
-  return aposChatPronto(() => onSnapshot(q, (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ConversaChat))));
+  return ouvirResiliente(q, (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ConversaChat), cb);
 }
 
 export function ouvirMensagens(empresaId: string, conversaId: string, cb: (m: MensagemChat[]) => void): Unsubscribe {
   const q = query(collection(db, 'empresas', empresaId, 'conversas', conversaId, 'mensagens'), orderBy('em', 'desc'), limit(300));
   // As 300 mais NOVAS (antes eram as 300 mais antigas: conversa longa parava de mostrar mensagem nova), já em ordem cronológica.
-  return aposChatPronto(() => onSnapshot(q, (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as MensagemChat).reverse())));
+  return ouvirResiliente(q, (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() }) as MensagemChat).reverse(), cb);
 }
 
 export interface SugestaoSupervisora {
