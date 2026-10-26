@@ -1,13 +1,31 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import AuthShell from '../components/AuthShell';
 import CampoSenha from '../components/CampoSenha';
+import { modulosDaEmpresa, rotaInicial, type Modulo } from '../lib/modulos';
+
+const NOMES_MODULO: Record<Modulo, { nome: string; desc: string }> = {
+  crm: { nome: 'Fluxa CRM', desc: 'Funil de vendas, clientes, vendedores, metas e agenda.' },
+  chat: { nome: 'Fluxa Chat', desc: 'Atendimento por WhatsApp, Instagram e Messenger.' },
+  erp: { nome: 'Fluxa ERP', desc: 'Produtos, estoque, pedidos, trocas e financeiro.' },
+  marketing: { nome: 'Fluxa Marketing', desc: 'Anúncios, lives e ROI cruzados com o funil.' },
+};
+const CHAVE_MODULO = 'fluxa_modulo_atual';
+function abrirModulo(m: Modulo, navigate: (to: string) => void) {
+  try {
+    sessionStorage.setItem(CHAVE_MODULO, m);
+  } catch {
+    /* sem armazenamento */
+  }
+  navigate(rotaInicial(m));
+}
 
 export default function Login() {
-  const { login, loginVendedor } = useAuth();
+  const { login, loginVendedor, empresa } = useAuth();
+  const [aposLogin, setAposLogin] = useState(false);
   const navigate = useNavigate();
   const [params] = useSearchParams();
   // Link direto de um vendedor (aba "Links dos vendedores") já vem com
@@ -21,6 +39,16 @@ export default function Login() {
   const [carregando, setCarregando] = useState(false);
 
   const [aviso, setAviso] = useState('');
+  const produtoDoLink = params.get('plataforma') as Modulo | null;
+  const meusModulos = empresa ? modulosDaEmpresa(empresa) : [];
+  useEffect(() => {
+    if (!aposLogin || !empresa) return;
+    if (produtoDoLink && meusModulos.includes(produtoDoLink)) abrirModulo(produtoDoLink, navigate);
+    else if (meusModulos.length <= 1) abrirModulo(meusModulos[0] ?? 'crm', navigate);
+    // vários produtos: mostra a escolha abaixo
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aposLogin, empresa]);
+
   async function esqueci() {
     setErro(''); setAviso('');
     if (!identificador.includes('@')) { setErro('Digite seu e-mail acima e clique de novo em "Esqueci minha senha".'); return; }
@@ -42,19 +70,9 @@ export default function Login() {
       } else {
         await loginVendedor(identificador, senha, empresaHint);
       }
-      // Veio de um produto (ex.: "Entrar" no cadastro do ERP): entra direto nele, cada produto é separado.
-      const prod = params.get('plataforma');
-      const m = prod === 'erp' || prod === 'chat' || prod === 'marketing' || prod === 'crm' ? prod : null;
-      if (m && modo === 'admin') {
-        try {
-          sessionStorage.setItem('fluxa_modulo_atual', m);
-        } catch {
-          /* sem armazenamento */
-        }
-        navigate(m === 'erp' ? '/erp/inicio' : m === 'chat' ? '/chat' : m === 'marketing' ? '/marketing' : '/dashboard');
-      } else {
-        navigate('/dashboard');
-      }
+      // Administrador: entra direto se a empresa tem um produto só (ou veio de um produto); senão escolhe qual abrir.
+      if (modo === 'admin') setAposLogin(true);
+      else navigate('/dashboard');
     } catch (err) {
       // No modo vendedor, loginVendedor já lança mensagens próprias em
       // português (credenciais inválidas, autenticação indisponível, sem
@@ -82,10 +100,25 @@ export default function Login() {
     }
   }
 
+  if (aposLogin && empresa && meusModulos.length > 1 && !(produtoDoLink && meusModulos.includes(produtoDoLink))) {
+    return (
+      <AuthShell titulo="O que você quer acessar?" subtitulo={`${empresa.nome} tem mais de um produto Fluxa. Escolha por onde entrar.`} rodape={null}>
+        <div className="space-y-3">
+          {meusModulos.map((m) => (
+            <button key={m} onClick={() => abrirModulo(m, navigate)} className="w-full text-left rounded-xl border border-line bg-white px-4 py-3 hover:border-teal-500 hover:bg-teal-500/5 transition-colors">
+              <div className="text-sm font-extrabold text-ink">{NOMES_MODULO[m].nome}</div>
+              <div className="text-xs text-ink-soft">{NOMES_MODULO[m].desc}</div>
+            </button>
+          ))}
+        </div>
+      </AuthShell>
+    );
+  }
+
   return (
     <AuthShell
-      titulo="Entrar no Fluxa CRM"
-      subtitulo="Acesse o CRM da sua empresa."
+      titulo="Entrar no Fluxa"
+      subtitulo="Acesse a sua empresa."
       rodape={
         <>
           Ainda não tem uma empresa cadastrada?{' '}
