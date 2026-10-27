@@ -548,7 +548,8 @@ export default function Chat() {
           crmVendedorLogin: login,
           crmColunaChangedAt: new Date().toISOString(),
         });
-        await salvarContatoChat(empresaId, aberta.id, cli.razao ?? cli.nome ?? nomeContato.trim());
+        // O nome de cima é o da agenda (o digitado, o já salvo ou o do celular); a razão social do cliente aparece embaixo.
+        await salvarContatoChat(empresaId, aberta.id, nomeContato.trim() || (aberta.salvo ? aberta.nome : '') || aberta.nomeSugerido || cli.razao || cli.nome || '');
         await assumirConversa(empresaId, aberta.id, login, nomeVend, cli.id);
         setCodigoCliente('');
         setEditando(false);
@@ -563,7 +564,7 @@ export default function Chat() {
       }
       await salvarContatoChat(empresaId, aberta.id, nome);
       // Ao salvar o contato, ele passa a pertencer a quem salvou (se ainda não tiver dono).
-      if (!aberta.vendedorLogin) await assumir({ ...aberta, nome });
+      if (!aberta.vendedorLogin || (aberta.vendedorLogin === meuLogin && !aberta.clienteId)) await assumir({ ...aberta, nome });
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Não foi possível salvar o contato.');
     }
@@ -1203,7 +1204,7 @@ export default function Chat() {
                   </button>
                 )}
               </div>
-              {(!aberta.salvo || !aberta.clienteId || editando) && (
+              {(!aberta.salvo || editando) && (
                 <div className="flex flex-wrap items-center gap-2 px-4 py-2 border-b border-line bg-amber-50 text-xs">
                   <input
                     value={codigoCliente}
