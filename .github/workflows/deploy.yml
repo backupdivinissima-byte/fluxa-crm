@@ -25,6 +25,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+        env:
+          # Chave do Google Places (Fluxa Prospect). Fica em Settings > Secrets and variables > Actions; vazia = busca desativada.
+          VITE_GOOGLE_PLACES_KEY: ${{ secrets.VITE_GOOGLE_PLACES_KEY }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
