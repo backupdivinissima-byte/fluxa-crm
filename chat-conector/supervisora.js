@@ -7,7 +7,7 @@ import { BASE_SUPERVISORA } from './supervisora-base.js';
 
 const CHAVE = process.env.ANTHROPIC_API_KEY || '';
 const CHAVE_GEMINI = process.env.GEMINI_API_KEY || '';
-const MODELOS_GEMINI = (process.env.GEMINI_MODELO || 'gemini-2.5-flash-lite,gemini-flash-latest').split(',').map((m) => m.trim()).filter(Boolean); // o primeiro que tiver cota grátis responde
+const MODELOS_GEMINI = (process.env.GEMINI_MODELO || 'gemini-flash-lite-latest,gemini-flash-latest').split(',').map((m) => m.trim()).filter(Boolean); // o primeiro que tiver cota grátis responde
 const CHAVE_GROQ = process.env.GROQ_API_KEY || ''; // grátis: console.groq.com
 const MODELO_GROQ = process.env.GROQ_MODELO || 'llama-3.3-70b-versatile';
 const CHAVE_OPENROUTER = process.env.OPENROUTER_API_KEY || ''; // grátis (modelos ':free'): openrouter.ai
