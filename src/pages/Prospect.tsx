@@ -201,6 +201,11 @@ export default function Prospect() {
           <div className="text-xs mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
             {l.telefone && <span>📞 {l.telefone}{l.whatsapp ? ' (WhatsApp)' : ' (fixo)'}</span>}
             {l.site && <a href={l.site} target="_blank" rel="noreferrer" className="text-blue-600 underline">site</a>}
+            {l.instagram ? (
+              <a href={`https://instagram.com/${l.instagram}`} target="_blank" rel="noreferrer" className="text-pink-600 font-bold">@{l.instagram}</a>
+            ) : (
+              <a href={`https://www.google.com/search?q=${encodeURIComponent(`${l.nome} ${l.endereco?.split(',').slice(-2, -1)[0]?.trim() ?? ''} instagram`)}`} target="_blank" rel="noreferrer" className="text-ink-soft underline" title="Procurar o Instagram desta loja no Google">achar instagram</a>
+            )}
             {l.mapaUrl && <a href={l.mapaUrl} target="_blank" rel="noreferrer" className="text-blue-600 underline">mapa</a>}
             {l.avaliacao && <span>⭐ {l.avaliacao} ({l.avaliacoes})</span>}
             {l.aberto === false && <span className="text-red-600 font-bold">fechada no Google</span>}
@@ -215,6 +220,18 @@ export default function Prospect() {
               <div className="flex gap-2 flex-wrap items-center">
                 <input value={cnpjTxt} onChange={(e) => setCnpjTxt(e.target.value)} placeholder="CNPJ (14 números)" className="h-8 rounded-lg border border-line px-2 text-xs w-48" />
                 <button onClick={() => void consultarReceita(l)} className="h-8 rounded-lg border border-line text-xs font-bold px-3 bg-white">Consultar na Receita</button>
+              </div>
+              <div className="flex gap-2 items-center">
+                <span className="text-xs font-bold text-ink-soft">Instagram @</span>
+                <input
+                  defaultValue={l.instagram ?? ''}
+                  onBlur={(e) => {
+                    const v = e.target.value.trim().replace(/^@/, '').replace(/^https?:\/\/(www\.)?instagram\.com\//i, '').replace(/[/?].*$/, '');
+                    if (empresaId && v !== (l.instagram ?? '')) void atualizarLead(empresaId, l.id, { instagram: v });
+                  }}
+                  placeholder="nomedaloja"
+                  className="h-8 rounded-lg border border-line px-2 text-xs w-48 bg-white"
+                />
               </div>
               <textarea
                 defaultValue={l.obs ?? ''}

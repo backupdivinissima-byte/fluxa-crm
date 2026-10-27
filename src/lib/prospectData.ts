@@ -18,6 +18,7 @@ export interface Lead {
   aberto?: boolean; // funcionando
   tipos?: string[];
   cnpj?: string;
+  instagram?: string; // @ do Instagram (sem o @)
   receita?: { razao?: string; fantasia?: string; situacao?: string; cnae?: string; porte?: string; abertura?: string; municipio?: string; uf?: string; telefone?: string; email?: string };
   nota: number; // 0–100
   motivos: string[];
