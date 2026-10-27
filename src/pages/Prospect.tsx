@@ -62,7 +62,6 @@ export default function Prospect() {
   const [proxima, setProxima] = useState<string | undefined>();
   const [salvos, setSalvos] = useState<Lead[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [filtro, setFiltro] = useState<StatusLead | 'todos'>('todos');
   const [aberto, setAberto] = useState<string | null>(null);
   const [cnpjTxt, setCnpjTxt] = useState('');
   const [msg, setMsg] = useState('');
@@ -180,13 +179,17 @@ export default function Prospect() {
     }
   }
 
-  const lista = salvos.filter((l) => filtro === 'todos' || l.status === filtro).sort((a, b) => b.nota - a.nota);
 
-  function renderLinha(l: Lead, salvo: boolean) {
+  function renderLinha(l: Lead, salvo: boolean, card = false) {
     const cli = jaCliente(l);
     const st = STATUS.find((s) => s.id === l.status)!;
     return (
-      <div key={l.id} className={`py-3 flex gap-3 items-start ${cli ? 'opacity-60' : ''}`}>
+      <div
+        key={l.id}
+        draggable={card}
+        onDragStart={card ? (e) => e.dataTransfer.setData('text/plain', l.id) : undefined}
+        className={card ? `bg-white border border-line rounded-xl p-3 flex flex-col gap-2 shadow-sm cursor-grab active:cursor-grabbing ${cli ? 'opacity-60' : ''}` : `py-3 flex gap-3 items-start ${cli ? 'opacity-60' : ''}`}
+      >
         <Nota lead={l} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
@@ -224,7 +227,7 @@ export default function Prospect() {
             </div>
           )}
         </div>
-        <div className="flex flex-col gap-1.5 shrink-0 items-end">
+        <div className={card ? 'flex flex-wrap gap-1.5 items-center' : 'flex flex-col gap-1.5 shrink-0 items-end'}>
           {l.whatsapp && !cli && (
             temChat ? (
               <button onClick={() => abrirNoChat(l)} className="text-xs font-bold border border-emerald-300 text-emerald-700 rounded-lg px-3 py-1.5">Abrir no Chat</button>
@@ -257,7 +260,7 @@ export default function Prospect() {
   }
 
   return (
-    <div className="p-4 w-full max-w-[1200px] mx-auto">
+    <div className="p-4 w-full">
       <div className="flex items-center gap-3 mb-3 flex-wrap">
         <h1 className="text-xl font-extrabold text-ink">Prospecção</h1>
         <span className="text-xs text-ink-soft">Encontre lojas, veja a nota de cada uma e salve as melhores como leads.</span>
@@ -360,15 +363,30 @@ export default function Prospect() {
           )}
         </>
       ) : (
-        <div className="bg-white border border-line rounded-xl p-4">
-          <div className="flex gap-1 mb-2 flex-wrap">
-            {(['todos', ...STATUS.map((s) => s.id)] as const).map((f) => (
-              <button key={f} onClick={() => setFiltro(f)} className={`px-3 h-8 rounded-lg text-xs font-bold ${filtro === f ? 'bg-teal-500/10 text-teal-600' : 'text-ink-soft border border-line'}`}>
-                {f === 'todos' ? 'Todos' : STATUS.find((s) => s.id === f)!.nome} ({f === 'todos' ? salvos.length : salvos.filter((l) => l.status === f).length})
-              </button>
-            ))}
-          </div>
-          {lista.length === 0 ? <p className="text-sm text-ink-soft">Nenhum lead aqui ainda. Faça uma busca e salve os melhores.</p> : <div className="divide-y divide-line">{lista.map((l) => renderLinha(l, true))}</div>}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 items-start">
+          {STATUS.map((col) => {
+            const itens = salvos.filter((l) => l.status === col.id).sort((x, y) => y.nota - x.nota);
+            return (
+              <div
+                key={col.id}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const lead = salvos.find((x) => x.id === e.dataTransfer.getData('text/plain'));
+                  if (lead && lead.status !== col.id) void mudarStatus(lead, col.id);
+                }}
+                className="bg-slate-50 border border-line rounded-xl p-2 min-h-[240px]"
+              >
+                <div className="flex items-center justify-between px-1 pb-2">
+                  <span className={`text-xs font-extrabold uppercase rounded-full px-2.5 py-1 ${col.cor}`}>{col.nome}</span>
+                  <span className="text-xs font-bold text-ink-soft">{itens.length}</span>
+                </div>
+                <div className="space-y-2 max-h-[75vh] overflow-y-auto">
+                  {itens.length === 0 ? <p className="text-xs text-ink-soft px-1 py-4 text-center">Arraste leads para cá.</p> : itens.map((l) => renderLinha(l, true, true))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
