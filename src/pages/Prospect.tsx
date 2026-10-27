@@ -118,6 +118,26 @@ export default function Prospect() {
       setErro(e instanceof Error ? e.message : 'Não consegui transferir.');
     }
   }
+  async function gerarRodizioProspect() {
+    if (!empresaId) return;
+    const ativos = vendedores.filter((v) => v.ativo);
+    if (ativos.length === 0) return setErro('Não há vendedor ativo para receber os leads.');
+    const fila = salvos.filter((l) => l.status === 'novo' && !l.rodizioLogin && !!l.whatsapp).sort((x, y) => y.nota - x.nota);
+    if (fila.length === 0) return setErro('Não há leads novos com WhatsApp para distribuir.');
+    if (!window.confirm(`Distribuir ${fila.length} leads novos entre ${ativos.length} vendedor(es)? Cada lead explode na tela do vendedor.`)) return;
+    const carga: Record<string, number> = {};
+    for (const v of ativos) carga[v.login] = agenda.filter((a) => a.vendedorLogin === v.login && a.status === 'pendente').length;
+    try {
+      for (const l of fila) {
+        const v = [...ativos].sort((x, y) => carga[x.login] - carga[y.login])[0];
+        carga[v.login]++;
+        await enviarAoRodizio(empresaId, l, { login: v.login, nome: v.nome }, meuNome, clientes);
+      }
+      setMsg(`${fila.length} leads distribuídos no rodízio de prospect.`);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Não consegui gerar o rodízio.');
+    }
+  }
   async function mandarRodizio(l: Lead) {
     if (!empresaId) return;
     const ativos = vendedores.filter((v) => v.ativo);
@@ -466,6 +486,9 @@ export default function Prospect() {
               >
                 <div className="flex items-center justify-between px-1 pb-2">
                   <span className={`text-xs font-extrabold uppercase rounded-full px-2.5 py-1 ${col.cor}`}>{col.nome}</span>
+                  {col.id === 'novo' && souAdmin && (
+                    <button onClick={() => void gerarRodizioProspect()} className="text-[11px] font-bold rounded-lg px-2.5 py-1 bg-violet-600 text-white">Gerar rodízio de prospect</button>
+                  )}
                   <span className="text-xs font-bold text-ink-soft">{itens.length}</span>
                 </div>
                 <div className="space-y-2 max-h-[75vh] overflow-y-auto">
