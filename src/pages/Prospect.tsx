@@ -4,8 +4,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { criarContatoChat, enviarMensagemChat, ouvirConexaoWhatsapp, ouvirTodasConversas, solicitarConexaoWhatsapp } from '../lib/chatData';
 import { modulosDaEmpresa } from '../lib/modulos';
 import type { ConexaoChat } from '../types';
-import { ouvirClientes, ouvirVendedores } from '../lib/crmData';
-import { ouvirAgenda, type Agendamento } from '../lib/agendaData';
+import { atualizarCampoCliente, ouvirClientes, ouvirVendedores } from '../lib/crmData';
+import { ouvirAgenda, removerAgendamento, type Agendamento } from '../lib/agendaData';
 import {
   atualizarLead,
   buscarLugares,
@@ -136,6 +136,18 @@ export default function Prospect() {
       setMsg(`${fila.length} leads distribuídos no rodízio de prospect.`);
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Não consegui gerar o rodízio.');
+    }
+  }
+  async function tirarDoRodizio(l: Lead) {
+    if (!empresaId) return;
+    try {
+      const itens = agenda.filter((a) => a.clienteId === l.clienteId && a.origem === 'rodizio' && a.status === 'pendente');
+      for (const a of itens) await removerAgendamento(empresaId, a.id);
+      if (l.clienteId) await atualizarCampoCliente(empresaId, l.clienteId, { crmVendedorLogin: undefined }).catch(() => {});
+      await atualizarLead(empresaId, l.id, { rodizioLogin: '' });
+      setMsg(`${l.nome} saiu do rodízio.`);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Não consegui tirar do rodízio.');
     }
   }
   async function mandarRodizio(l: Lead) {
@@ -353,12 +365,17 @@ export default function Prospect() {
               {souAdmin && ['novo', 'contatado', 'interessado'].includes(l.status) && !l.rodizioLogin && (
                 <button onClick={() => void mandarRodizio(l)} className="text-xs font-bold rounded-lg px-3 py-1.5 bg-violet-600 text-white" title="Entrega o lead a um vendedor: explode na tela dele para iniciar o atendimento">Enviar ao rodízio</button>
               )}
-              {l.rodizioLogin && l.status !== 'transferido' && <span className="text-[11px] font-bold text-violet-700">no rodízio</span>}
+              {l.rodizioLogin && l.status !== 'transferido' && (
+                <>
+                  <span className="text-[11px] font-bold text-violet-700">no rodízio</span>
+                  {souAdmin && <button onClick={() => void tirarDoRodizio(l)} className="text-xs font-bold border border-violet-300 text-violet-700 rounded-lg px-2 py-1">Tirar do rodízio</button>}
+                </>
+              )}
               {l.status === 'transferido' && <span className="text-[11px] font-bold text-orange-700">no CRM</span>}
               {l.status === 'descartado' ? (
                 <button onClick={() => void mudarStatus(l, 'novo')} className="text-xs font-bold border border-line rounded-lg px-2 py-1">Reabrir</button>
               ) : l.status !== 'transferido' ? (
-                <button onClick={() => void mudarStatus(l, 'descartado')} className="text-xs font-bold border border-line text-ink-soft rounded-lg px-2 py-1">Descartar</button>
+                <button onClick={() => { if (l.rodizioLogin) void tirarDoRodizio(l); void mudarStatus(l, 'descartado'); }} className="text-xs font-bold border border-line text-ink-soft rounded-lg px-2 py-1">Descartar</button>
               ) : null}
               <div className="flex gap-1">
                 <button onClick={() => { setAberto(aberto === l.id ? null : l.id); setCnpjTxt(l.cnpj ?? ''); }} className="text-xs font-bold border border-line rounded-lg px-2 py-1">Detalhes</button>
