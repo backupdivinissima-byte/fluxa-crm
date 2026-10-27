@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { corrigirNonoDigito } from '../lib/chatData';
 import { ouvirEmpresa } from '../lib/crmData';
+import { descartarLead } from '../lib/prospectData';
 import { atualizarAgendamento, ouvirAgenda, type Agendamento } from '../lib/agendaData';
 
 /** Lembrete estilo Outlook: abre na hora marcada. O vendedor pode adiar UMA vez (5, 10 ou 15 min, no máximo 15). */
@@ -82,6 +83,16 @@ export default function AgendaLembrete() {
     const m = Math.min(15, Math.max(1, minutos));
     await atualizarAgendamento(empresaId, devido.id, { adiado: true, lembreteEm: new Date(Date.now() + m * 60000).toISOString() });
   }
+  async function descartarContato() {
+    if (!devido || !empresaId || !devido.leadId) return;
+    if (!window.confirm('Descartar este contato? Ele sai da sua tela e vai para Descartados no Prospect.')) return;
+    try {
+      await descartarLead(empresaId, devido.leadId);
+      await atualizarAgendamento(empresaId, devido.id, { status: 'feito', resultado: 'Lead descartado: sem interesse.', feitoEm: new Date().toISOString() });
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'Não consegui descartar o contato.');
+    }
+  }
   async function concluir() {
     if (!devido || !empresaId || !resultado.trim()) return;
     await atualizarAgendamento(empresaId, devido.id, { status: 'feito', resultado: resultado.trim(), feitoEm: new Date().toISOString() });
@@ -116,6 +127,9 @@ export default function AgendaLembrete() {
                 )}
                 <button onClick={() => setConcluindo(true)} className="flex-1 rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold py-2">Concluir</button>
               </div>
+              {devido.leadId && (
+                <button onClick={() => void descartarContato()} className="w-full rounded-xl border border-red-300 bg-red-50 text-red-700 text-sm font-bold py-2">🚫 Descartar contato (sem interesse)</button>
+              )}
               {devido.adiado ? (
                 <p className="text-xs text-ink-soft">Este lembrete já foi adiado uma vez — conclua o contato.</p>
               ) : (

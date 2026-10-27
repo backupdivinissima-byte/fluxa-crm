@@ -217,6 +217,7 @@ export async function enviarAoRodizio(empresaId: string, lead: Lead, vendedor: {
       status: 'pendente',
       origem: 'rodizio',
       prospect: true,
+      leadId: lead.id,
       criadoEm: agora.toISOString(),
       criadoPor: autor,
       lembreteEm: agora.toISOString(),
@@ -227,4 +228,9 @@ export async function enviarAoRodizio(empresaId: string, lead: Lead, vendedor: {
 
 export async function definirEstadoRodizio(empresaId: string, estado: 'ativo' | 'pausado' | 'desativado') {
   await updateDoc(doc(db, 'empresas', empresaId), { prospectRodizio: estado });
+}
+
+/** O vendedor viu que o lead não tem interesse: sai do rodízio e vai para Descartado. */
+export async function descartarLead(empresaId: string, leadId: string) {
+  await atualizarLead(empresaId, leadId, { status: 'descartado', rodizioLogin: '' });
 }
