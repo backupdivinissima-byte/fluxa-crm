@@ -270,6 +270,24 @@ export default function Prospect() {
         </div>
       </div>
 
+      {/* Dash */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 mb-3">
+        {[
+          { t: 'Leads salvos', v: salvos.length, s: 'no total' },
+          { t: 'Novos', v: salvos.filter((l) => l.status === 'novo').length, s: 'ainda sem contato' },
+          { t: 'Contatados', v: salvos.filter((l) => l.status === 'contatado').length, s: 'aguardando resposta' },
+          { t: 'Interessados', v: salvos.filter((l) => l.status === 'interessado').length, s: 'quentes' },
+          { t: 'Nota média', v: salvos.length ? Math.round(salvos.reduce((a, l) => a + l.nota, 0) / salvos.length) : 0, s: 'de 0 a 100' },
+          { t: 'Com WhatsApp', v: salvos.filter((l) => !!l.whatsapp).length, s: `${salvos.filter((l) => l.nota >= 70).length} com nota 70+` },
+        ].map((c) => (
+          <div key={c.t} className="bg-white border border-line rounded-xl px-3 py-2">
+            <div className="text-[11px] font-bold text-ink-soft uppercase">{c.t}</div>
+            <div className="text-xl font-extrabold text-ink leading-tight">{c.v}</div>
+            <div className="text-[11px] text-ink-soft">{c.s}</div>
+          </div>
+        ))}
+      </div>
+
       {!googleConfigurado && (
         <div className="mb-3 rounded-xl border border-amber-300 bg-amber-50 text-amber-800 text-sm px-4 py-3">
           A busca no Google ainda não foi ativada neste sistema (falta a chave do Google Places). Os leads já salvos continuam disponíveis.
