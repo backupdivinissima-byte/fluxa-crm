@@ -19,6 +19,7 @@ import Agenda from './pages/Agenda';
 import Modulos from './pages/Modulos';
 import Erp from './pages/Erp';
 import Prospect from './pages/Prospect';
+import AcessoProduto from './pages/AcessoProduto';
 import MetaAds from './pages/marketing/MetaAds';
 import Live from './pages/marketing/Live';
 import AnaliseMarketing from './pages/marketing/AnaliseMarketing';
@@ -52,6 +53,7 @@ function AppRoutes() {
       <Route path="/produtos" element={<Home />} />
       <Route path="/login" element={<Login />} />
       <Route path="/cadastrar" element={<Cadastrar />} />
+      <Route path="/acesso" element={<AcessoProduto />} />
       <Route
         element={
           <RotaProtegida>

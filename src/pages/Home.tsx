@@ -349,7 +349,7 @@ export default function Home() {
                   {produtos.map((p) => (
                     <Link
                       key={p.nome}
-                      to={destinoDe(p).to ?? '/produtos'}
+                      to={(destinoDe(p).to ?? '/produtos').replace('/cadastrar?plataforma=', '/acesso?plataforma=')}
                       className="flex items-start gap-3 rounded-xl p-3 hover:bg-surface transition-colors"
                     >
                       <div className="shrink-0 scale-[0.7] origin-top-left -mr-2 -mt-1">{p.icon}</div>
