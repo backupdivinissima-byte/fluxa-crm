@@ -1,5 +1,6 @@
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { ouvirVendedores } from '../lib/crmData';
 import { DONOS_PLATAFORMA } from '../pages/Modulos';
 import { modulosDaEmpresa, moduloDaRota, rotaInicial, MODULOS_SEPARADOS, type Modulo } from '../lib/modulos';
 import AgendaLembrete from './AgendaLembrete';
@@ -63,6 +64,15 @@ export default function Layout() {
   const { empresa, perfil, sessaoVendedor, papel, sair, definirVinculoModulos } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  // O que o gerencial liberou para este vendedor (atualiza ao vivo, sem precisar sair e entrar).
+  const [acessosVend, setAcessosVend] = useState<Array<'crm' | 'chat' | 'prospect'>>(sessaoVendedor?.vendedor.acessos ?? ['crm', 'chat']);
+  useEffect(() => {
+    if (papel !== 'vendedor' || !empresa?.id || !sessaoVendedor) return;
+    return ouvirVendedores(empresa.id, (lista) => {
+      const eu = lista.find((v) => v.login === sessaoVendedor.vendedor.login);
+      if (eu) setAcessosVend(eu.acessos ?? ['crm', 'chat']);
+    });
+  }, [papel, empresa?.id, sessaoVendedor]);
 
   // Módulos contratados: cada um mostra só as próprias abas. Com mais de um,
   // a empresa escolhe vincular tudo (todas as abas juntas) ou trabalhar em
@@ -86,7 +96,9 @@ export default function Layout() {
   const moduloDaTela = moduloDaRota(location.pathname, modulos);
   const rotaNeutra = location.pathname === '/modulos' || location.pathname === '/dashboard';
   const moduloAtual: Modulo = !rotaNeutra && modulos.includes(moduloDaTela) ? moduloDaTela : moduloEscolhido && modulos.includes(moduloEscolhido) ? moduloEscolhido : modulos[0];
-  const visiveis: Modulo[] = !varios ? modulos : MODULOS_SEPARADOS.includes(moduloAtual) ? [moduloAtual] : vinculados ? vinculaveis : [moduloAtual];
+  const visiveisAdmin: Modulo[] = !varios ? modulos : MODULOS_SEPARADOS.includes(moduloAtual) ? [moduloAtual] : vinculados ? vinculaveis : [moduloAtual];
+  // Vendedor não troca de módulo: vê o que o gerencial liberou (abas filtradas abaixo).
+  const visiveis: Modulo[] = papel === 'admin' ? visiveisAdmin : modulos;
   const perguntarVinculo = papel === 'admin' && variosVinculaveis && empresa?.modulosVinculados === undefined;
 
   function trocarModulo(m: Modulo) {
@@ -103,6 +115,13 @@ export default function Layout() {
   if (empresa?.id && !visiveis.includes(moduloDaRota(location.pathname, modulos))) {
     return <Navigate to={rotaInicial(visiveis[0])} replace />;
   }
+  // Vendedor abrindo uma aba que o gerencial não liberou: volta para a primeira que ele tem.
+  const grupoDe = (to: string): 'crm' | 'chat' | 'prospect' => (to.startsWith('/chat') ? 'chat' : to.startsWith('/prospect') ? 'prospect' : 'crm');
+  const abaDoVendedor = (item: (typeof itens)[number]) => (!item.apenasAdmin || item.to === '/prospect') && !('apenasDono' in item) && acessosVend.includes(grupoDe(item.to)) && visiveis.includes(moduloDaRota(item.to, modulos));
+  if (papel === 'vendedor' && /^\/(chat|prospect|dashboard|crm|agenda|clientes|metas)/.test(location.pathname) && !acessosVend.includes(grupoDe(location.pathname))) {
+    const primeira = itens.find(abaDoVendedor);
+    if (primeira && primeira.to !== location.pathname) return <Navigate to={primeira.to} replace />;
+  }
 
   const nomeUsuario = papel === 'admin' ? perfil?.nome : sessaoVendedor?.vendedor.nome;
 
@@ -117,7 +136,7 @@ export default function Layout() {
             </span>
           </div>
 
-          {varios && (!vinculados || separados.length > 0) && !perguntarVinculo && (
+          {papel === 'admin' && varios && (!vinculados || separados.length > 0) && !perguntarVinculo && (
             <div className="flex bg-slate-100 rounded-lg p-0.5 mr-2 shrink-0">
               {(vinculados ? [vinculaveis[0], ...separados] : modulos).map((m) => {
                 const grupo = vinculados && !MODULOS_SEPARADOS.includes(m);
@@ -137,7 +156,8 @@ export default function Layout() {
 
           <nav className="flex items-center gap-1 flex-wrap">
             {itens
-              .filter((item) => !item.apenasAdmin || papel === 'admin')
+              .filter((item) => (papel === 'admin' ? true : abaDoVendedor(item)))
+              .filter((item) => !item.apenasAdmin || papel === 'admin' || item.to === '/prospect')
               .filter((item) => !('apenasDono' in item) || (!!perfil?.email && DONOS_PLATAFORMA.includes(perfil.email.toLowerCase())))
               .filter((item) => visiveis.includes(moduloDaRota(item.to, modulos)))
               .map((item) => (

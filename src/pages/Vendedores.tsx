@@ -25,6 +25,7 @@ export default function Vendedores() {
   const [senha, setSenha] = useState('');
   const [meta, setMeta] = useState('');
   const [erro, setErro] = useState('');
+  const [acessos, setAcessos] = useState<Array<'crm' | 'chat' | 'prospect'>>(['crm', 'chat']);
 
   const ehAdmin = papel === 'admin';
 
@@ -74,6 +75,7 @@ export default function Vendedores() {
     setLogin('');
     setSenha('');
     setMeta('');
+    setAcessos(['crm', 'chat']);
     setErro('');
     setModalAberto(true);
   }
@@ -84,6 +86,7 @@ export default function Vendedores() {
     setLogin(v.login);
     setSenha(v.senha);
     setMeta(v.meta ? String(v.meta) : '');
+    setAcessos(v.acessos ?? ['crm', 'chat']);
     setErro('');
     setModalAberto(true);
   }
@@ -107,6 +110,7 @@ export default function Vendedores() {
         senha: senha.trim(),
         ativo: true,
         meta: meta ? Number(meta) : undefined,
+        acessos,
         criadoEm: editando?.criadoEm ?? new Date().toISOString(),
       });
       setModalAberto(false);
@@ -174,6 +178,7 @@ export default function Vendedores() {
               <th className="text-right px-4 py-2.5 font-bold" title="Cards arrastados pra uma coluna de fechamento do quadro CRM neste mês — não é o total importado da planilha/ERP.">
                 Vendas no mês
               </th>
+              <th className="text-left px-4 py-2.5 font-bold">Acessos</th>
               <th className="text-right px-4 py-2.5 font-bold">Ações</th>
             </tr>
           </thead>
@@ -186,6 +191,7 @@ export default function Vendedores() {
                 <td className="px-4 py-2.5 text-right font-bold text-ink">
                   {formatarMoeda(vendasDoMesVendedor(clientes, v.login, v.nome, colunasFechamentoIds, mesAtual()))}
                 </td>
+                <td className="px-4 py-2.5 text-xs text-ink-soft">{(v.acessos ?? ['crm', 'chat']).map((a) => (a === 'crm' ? 'CRM' : a === 'chat' ? 'Chat' : 'Prospecção')).join(' · ') || 'nenhum'}</td>
                 <td className="px-4 py-2.5 text-right">
                   <button onClick={() => abrirEdicao(v)} className="text-teal-600 font-bold text-xs mr-3 hover:underline">
                     Editar
@@ -198,7 +204,7 @@ export default function Vendedores() {
             ))}
             {vendedores.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-10 text-center text-ink-soft text-sm">
+                <td colSpan={6} className="px-4 py-10 text-center text-ink-soft text-sm">
                   Nenhum vendedor cadastrado ainda.
                 </td>
               </tr>
@@ -279,6 +285,29 @@ export default function Vendedores() {
                   onChange={(e) => setSenha(e.target.value)}
                   className="w-full rounded-lg border border-line px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/30"
                 />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1">O que este vendedor pode acessar</label>
+                <div className="space-y-1.5 rounded-lg border border-line p-2.5">
+                  {([
+                    ['crm', 'CRM', 'Meu painel, CRM, Agenda, Clientes e Metas'],
+                    ['chat', 'Chat', 'Atendimento por WhatsApp, Instagram e Messenger'],
+                    ['prospect', 'Prospecção', 'Buscar e qualificar novos clientes'],
+                  ] as const).map(([id, nomeAcesso, desc]) => (
+                    <label key={id} className="flex items-start gap-2 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={acessos.includes(id)}
+                        onChange={(e) => setAcessos((a) => (e.target.checked ? [...a, id] : a.filter((x) => x !== id)))}
+                        className="mt-1"
+                      />
+                      <span>
+                        <b className="text-ink">{nomeAcesso}</b>
+                        <span className="block text-[11px] text-ink-soft">{desc}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1">Meta pessoal (R$, opcional)</label>
