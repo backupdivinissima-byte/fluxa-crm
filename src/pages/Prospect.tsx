@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { criarContatoChat, enviarMensagemChat, ouvirConexaoWhatsapp, solicitarConexaoWhatsapp } from '../lib/chatData';
+import { modulosDaEmpresa } from '../lib/modulos';
+import type { ConexaoChat } from '../types';
 import { ouvirClientes } from '../lib/crmData';
 import {
   atualizarLead,
@@ -33,9 +37,21 @@ function Nota({ lead }: { lead: Lead }) {
   );
 }
 
+function erroDeSalvar(e: unknown): string {
+  const t = e instanceof Error ? e.message : String(e);
+  if (/permission|insufficient/i.test(t)) return 'Sem permissão para salvar: falta publicar a regra "prospectLeads" no Firestore (Firebase → Firestore Database → Regras). Veja as instruções que o Claude passou.';
+  return 'Não consegui salvar o lead: ' + t;
+}
+
 export default function Prospect() {
-  const { empresa } = useAuth();
+  const { empresa, perfil } = useAuth();
+  const navigate = useNavigate();
   const empresaId = empresa?.id;
+  const temChat = !!empresa && modulosDaEmpresa(empresa).includes('chat');
+  const [conexao, setConexao] = useState<ConexaoChat>({ status: 'desconectado' });
+  const [pedindoQr, setPedindoQr] = useState<number | null>(null);
+  const [mensagem, setMensagem] = useState<{ lead: Lead; texto: string } | null>(null);
+  const [enviando, setEnviando] = useState(false);
   const [aba, setAba] = useState<'buscar' | 'leads'>('buscar');
   const [termo, setTermo] = useState('loja de semijoias');
   const [cidade, setCidade] = useState('');
@@ -55,9 +71,11 @@ export default function Prospect() {
     if (!empresaId) return;
     const a = ouvirLeads(empresaId, setSalvos, (m) => setErro('Não consegui ler os leads salvos: ' + m));
     const b = ouvirClientes(empresaId, setClientes);
+    const c = ouvirConexaoWhatsapp(empresaId, setConexao);
     return () => {
       a();
       b();
+      c();
     };
   }, [empresaId]);
 
@@ -86,14 +104,22 @@ export default function Prospect() {
 
   async function guardar(l: Lead) {
     if (!empresaId) return;
-    await salvarLead(empresaId, l);
-    setMsg(`"${l.nome}" salvo em Meus leads.`);
+    try {
+      await salvarLead(empresaId, l);
+      setMsg(`"${l.nome}" salvo em Meus leads.`);
+    } catch (e) {
+      setErro(erroDeSalvar(e));
+    }
   }
   async function guardarTodos() {
     if (!empresaId) return;
     const novos = resultados.filter((l) => !idsSalvos.has(l.id) && !jaCliente(l));
-    for (const l of novos) await salvarLead(empresaId, l);
-    setMsg(`${novos.length} leads salvos (quem já é cliente ficou de fora).`);
+    try {
+      for (const l of novos) await salvarLead(empresaId, l);
+      setMsg(`${novos.length} leads salvos (quem já é cliente ficou de fora).`);
+    } catch (e) {
+      setErro(erroDeSalvar(e));
+    }
   }
   async function mudarStatus(l: Lead, status: StatusLead) {
     if (empresaId) await atualizarLead(empresaId, l.id, { status });
@@ -108,6 +134,49 @@ export default function Prospect() {
       setMsg('Dados da Receita adicionados e nota recalculada.');
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Falha ao consultar o CNPJ.');
+    }
+  }
+
+  const [, tic] = useState(0);
+  useEffect(() => {
+    if (pedindoQr === null) return;
+    const t = setInterval(() => tic((n) => n + 1), 3000);
+    return () => clearInterval(t);
+  }, [pedindoQr]);
+  const qrDemora = pedindoQr !== null && !conexao.qr && conexao.status !== 'conectado' && Date.now() - pedindoQr > 25000;
+
+  async function gerarQr() {
+    if (!empresaId) return;
+    setErro('');
+    setPedindoQr(Date.now());
+    try {
+      await solicitarConexaoWhatsapp(empresaId);
+    } catch (e) {
+      setErro('Não foi possível pedir o QR Code: ' + (e instanceof Error ? e.message : 'erro'));
+    }
+  }
+  function abrirNoChat(l: Lead) {
+    navigate(`/chat?tel=${encodeURIComponent(l.whatsapp ?? '')}&nome=${encodeURIComponent(l.nome)}`);
+  }
+  function abrirMensagem(l: Lead) {
+    setMensagem({
+      lead: l,
+      texto: `Olá! Aqui é ${perfil?.nome ?? 'a equipe'} da ${empresa?.nome ?? 'nossa empresa'}. Vi a ${l.nome} e queria te apresentar nossos produtos. Posso te enviar o catálogo?`,
+    });
+  }
+  async function enviarPrimeira() {
+    if (!empresaId || !mensagem || !mensagem.texto.trim()) return;
+    setEnviando(true);
+    try {
+      const conversa = await criarContatoChat(empresaId, mensagem.lead.nome, mensagem.lead.whatsapp ?? '');
+      await enviarMensagemChat(empresaId, conversa, mensagem.texto.trim(), perfil?.nome ?? 'Fluxa Prospect');
+      await atualizarLead(empresaId, mensagem.lead.id, { status: 'contatado' }).catch(() => {});
+      setMsg(`Mensagem enviada para ${mensagem.lead.nome}. As respostas chegam no seu WhatsApp.`);
+      setMensagem(null);
+    } catch (e) {
+      setErro('Não consegui enviar: ' + (e instanceof Error ? e.message : 'erro'));
+    } finally {
+      setEnviando(false);
     }
   }
 
@@ -157,7 +226,13 @@ export default function Prospect() {
         </div>
         <div className="flex flex-col gap-1.5 shrink-0 items-end">
           {l.whatsapp && !cli && (
-            <a href={`https://wa.me/${l.whatsapp}`} target="_blank" rel="noreferrer" className="text-xs font-bold border border-emerald-300 text-emerald-700 rounded-lg px-3 py-1.5">WhatsApp</a>
+            temChat ? (
+              <button onClick={() => abrirNoChat(l)} className="text-xs font-bold border border-emerald-300 text-emerald-700 rounded-lg px-3 py-1.5">Abrir no Chat</button>
+            ) : conexao.status === 'conectado' ? (
+              <button onClick={() => abrirMensagem(l)} className="text-xs font-bold border border-emerald-300 text-emerald-700 rounded-lg px-3 py-1.5">Enviar WhatsApp</button>
+            ) : (
+              <button onClick={() => document.getElementById('conectar-whatsapp')?.scrollIntoView({ behavior: 'smooth' })} className="text-xs font-bold border border-line text-ink-soft rounded-lg px-3 py-1.5" title="Conecte o seu WhatsApp para falar com os leads">Conectar WhatsApp</button>
+            )
           )}
           {!salvo ? (
             !cli && !idsSalvos.has(l.id) ? (
@@ -198,6 +273,34 @@ export default function Prospect() {
       {!googleConfigurado && (
         <div className="mb-3 rounded-xl border border-amber-300 bg-amber-50 text-amber-800 text-sm px-4 py-3">
           A busca no Google ainda não foi ativada neste sistema (falta a chave do Google Places). Os leads já salvos continuam disponíveis.
+        </div>
+      )}
+      {!temChat && conexao.status !== 'conectado' && (
+        <div id="conectar-whatsapp" className="mb-3 bg-white border border-line rounded-xl p-4">
+          <h2 className="text-sm font-extrabold text-ink mb-1">Conecte o seu WhatsApp para falar com os leads</h2>
+          <p className="text-sm text-ink-soft mb-3 max-w-3xl">
+            Clique em "Gerar QR Code" e, no celular, abra o WhatsApp → Aparelhos conectados → Conectar um aparelho e leia o código. Funciona como o WhatsApp Web.
+          </p>
+          <button onClick={() => void gerarQr()} className="rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-4 py-2.5">Gerar QR Code</button>
+          {pedindoQr !== null && !conexao.qr && !qrDemora && <p className="text-xs text-ink-soft mt-2">Gerando o QR Code…</p>}
+          {qrDemora && <p className="text-xs text-red-600 mt-2">O QR Code não apareceu: o conector de WhatsApp desta empresa ainda não foi ativado no servidor. Fale com o suporte do Fluxa para ativar.</p>}
+          {conexao.erro && <p className="text-xs text-red-500 mt-2">{conexao.erro}</p>}
+          {conexao.qr && <img src={conexao.qr} alt="QR Code do WhatsApp" className="mt-3 w-64 h-64 bg-white border border-line rounded-lg" />}
+        </div>
+      )}
+      {!temChat && conexao.status === 'conectado' && (
+        <div className="mb-3 text-xs font-bold rounded-full inline-block px-3 py-1 bg-emerald-100 text-emerald-700">WhatsApp conectado{conexao.telefone ? ` (${conexao.telefone})` : ''}</div>
+      )}
+      {mensagem && (
+        <div className="fixed inset-0 z-50 bg-ink/40 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-5 shadow-xl">
+            <h3 className="font-extrabold text-ink">Primeira mensagem para {mensagem.lead.nome}</h3>
+            <textarea value={mensagem.texto} onChange={(e) => setMensagem({ ...mensagem, texto: e.target.value })} rows={5} className="w-full mt-3 rounded-lg border border-line px-3 py-2 text-sm" />
+            <div className="flex gap-2 mt-3">
+              <button disabled={enviando || !mensagem.texto.trim()} onClick={() => void enviarPrimeira()} className="flex-1 rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold py-2 disabled:opacity-50">{enviando ? 'Enviando…' : 'Enviar'}</button>
+              <button onClick={() => setMensagem(null)} className="flex-1 rounded-xl border border-line text-sm font-bold py-2">Cancelar</button>
+            </div>
+          </div>
         </div>
       )}
       {msg && <div className="mb-3 rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-800 text-sm px-4 py-2 flex"><span className="flex-1">{msg}</span><button onClick={() => setMsg('')} className="font-bold">×</button></div>}

@@ -82,7 +82,10 @@ export default function Layout() {
       return null;
     }
   });
-  const moduloAtual: Modulo = moduloEscolhido && modulos.includes(moduloEscolhido) ? moduloEscolhido : modulos[0];
+  // A tela aberta manda: abrir /chat a partir do Prospect, por exemplo, troca para o módulo Chat em vez de voltar.
+  const moduloDaTela = moduloDaRota(location.pathname, modulos);
+  const rotaNeutra = location.pathname === '/modulos' || location.pathname === '/dashboard';
+  const moduloAtual: Modulo = !rotaNeutra && modulos.includes(moduloDaTela) ? moduloDaTela : moduloEscolhido && modulos.includes(moduloEscolhido) ? moduloEscolhido : modulos[0];
   const visiveis: Modulo[] = !varios ? modulos : MODULOS_SEPARADOS.includes(moduloAtual) ? [moduloAtual] : vinculados ? vinculaveis : [moduloAtual];
   const perguntarVinculo = papel === 'admin' && variosVinculaveis && empresa?.modulosVinculados === undefined;
 
