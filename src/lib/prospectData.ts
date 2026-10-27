@@ -100,7 +100,7 @@ export interface ResultadoBusca {
 /** Busca no Google Places (API nova). 20 por página. */
 export async function buscarLugares(termo: string, cidade: string, uf: string, proxima?: string): Promise<ResultadoBusca> {
   if (!CHAVE_GOOGLE) throw new Error('A chave do Google ainda não foi configurada.');
-  const consulta = cidade.trim() ? `${termo} em ${cidade.trim()}${uf ? ', ' + uf : ''}` : `${termo} no estado de ${ESTADOS[uf] ?? uf}`;
+  const consulta = uf === 'BR' ? `${termo} no Brasil` : cidade.trim() ? `${termo} em ${cidade.trim()}${uf ? ', ' + uf : ''}` : `${termo} no estado de ${ESTADOS[uf] ?? uf}`;
   const resp = await fetch('https://places.googleapis.com/v1/places:searchText', {
     method: 'POST',
     headers: {

@@ -84,7 +84,7 @@ export default function Prospect() {
 
   async function buscar(mais = false) {
     if (!termo.trim() || (!cidade.trim() && !uf)) {
-      setErro('Diga o que procura e a cidade ou só o estado (UF).');
+      setErro('Diga o que procura e escolha a cidade, o estado (UF) ou "Todo o Brasil".');
       return;
     }
     setErro('');
@@ -329,19 +329,20 @@ export default function Prospect() {
 
       {aba === 'buscar' ? (
         <>
-          <div className="bg-white border border-line rounded-xl p-4 mb-4 grid md:grid-cols-[2fr_2fr_90px_auto] gap-3 items-end">
+          <div className="bg-white border border-line rounded-xl p-4 mb-4 grid md:grid-cols-[2fr_2fr_150px_auto] gap-3 items-end">
             <div>
               <label className="text-xs font-bold text-ink-soft">O que procurar</label>
               <input value={termo} onChange={(e) => setTermo(e.target.value)} className="w-full h-10 rounded-lg border border-line px-3 text-sm" placeholder="Ex.: loja de semijoias" />
             </div>
             <div>
-              <label className="text-xs font-bold text-ink-soft">Cidade (opcional se escolher o estado)</label>
+              <label className="text-xs font-bold text-ink-soft">Cidade (opcional se escolher o estado ou o Brasil)</label>
               <input value={cidade} onChange={(e) => setCidade(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void buscar()} className="w-full h-10 rounded-lg border border-line px-3 text-sm" placeholder="Ex.: Belo Horizonte — ou deixe vazio e escolha só o estado" />
             </div>
             <div>
               <label className="text-xs font-bold text-ink-soft">UF</label>
               <select value={uf} onChange={(e) => setUf(e.target.value)} className="w-full h-10 rounded-lg border border-line px-2 text-sm bg-white">
                 <option value="">—</option>
+                <option value="BR">Todo o Brasil</option>
                 {UFS.map((u) => <option key={u}>{u}</option>)}
               </select>
             </div>
