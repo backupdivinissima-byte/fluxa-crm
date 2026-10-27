@@ -47,10 +47,10 @@ const PLATAFORMAS = [
   {
     id: 'prospect',
     nome: 'Fluxa Prospect',
-    status: 'Em breve',
-    statusCls: 'bg-slate-100 text-ink-soft',
-    desc: 'Encontre e qualifique novos clientes em potencial pro seu funil.',
-    disponivel: false,
+    status: 'Disponível agora',
+    statusCls: 'bg-teal-500/10 text-teal-600',
+    desc: 'Encontre lojas e clientes em potencial, veja a nota de cada um e organize os leads em colunas.',
+    disponivel: true,
   },
   {
     id: 'live',
@@ -117,8 +117,8 @@ export default function Cadastrar() {
   // (etapa 1); só Fluxa CRM e Fluxa Marketing têm formulário completo hoje
   // (mesma conta por baixo), os outros abrem "quero ser avisado".
   const plataformaUrl = params.get('plataforma');
-  const [plataforma, setPlataforma] = useState<'crm' | 'marketing' | 'chat' | 'erp' | null>(
-    plataformaUrl === 'crm' || plataformaUrl === 'marketing' || plataformaUrl === 'chat' || plataformaUrl === 'erp' ? plataformaUrl : null
+  const [plataforma, setPlataforma] = useState<'crm' | 'marketing' | 'chat' | 'erp' | 'prospect' | null>(
+    plataformaUrl === 'crm' || plataformaUrl === 'marketing' || plataformaUrl === 'chat' || plataformaUrl === 'erp' || plataformaUrl === 'prospect' ? plataformaUrl : null
   );
   const [nomeEmpresa, setNomeEmpresa] = useState('');
   const [nome, setNome] = useState('');
@@ -189,7 +189,7 @@ export default function Cadastrar() {
         produto: plataforma ?? 'crm',
         ...(documento ? { documento, documentoTipo: tipoDocumento } : {}),
       });
-      navigate(plataforma === 'erp' ? '/erp' : plataforma === 'marketing' ? '/marketing' : plataforma === 'chat' ? '/chat' : '/dashboard');
+      navigate(plataforma === 'prospect' ? '/prospect' : plataforma === 'erp' ? '/erp' : plataforma === 'marketing' ? '/marketing' : plataforma === 'chat' ? '/chat' : '/dashboard');
     } catch (err) {
       console.error('Erro ao cadastrar empresa:', err);
       const codigo = (err as { code?: string })?.code;
@@ -238,7 +238,7 @@ export default function Cadastrar() {
               <button
                 key={p.id}
                 type="button"
-                onClick={() => setPlataforma(p.id as 'crm' | 'marketing' | 'chat' | 'erp')}
+                onClick={() => setPlataforma(p.id as 'crm' | 'marketing' | 'chat' | 'erp' | 'prospect')}
                 className="w-full flex items-center justify-between gap-3 rounded-xl border border-line bg-white p-4 text-left hover:border-teal-500 hover:bg-teal-500/5 transition-colors"
               >
                 <div>
@@ -291,6 +291,8 @@ export default function Cadastrar() {
   const subtituloPlataforma =
     plataforma === 'marketing'
       ? 'Comece seu teste grátis: anúncios, lives e ROI/CAC, já cruzados com o funil de vendas da sua empresa.'
+      : plataforma === 'prospect'
+        ? 'Comece seu teste grátis: encontre novos clientes em potencial, com nota de qualificação e funil de leads.'
       : plataforma === 'erp'
         ? 'Comece seu teste grátis: produtos, estoque, pedidos e financeiro da sua empresa, de forma simples.'
       : plataforma === 'chat'
@@ -328,6 +330,12 @@ export default function Cadastrar() {
           Já tem conta com esse e-mail? Use o mesmo e-mail e a senha atual: o ERP é adicionado à sua empresa.{' '}
           O Fluxa ERP funciona sozinho, em uma conta própria. Se depois você contratar o CRM, Chat ou Marketing, a
           ligação entre eles é feita por API, sem misturar os dados.
+        </p>
+      )}
+      {plataforma === 'prospect' && (
+        <p className="text-xs text-ink-soft bg-surface rounded-xl p-3 mb-4">
+          O Fluxa Prospect funciona sozinho, em uma conta própria. Já tem conta com esse e-mail? Use o mesmo e-mail e a
+          senha atual: o Prospect é adicionado à sua empresa. Se depois você contratar o CRM ou o Chat, dá para ligar os leads ao funil e ao atendimento.
         </p>
       )}
       {plataforma === 'chat' && (

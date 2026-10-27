@@ -247,7 +247,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ...(dados.documento ? { cnpj: dados.documento, documentoTipo: dados.documentoTipo } : {}),
       criadoEm: new Date().toISOString(),
       plano: 'trial',
-      modulos: [dados.produto === 'marketing' ? 'marketing' : dados.produto === 'chat' ? 'chat' : dados.produto === 'erp' ? 'erp' : 'crm'], // só o módulo escolhido
+      modulos: [dados.produto === 'marketing' ? 'marketing' : dados.produto === 'chat' ? 'chat' : dados.produto === 'erp' ? 'erp' : dados.produto === 'prospect' ? 'prospect' : 'crm'], // só o módulo escolhido
       produto: dados.produto ?? 'crm', // qual card/plataforma a pessoa escolheu no cadastro (ver DadosCadastro.produto)
     };
     await setDoc(empresaRef, novaEmpresa);

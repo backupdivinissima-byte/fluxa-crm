@@ -119,10 +119,10 @@ function IconChatProduto() {
 
 function IconProspect() {
   return (
-    <IconBaseMuted>
+    <IconBase>
       <circle cx="10" cy="10" r="6" />
       <path d="M15 15l5 5" />
-    </IconBaseMuted>
+    </IconBase>
   );
 }
 
@@ -178,12 +178,12 @@ const produtos = [
   },
   {
     nome: 'Fluxa Prospect',
-    status: 'Em breve',
-    statusCls: 'bg-slate-100 text-ink-soft',
-    desc: 'Encontre e qualifique novos clientes em potencial pra alimentar o funil da sua equipe de vendas.',
+    status: 'Disponível agora',
+    statusCls: 'bg-teal-500/10 text-teal-600',
+    desc: 'Encontre e qualifique novos clientes em potencial pra alimentar o funil da sua equipe de vendas. Vende sozinho ou junto com os outros.',
     icon: <IconProspect />,
-    ctaLabel: 'Quero ser avisado',
-    ctaTo: null,
+    ctaLabel: 'Teste grátis',
+    ctaTo: '/cadastrar?plataforma=prospect',
   },
   {
     nome: 'Fluxa Live',
