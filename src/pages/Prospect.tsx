@@ -525,17 +525,17 @@ export default function Prospect() {
               >
                 <div className="flex items-center justify-between px-1 pb-2">
                   <span className={`text-xs font-extrabold uppercase rounded-full px-2.5 py-1 ${col.cor}`}>{col.nome}</span>
-                  {col.id === 'novo' && souAdmin && (
-                    <div className="flex items-center gap-1 flex-wrap justify-end">
-                      <button onClick={() => void gerarRodizioProspect()} disabled={estadoRodizio !== 'ativo'} className="text-[11px] font-bold rounded-lg px-2.5 py-1 bg-violet-600 text-white disabled:opacity-40">Gerar rodízio de prospect</button>
-                      {estadoRodizio !== 'desativado' && (
-                        <button onClick={() => void mudarRodizio(estadoRodizio === 'pausado' ? 'ativo' : 'pausado')} className="text-[11px] font-bold rounded-lg px-2.5 py-1 border border-amber-400 text-amber-700 bg-amber-50">{estadoRodizio === 'pausado' ? 'Retomar rodízio' : 'Pausar rodízio'}</button>
-                      )}
-                      <button onClick={() => void mudarRodizio(estadoRodizio === 'desativado' ? 'ativo' : 'desativado')} className="text-[11px] font-bold rounded-lg px-2.5 py-1 border border-red-300 text-red-700 bg-red-50">{estadoRodizio === 'desativado' ? 'Ativar rodízio' : 'Desativar rodízio'}</button>
-                    </div>
-                  )}
                   <span className="text-xs font-bold text-ink-soft">{itens.length}</span>
                 </div>
+                {col.id === 'novo' && souAdmin && (
+                  <div className="flex items-center gap-1.5 px-1 pb-2">
+                    <button onClick={() => void gerarRodizioProspect()} disabled={estadoRodizio !== 'ativo'} className="flex-1 text-[11px] font-bold rounded-lg py-1.5 bg-violet-600 text-white disabled:opacity-40 whitespace-nowrap">Gerar rodízio</button>
+                    {estadoRodizio !== 'desativado' && (
+                      <button onClick={() => void mudarRodizio(estadoRodizio === 'pausado' ? 'ativo' : 'pausado')} className="flex-1 text-[11px] font-bold rounded-lg py-1.5 border border-amber-400 text-amber-700 bg-amber-50 whitespace-nowrap">{estadoRodizio === 'pausado' ? 'Retomar rodízio' : 'Pausar rodízio'}</button>
+                    )}
+                    <button onClick={() => void mudarRodizio(estadoRodizio === 'desativado' ? 'ativo' : 'desativado')} className="flex-1 text-[11px] font-bold rounded-lg py-1.5 border border-red-300 text-red-700 bg-red-50 whitespace-nowrap">{estadoRodizio === 'desativado' ? 'Ativar rodízio' : 'Desativar rodízio'}</button>
+                  </div>
+                )}
                 <div className="space-y-2 max-h-[75vh] overflow-y-auto">
                   {itens.length === 0 ? <p className="text-xs text-ink-soft px-1 py-4 text-center">Automático: o lead entra aqui sozinho.</p> : itens.map((l) => renderLinha(l, true, true))}
                 </div>
