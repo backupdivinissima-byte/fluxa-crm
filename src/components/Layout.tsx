@@ -1,5 +1,6 @@
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
+import { DONOS_PLATAFORMA } from '../pages/Modulos';
 import { modulosDaEmpresa, moduloDaRota, rotaInicial, MODULOS_SEPARADOS, type Modulo } from '../lib/modulos';
 import AgendaLembrete from './AgendaLembrete';
 import AcompanhamentoCarteira from './AcompanhamentoCarteira';
@@ -49,6 +50,8 @@ const itens = [
   { to: '/erp/integracoes', label: 'Integrações', icon: <IconErpIntegracoes />, apenasAdmin: true },
   // Encontrar e qualificar novos clientes (Fluxa Prospect): só admin.
   { to: '/prospect', label: 'Prospecção', icon: <IconClientes />, apenasAdmin: true },
+  // Só para os donos da plataforma: liga/desliga os produtos de cada empresa.
+  { to: '/modulos', label: 'Módulos', icon: <IconLinks />, apenasAdmin: true, apenasDono: true },
 ];
 
 const NOME_MODULO: Record<Modulo, string> = { crm: 'CRM', marketing: 'Marketing', chat: 'Chat', erp: 'ERP', prospect: 'Prospect' };
@@ -132,6 +135,7 @@ export default function Layout() {
           <nav className="flex items-center gap-1 flex-wrap">
             {itens
               .filter((item) => !item.apenasAdmin || papel === 'admin')
+              .filter((item) => !('apenasDono' in item) || (!!perfil?.email && DONOS_PLATAFORMA.includes(perfil.email.toLowerCase())))
               .filter((item) => visiveis.includes(moduloDaRota(item.to, modulos)))
               .map((item) => (
                 <NavLink
