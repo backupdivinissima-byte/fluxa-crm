@@ -86,6 +86,13 @@ export function notaDoLead(l: Pick<Lead, 'telefone' | 'whatsapp' | 'site' | 'ava
   return { nota: Math.max(0, Math.min(100, n)), motivos: m };
 }
 
+const ESTADOS: Record<string, string> = {
+  AC: 'Acre', AL: 'Alagoas', AP: 'Amapá', AM: 'Amazonas', BA: 'Bahia', CE: 'Ceará', DF: 'Distrito Federal', ES: 'Espírito Santo', GO: 'Goiás',
+  MA: 'Maranhão', MT: 'Mato Grosso', MS: 'Mato Grosso do Sul', MG: 'Minas Gerais', PA: 'Pará', PB: 'Paraíba', PR: 'Paraná', PE: 'Pernambuco',
+  PI: 'Piauí', RJ: 'Rio de Janeiro', RN: 'Rio Grande do Norte', RS: 'Rio Grande do Sul', RO: 'Rondônia', RR: 'Roraima', SC: 'Santa Catarina',
+  SP: 'São Paulo', SE: 'Sergipe', TO: 'Tocantins',
+};
+
 export interface ResultadoBusca {
   leads: Lead[];
   proxima?: string;
@@ -93,7 +100,7 @@ export interface ResultadoBusca {
 /** Busca no Google Places (API nova). 20 por página. */
 export async function buscarLugares(termo: string, cidade: string, uf: string, proxima?: string): Promise<ResultadoBusca> {
   if (!CHAVE_GOOGLE) throw new Error('A chave do Google ainda não foi configurada.');
-  const consulta = `${termo} em ${cidade}${uf ? ', ' + uf : ''}`;
+  const consulta = cidade.trim() ? `${termo} em ${cidade.trim()}${uf ? ', ' + uf : ''}` : `${termo} no estado de ${ESTADOS[uf] ?? uf}`;
   const resp = await fetch('https://places.googleapis.com/v1/places:searchText', {
     method: 'POST',
     headers: {

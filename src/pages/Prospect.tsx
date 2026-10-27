@@ -83,8 +83,8 @@ export default function Prospect() {
   const jaCliente = (l: Lead) => !!l.telefone && telefonesClientes.has(fim9(l.telefone));
 
   async function buscar(mais = false) {
-    if (!termo.trim() || !cidade.trim()) {
-      setErro('Diga o que procura e a cidade.');
+    if (!termo.trim() || (!cidade.trim() && !uf)) {
+      setErro('Diga o que procura e a cidade ou só o estado (UF).');
       return;
     }
     setErro('');
@@ -335,8 +335,8 @@ export default function Prospect() {
               <input value={termo} onChange={(e) => setTermo(e.target.value)} className="w-full h-10 rounded-lg border border-line px-3 text-sm" placeholder="Ex.: loja de semijoias" />
             </div>
             <div>
-              <label className="text-xs font-bold text-ink-soft">Cidade</label>
-              <input value={cidade} onChange={(e) => setCidade(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void buscar()} className="w-full h-10 rounded-lg border border-line px-3 text-sm" placeholder="Ex.: Belo Horizonte" />
+              <label className="text-xs font-bold text-ink-soft">Cidade (opcional se escolher o estado)</label>
+              <input value={cidade} onChange={(e) => setCidade(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void buscar()} className="w-full h-10 rounded-lg border border-line px-3 text-sm" placeholder="Ex.: Belo Horizonte — ou deixe vazio e escolha só o estado" />
             </div>
             <div>
               <label className="text-xs font-bold text-ink-soft">UF</label>
