@@ -3,7 +3,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ouvirClientes, ouvirEmpresa, ouvirVendedores, atualizarCampoCliente, salvarCliente } from '../lib/crmData';
-import { acaoDaColuna } from '../lib/crmLogic';
+import { acaoDaColuna, tagAutomaticaCliente } from '../lib/crmLogic';
+import { ouvirLeads, type Lead } from '../lib/prospectData';
 import {
   acharClientePorTelefone,
   assumirConversa,
@@ -301,6 +302,7 @@ export default function Chat() {
 
   const [conversas, setConversas] = useState<ConversaChat[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [leadsProspect, setLeadsProspect] = useState<Lead[]>([]);
   const [colunas, setColunas] = useState<ColunaCrm[]>([]);
   const [conexao, setConexao] = useState<ConexaoChat>({ status: 'desconectado' });
   const [filtroTag, setFiltroTag] = useState<string | null>(null); // 'origem:instagram' ou 'tag:<id>'
@@ -356,7 +358,9 @@ export default function Chat() {
     const u4 = ouvirEmpresa(empresaId, (e) => setColunas(e?.crmColunas && e.crmColunas.length > 0 ? e.crmColunas : CRM_COLUNAS_PADRAO));
     const u5 = ouvirConexaoWhatsapp(empresaId, setConexao);
     const u6 = ouvirTags(empresaId, setTags);
+    const uL = ouvirLeads(empresaId, setLeadsProspect);
     return () => {
+      uL();
       u1();
       u2();
       uV();
@@ -1096,6 +1100,15 @@ export default function Chat() {
                   </div>
                   <div className="flex flex-wrap gap-1 mt-1">
                     <Etiqueta nome={ORIGENS[origemDe(c)].nome} cor={ORIGENS[origemDe(c)].cor} />
+                    {(() => {
+                      const k = (c.telefone ?? '').replace(/\D/g, '').slice(-9);
+                      const cli = (c.clienteId ? clientes.find((x) => x.id === c.clienteId) : undefined) ?? (k.length === 9 ? clientes.find((x) => (x.telefone ?? '').replace(/\D/g, '').slice(-9) === k) : undefined);
+                      const auto = cli ? tagAutomaticaCliente(cli) : null;
+                      const lead = !cli && k.length === 9 ? leadsProspect.find((l) => l.status !== 'descartado' && (l.whatsapp ?? '').slice(-9) === k) : undefined;
+                      if (auto === 'prospect' || lead) return <Etiqueta nome="Prospect" cor="#F97316" />;
+                      if (auto === 'novo') return <Etiqueta nome="Novo" cor="#16A34A" />;
+                      return null;
+                    })()}
                     {(c.tags ?? []).map((id) => {
                       const t = tags.find((x) => x.id === id);
                       return t ? <Etiqueta key={id} nome={t.nome} cor={t.cor} /> : null;
