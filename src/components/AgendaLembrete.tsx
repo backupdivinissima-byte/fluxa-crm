@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { corrigirNonoDigito } from '../lib/chatData';
+import { ouvirEmpresa } from '../lib/crmData';
 import { atualizarAgendamento, ouvirAgenda, type Agendamento } from '../lib/agendaData';
 
 /** Lembrete estilo Outlook: abre na hora marcada. O vendedor pode adiar UMA vez (5, 10 ou 15 min, no máximo 15). */
@@ -11,6 +12,7 @@ export default function AgendaLembrete() {
   const empresaId = empresa?.id;
   const login = papel === 'admin' ? undefined : sessaoVendedor?.vendedor.login;
   const [lista, setLista] = useState<Agendamento[]>([]);
+  const [rodizioProspect, setRodizioProspect] = useState<string>('ativo');
   const [agora, setAgora] = useState(() => Date.now());
   const [minutos, setMinutos] = useState(10);
   const [resultado, setResultado] = useState('');
@@ -25,12 +27,17 @@ export default function AgendaLembrete() {
   }, [empresaId, login]);
 
   useEffect(() => {
+    if (!empresaId) return;
+    return ouvirEmpresa(empresaId, (e) => setRodizioProspect(e?.prospectRodizio ?? 'ativo'));
+  }, [empresaId]);
+
+  useEffect(() => {
     const t = setInterval(() => setAgora(Date.now()), 15000);
     return () => clearInterval(t);
   }, []);
 
   const devido = lista
-    .filter((a) => a.status === 'pendente' && new Date(a.lembreteEm).getTime() <= agora)
+    .filter((a) => a.status === 'pendente' && new Date(a.lembreteEm).getTime() <= agora && !(a.prospect && rodizioProspect !== 'ativo'))
     .sort((a, b) => a.lembreteEm.localeCompare(b.lembreteEm))[0];
 
   useEffect(() => {

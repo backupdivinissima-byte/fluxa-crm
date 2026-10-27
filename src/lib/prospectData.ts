@@ -216,10 +216,15 @@ export async function enviarAoRodizio(empresaId: string, lead: Lead, vendedor: {
       obs: `Lead do Prospect (nota ${lead.nota}) — inicie o atendimento.`,
       status: 'pendente',
       origem: 'rodizio',
+      prospect: true,
       criadoEm: agora.toISOString(),
       criadoPor: autor,
       lembreteEm: agora.toISOString(),
     },
   ]);
   await atualizarLead(empresaId, lead.id, { clienteId: id, rodizioLogin: vendedor.login });
+}
+
+export async function definirEstadoRodizio(empresaId: string, estado: 'ativo' | 'pausado' | 'desativado') {
+  await updateDoc(doc(db, 'empresas', empresaId), { prospectRodizio: estado });
 }

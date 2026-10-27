@@ -4,11 +4,12 @@ import { useAuth } from '../contexts/AuthContext';
 import { criarContatoChat, enviarMensagemChat, ouvirConexaoWhatsapp, ouvirTodasConversas, solicitarConexaoWhatsapp } from '../lib/chatData';
 import { modulosDaEmpresa } from '../lib/modulos';
 import type { ConexaoChat } from '../types';
-import { atualizarCampoCliente, ouvirClientes, ouvirVendedores } from '../lib/crmData';
+import { atualizarCampoCliente, ouvirClientes, ouvirEmpresa, ouvirVendedores } from '../lib/crmData';
 import { ouvirAgenda, removerAgendamento, type Agendamento } from '../lib/agendaData';
 import {
   atualizarLead,
   buscarLugares,
+  definirEstadoRodizio,
   enviarAoRodizio,
   transferirParaAtendimento,
   consultarCnpj,
@@ -73,6 +74,7 @@ export default function Prospect() {
   const [conversas, setConversas] = useState<ConversaChat[]>([]);
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [agenda, setAgenda] = useState<Agendamento[]>([]);
+  const [estadoRodizio, setEstadoRodizio] = useState<'ativo' | 'pausado' | 'desativado'>('ativo');
   const [aberto, setAberto] = useState<string | null>(null);
   const [cnpjTxt, setCnpjTxt] = useState('');
   const [msg, setMsg] = useState('');
@@ -85,6 +87,7 @@ export default function Prospect() {
     const d = ouvirTodasConversas(empresaId, setConversas);
     const e = ouvirVendedores(empresaId, setVendedores);
     const f = ouvirAgenda(empresaId, undefined, setAgenda);
+    const g = ouvirEmpresa(empresaId, (e) => setEstadoRodizio(e?.prospectRodizio ?? 'ativo'));
     return () => {
       a();
       b();
@@ -92,6 +95,7 @@ export default function Prospect() {
       d();
       e();
       f();
+      g();
     };
   }, [empresaId]);
 
@@ -118,8 +122,24 @@ export default function Prospect() {
       setErro(e instanceof Error ? e.message : 'Não consegui transferir.');
     }
   }
+  async function mudarRodizio(novo: 'ativo' | 'pausado' | 'desativado') {
+    if (!empresaId) return;
+    try {
+      if (novo === 'desativado') {
+        if (!window.confirm('Desativar o rodízio de prospect? Os leads que estão com os vendedores saem da tela deles e voltam para o admin.')) return;
+        const pend = agenda.filter((a) => a.prospect && a.status === 'pendente');
+        for (const a of pend) await removerAgendamento(empresaId, a.id);
+        for (const l of salvos) if (l.rodizioLogin && l.status !== 'transferido') await atualizarLead(empresaId, l.id, { rodizioLogin: '' });
+      }
+      await definirEstadoRodizio(empresaId, novo);
+      setMsg(novo === 'ativo' ? 'Rodízio de prospect ativo.' : novo === 'pausado' ? 'Rodízio pausado: os avisos param de explodir e voltam quando você retomar.' : 'Rodízio de prospect desativado.');
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Não consegui mudar o rodízio.');
+    }
+  }
   async function gerarRodizioProspect() {
     if (!empresaId) return;
+    if (estadoRodizio !== 'ativo') return setErro(`O rodízio está ${estadoRodizio}. Ative para distribuir leads.`);
     const ativos = vendedores.filter((v) => v.ativo);
     if (ativos.length === 0) return setErro('Não há vendedor ativo para receber os leads.');
     const fila = salvos.filter((l) => l.status === 'novo' && !l.rodizioLogin && !!l.whatsapp).sort((x, y) => y.nota - x.nota);
@@ -152,6 +172,7 @@ export default function Prospect() {
   }
   async function mandarRodizio(l: Lead) {
     if (!empresaId) return;
+    if (estadoRodizio !== 'ativo') return setErro(`O rodízio está ${estadoRodizio}. Ative para enviar leads.`);
     const ativos = vendedores.filter((v) => v.ativo);
     if (ativos.length === 0) return setErro('Não há vendedor ativo para receber o lead.');
     const carga = (login: string) => agenda.filter((a) => a.vendedorLogin === login && a.status === 'pendente').length;
@@ -505,7 +526,13 @@ export default function Prospect() {
                 <div className="flex items-center justify-between px-1 pb-2">
                   <span className={`text-xs font-extrabold uppercase rounded-full px-2.5 py-1 ${col.cor}`}>{col.nome}</span>
                   {col.id === 'novo' && souAdmin && (
-                    <button onClick={() => void gerarRodizioProspect()} className="text-[11px] font-bold rounded-lg px-2.5 py-1 bg-violet-600 text-white">Gerar rodízio de prospect</button>
+                    <div className="flex items-center gap-1 flex-wrap justify-end">
+                      <button onClick={() => void gerarRodizioProspect()} disabled={estadoRodizio !== 'ativo'} className="text-[11px] font-bold rounded-lg px-2.5 py-1 bg-violet-600 text-white disabled:opacity-40">Gerar rodízio de prospect</button>
+                      {estadoRodizio !== 'desativado' && (
+                        <button onClick={() => void mudarRodizio(estadoRodizio === 'pausado' ? 'ativo' : 'pausado')} className="text-[11px] font-bold rounded-lg px-2.5 py-1 border border-amber-400 text-amber-700 bg-amber-50">{estadoRodizio === 'pausado' ? 'Retomar rodízio' : 'Pausar rodízio'}</button>
+                      )}
+                      <button onClick={() => void mudarRodizio(estadoRodizio === 'desativado' ? 'ativo' : 'desativado')} className="text-[11px] font-bold rounded-lg px-2.5 py-1 border border-red-300 text-red-700 bg-red-50">{estadoRodizio === 'desativado' ? 'Ativar rodízio' : 'Desativar rodízio'}</button>
+                    </div>
                   )}
                   <span className="text-xs font-bold text-ink-soft">{itens.length}</span>
                 </div>

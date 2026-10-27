@@ -20,6 +20,7 @@ export interface Agendamento {
   criadoEm: string;
   criadoPor?: string;
   lembreteEm: string; // ISO: quando o lembrete deve abrir
+  prospect?: boolean; // lead do Fluxa Prospect entregue pelo rodízio
   adiado?: boolean; // só pode adiar uma vez
   resultado?: string; // o que foi conversado no contato
   feitoEm?: string;

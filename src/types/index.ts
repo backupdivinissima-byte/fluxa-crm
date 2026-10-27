@@ -52,6 +52,7 @@ export interface Empresa {
   // Só vale pro funil do Dashboard; o corte fixo usado em Clientes/detalhe
   // do cliente continua como antes.
   diasInatividade?: number;
+  prospectRodizio?: 'ativo' | 'pausado' | 'desativado'; // rodízio de leads do Fluxa Prospect (sem valor = ativo)
   // true depois que o funil padrão do Fluxa CRM foi aplicado a esta empresa
   // (acontece uma vez, na primeira vez que o administrador abre o CRM).
   crmFunilPadrao?: boolean;
