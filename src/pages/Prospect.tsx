@@ -158,6 +158,7 @@ export default function Prospect() {
     const v = [...ativos].sort((x, y) => carga(x.login) - carga(y.login))[0];
     try {
       await enviarAoRodizio(empresaId, l, { login: v.login, nome: v.nome }, meuNome, clientes);
+      if (l.status === 'descartado') await atualizarLead(empresaId, l.id, { status: 'novo' });
       setMsg(`${l.nome} foi para o rodízio: ${v.nome} recebe o lead na tela agora.`);
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Não consegui enviar ao rodízio.');
@@ -362,7 +363,7 @@ export default function Prospect() {
               {(l.status === 'contatado' || l.status === 'interessado') && !souAdmin && (
                 <button onClick={() => void transferir(l)} className="text-xs font-bold rounded-lg px-3 py-1.5 bg-orange-500 text-white" title="Leva o lead para o CRM, coluna Em atendimento, com a tag Prospect">Transferir para atendimento</button>
               )}
-              {souAdmin && ['novo', 'contatado', 'interessado'].includes(l.status) && !l.rodizioLogin && (
+              {souAdmin && l.status !== 'transferido' && !l.rodizioLogin && (
                 <button onClick={() => void mandarRodizio(l)} className="text-xs font-bold rounded-lg px-3 py-1.5 bg-violet-600 text-white" title="Entrega o lead a um vendedor: explode na tela dele para iniciar o atendimento">Enviar ao rodízio</button>
               )}
               {l.rodizioLogin && l.status !== 'transferido' && (
