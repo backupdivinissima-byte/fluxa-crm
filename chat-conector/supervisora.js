@@ -7,13 +7,17 @@ import { BASE_SUPERVISORA } from './supervisora-base.js';
 
 const CHAVE = process.env.ANTHROPIC_API_KEY || '';
 const CHAVE_GEMINI = process.env.GEMINI_API_KEY || '';
-const MODELO_GEMINI = process.env.GEMINI_MODELO || 'gemini-flash-latest';
+const MODELOS_GEMINI = (process.env.GEMINI_MODELO || 'gemini-2.5-flash-lite,gemini-flash-latest').split(',').map((m) => m.trim()).filter(Boolean); // o primeiro que tiver cota grátis responde
+const CHAVE_GROQ = process.env.GROQ_API_KEY || ''; // grátis: console.groq.com
+const MODELO_GROQ = process.env.GROQ_MODELO || 'llama-3.3-70b-versatile';
+const CHAVE_OPENROUTER = process.env.OPENROUTER_API_KEY || ''; // grátis (modelos ':free'): openrouter.ai
+const MODELO_OPENROUTER = process.env.OPENROUTER_MODELO || 'meta-llama/llama-3.3-70b-instruct:free';
 const MODELO = process.env.SUPERVISORA_MODELO || 'claude-sonnet-5-5';
 const ESPERA_MS = Number(process.env.SUPERVISORA_ESPERA_S || 8) * 1000; // espera o cliente terminar de escrever
 const MAX_MSGS = 24;
 
 export function criarSupervisora({ base, agora }) {
-  const ligada = !!CHAVE || !!CHAVE_GEMINI;
+  const ligada = !!CHAVE || !!CHAVE_GEMINI || !!CHAVE_GROQ || !!CHAVE_OPENROUTER;
   // Contexto da empresa (nome + resumo do cadastro): cada empresa tem o seu, a base de vendas é a mesma.
   let ctxEmpresa = { em: 0, texto: '' };
   async function sistema() {
@@ -36,8 +40,8 @@ export function criarSupervisora({ base, agora }) {
   const timers = new Map();
   const emAnalise = new Set();
 
-  if (ligada) console.log(`[supervisora] ligada (${CHAVE ? `Anthropic ${MODELO}` : 'sem Anthropic'}${CHAVE_GEMINI ? `; reserva Gemini ${MODELO_GEMINI}` : ''}).`);
-  else console.log('[supervisora] desligada: falta ANTHROPIC_API_KEY ou GEMINI_API_KEY.');
+  if (ligada) console.log(`[supervisora] ligada (${CHAVE ? `Anthropic ${MODELO}` : 'sem Anthropic'}${CHAVE_GEMINI ? `; Gemini ${MODELOS_GEMINI.join('/')}` : ''}${CHAVE_GROQ ? `; Groq ${MODELO_GROQ}` : ''}${CHAVE_OPENROUTER ? `; OpenRouter ${MODELO_OPENROUTER}` : ''}).`);
+  else console.log('[supervisora] desligada: falta uma chave (GEMINI_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY ou ANTHROPIC_API_KEY).');
 
   function extrairJson(texto) {
     const ini = texto.indexOf('{');
@@ -46,8 +50,8 @@ export function criarSupervisora({ base, agora }) {
     return JSON.parse(texto.slice(ini, fim + 1));
   }
 
-  async function chamarGemini(contexto) {
-    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODELO_GEMINI}:generateContent`, {
+  async function chamarGemini(contexto, modeloGemini) {
+    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modeloGemini}:generateContent`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-goog-api-key': CHAVE_GEMINI },
       body: JSON.stringify({
@@ -60,19 +64,48 @@ export function criarSupervisora({ base, agora }) {
     if (!resp.ok) throw new Error(`Gemini ${resp.status}: ${(await resp.text()).slice(0, 200)}`);
     const j = await resp.json();
     const texto = (j.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('');
-    return { dado: extrairJson(texto), uso: { input_tokens: j.usageMetadata?.promptTokenCount, output_tokens: j.usageMetadata?.candidatesTokenCount }, modelo: `gemini:${MODELO_GEMINI}` };
+    return { dado: extrairJson(texto), uso: { input_tokens: j.usageMetadata?.promptTokenCount, output_tokens: j.usageMetadata?.candidatesTokenCount }, modelo: `gemini:${modeloGemini}` };
   }
 
+  // Groq e OpenRouter falam o mesmo formato (OpenAI) e têm camada gratuita.
+  async function chamarOpenAI(url, chave, modelo, nome, contexto) {
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${chave}` },
+      body: JSON.stringify({
+        model: modelo,
+        max_tokens: 900,
+        response_format: { type: 'json_object' },
+        messages: [{ role: 'system', content: await sistema() }, { role: 'user', content: contexto }],
+      }),
+      signal: AbortSignal.timeout(45000),
+    });
+    if (!resp.ok) throw new Error(`${nome} ${resp.status}: ${(await resp.text()).slice(0, 200)}`);
+    const j = await resp.json();
+    const texto = j.choices?.[0]?.message?.content || '';
+    return { dado: extrairJson(texto), uso: { input_tokens: j.usage?.prompt_tokens, output_tokens: j.usage?.completion_tokens }, modelo: `${nome}:${modelo}` };
+  }
+
+  // Quem deu limite (429) descansa 5 minutos, para não ficar batendo na porta.
+  const descanso = new Map();
   async function chamarIA(contexto) {
-    if (CHAVE) {
+    const tentativas = [];
+    if (CHAVE) tentativas.push(['anthropic', async () => ({ ...(await chamarAnthropic(contexto)), modelo: MODELO })]);
+    if (CHAVE_GEMINI) for (const m of MODELOS_GEMINI) tentativas.push([`gemini:${m}`, () => chamarGemini(contexto, m)]);
+    if (CHAVE_GROQ) tentativas.push(['groq', () => chamarOpenAI('https://api.groq.com/openai/v1/chat/completions', CHAVE_GROQ, MODELO_GROQ, 'groq', contexto)]);
+    if (CHAVE_OPENROUTER) tentativas.push(['openrouter', () => chamarOpenAI('https://openrouter.ai/api/v1/chat/completions', CHAVE_OPENROUTER, MODELO_OPENROUTER, 'openrouter', contexto)]);
+    let ultimo = new Error('nenhuma IA configurada');
+    for (const [nome, fn] of tentativas) {
+      if ((descanso.get(nome) || 0) > Date.now()) continue;
       try {
-        return { ...(await chamarAnthropic(contexto)), modelo: MODELO };
+        return await fn();
       } catch (e) {
-        if (!CHAVE_GEMINI) throw e;
-        console.warn(`[supervisora] Anthropic falhou (${e.message.slice(0, 80)}); usando Gemini.`);
+        ultimo = e;
+        if (/ 429|quota|RESOURCE_EXHAUSTED|credit/i.test(e.message)) descanso.set(nome, Date.now() + 5 * 60 * 1000);
+        console.warn(`[supervisora] ${nome} falhou (${e.message.slice(0, 90)}); tentando a próxima.`);
       }
     }
-    return chamarGemini(contexto);
+    throw ultimo;
   }
 
   async function chamarAnthropic(contexto) {
