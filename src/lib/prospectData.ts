@@ -1,9 +1,12 @@
 // Fluxa Prospect: achar e qualificar novos clientes em potencial.
 // Fontes: Google Places (telefone, site, avaliações) + Receita Federal por CNPJ (BrasilAPI, grátis).
-import { collection, deleteDoc, doc, onSnapshot, setDoc, updateDoc, type Unsubscribe } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, onSnapshot, setDoc, updateDoc, type Unsubscribe } from 'firebase/firestore';
 import { db } from './firebase';
+import { acaoDaColuna } from './crmLogic';
+import { criarAgendamentos, isoLocal } from './agendaData';
+import { CRM_COLUNAS_PADRAO, type Cliente, type ColunaCrm } from '../types';
 
-export type StatusLead = 'novo' | 'contatado' | 'interessado' | 'descartado';
+export type StatusLead = 'novo' | 'contatado' | 'interessado' | 'descartado' | 'transferido';
 
 export interface Lead {
   id: string; // place id do Google
@@ -29,6 +32,8 @@ export interface Lead {
   busca?: string; // o que foi buscado (ex.: "loja de semijoias em Belo Horizonte, MG")
   criadoEm: string;
   atualizadoEm?: string;
+  clienteId?: string; // cliente criado no CRM ao transferir
+  rodizioLogin?: string; // vendedor que recebeu o lead pelo rodízio do admin
 }
 
 const CHAVE_GOOGLE = (import.meta.env.VITE_GOOGLE_PLACES_KEY as string | undefined) ?? '';
@@ -161,4 +166,60 @@ export async function consultarCnpj(cnpj: string): Promise<NonNullable<Lead['rec
     telefone: j.ddd_telefone_1 as string | undefined,
     email: j.email as string | undefined,
   };
+}
+
+
+
+/** Cria (ou reaproveita) o cliente do CRM a partir do lead, com a tag Prospect, e devolve o id. */
+async function clienteDoLead(empresaId: string, lead: Lead, clientes: Cliente[], extra: Partial<Cliente>): Promise<string> {
+  const k = soDigitos(lead.whatsapp ?? lead.telefone).slice(-9);
+  const existente = k.length === 9 ? clientes.find((c) => soDigitos(c.telefone).slice(-9) === k) : undefined;
+  const id = existente?.id ?? `prospect-${lead.id.replace(/[^A-Za-z0-9_-]/g, '').slice(-24)}`;
+  const dados: Record<string, unknown> = {
+    ...extra,
+    prospectLeadId: lead.id,
+    ...(existente ? {} : { cod: id, nome: lead.nome, razao: lead.receita?.razao, telefone: lead.whatsapp ?? lead.telefone, cnpj: lead.cnpj, cidade: lead.receita?.municipio, uf: lead.receita?.uf, prospect: true }),
+  };
+  await setDoc(doc(db, 'empresas', empresaId, 'clientes', id), JSON.parse(JSON.stringify(dados)), { merge: true });
+  return id;
+}
+
+/** Vendedor prospectou e o lead está interessado: cai no CRM, coluna "Em atendimento", com a tag Prospect. */
+export async function transferirParaAtendimento(empresaId: string, lead: Lead, vendedor: { login: string; nome: string }, clientes: Cliente[]) {
+  const emp = await getDoc(doc(db, 'empresas', empresaId));
+  const salvas = (emp.data()?.crmColunas ?? []) as ColunaCrm[];
+  const colunas = salvas.length > 0 ? salvas : CRM_COLUNAS_PADRAO;
+  const col = colunas.find((c) => acaoDaColuna(c) === 'atendimento');
+  if (!col) throw new Error('Não há coluna "Em atendimento" configurada no CRM.');
+  const id = await clienteDoLead(empresaId, lead, clientes, {
+    crmColunaId: col.id,
+    crmVendedorLogin: vendedor.login,
+    crmColunaChangedAt: new Date().toISOString(),
+  });
+  await atualizarLead(empresaId, lead.id, { status: 'transferido', clienteId: id });
+}
+
+/** Admin coloca o lead no rodízio: vira cliente Prospect do vendedor e explode na tela dele (agenda). */
+export async function enviarAoRodizio(empresaId: string, lead: Lead, vendedor: { login: string; nome: string }, autor: string, clientes: Cliente[]) {
+  const id = await clienteDoLead(empresaId, lead, clientes, { crmVendedorLogin: vendedor.login });
+  const agora = new Date();
+  await criarAgendamentos(empresaId, [
+    {
+      data: isoLocal(agora),
+      hora: `${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`,
+      clienteId: id,
+      clienteCod: id,
+      clienteNome: lead.nome,
+      telefone: lead.whatsapp ?? lead.telefone,
+      vendedorLogin: vendedor.login,
+      vendedorNome: vendedor.nome,
+      obs: `Lead do Prospect (nota ${lead.nota}) — inicie o atendimento.`,
+      status: 'pendente',
+      origem: 'rodizio',
+      criadoEm: agora.toISOString(),
+      criadoPor: autor,
+      lembreteEm: agora.toISOString(),
+    },
+  ]);
+  await atualizarLead(empresaId, lead.id, { clienteId: id, rodizioLogin: vendedor.login });
 }

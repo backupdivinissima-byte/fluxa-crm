@@ -20,6 +20,7 @@ import {
   colunaEfetivaDoCliente,
   padronizarColunas,
   diasSemAtend,
+  tagAutomaticaCliente,
   formatarMoeda,
   parseValorBR,
   rotuloFaixa,
@@ -719,6 +720,14 @@ export default function Crm() {
                           {dias >= 9999 ? 'Sem compra' : `${dias} ${dias === 1 ? 'dia' : 'dias'}`}
                         </span>
                       </div>
+                      {(() => {
+                        const tag = tagAutomaticaCliente(c);
+                        return tag ? (
+                          <span className={`inline-block mt-0.5 rounded-full font-bold px-1.5 py-px text-[10px] ${tag === 'prospect' ? 'bg-orange-100 text-orange-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                            {tag === 'prospect' ? 'Prospect' : 'Novo'}
+                          </span>
+                        ) : null;
+                      })()}
                       {rodizioPorCliente.get(c.id) && (
                         <div className="flex items-center gap-1 mt-0.5">
                           <span className="text-ink truncate font-semibold">👤 {rodizioPorCliente.get(c.id)!.vendedorNome}</span>

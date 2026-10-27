@@ -193,6 +193,8 @@ export interface Cliente {
   crmColunaChangedAt?: string; // ISO date, usado pra filtrar comissão por mês
   crmVendedorLogin?: string; // vendedor responsável pelo card no funil
   crmOrcamentoValor?: number; // valor combinado quando o card entrou numa coluna de fechamento
+  prospect?: boolean; // veio do Fluxa Prospect: tag laranja "Prospect" até a 1ª compra
+  prospectLeadId?: string;
 }
 
 // Coluna do quadro CRM — 100% personalizável pela empresa (até

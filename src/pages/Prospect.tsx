@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { criarContatoChat, enviarMensagemChat, ouvirConexaoWhatsapp, solicitarConexaoWhatsapp } from '../lib/chatData';
+import { criarContatoChat, enviarMensagemChat, ouvirConexaoWhatsapp, ouvirTodasConversas, solicitarConexaoWhatsapp } from '../lib/chatData';
 import { modulosDaEmpresa } from '../lib/modulos';
 import type { ConexaoChat } from '../types';
-import { ouvirClientes } from '../lib/crmData';
+import { ouvirClientes, ouvirVendedores } from '../lib/crmData';
+import { ouvirAgenda, type Agendamento } from '../lib/agendaData';
 import {
   atualizarLead,
   buscarLugares,
+  enviarAoRodizio,
+  transferirParaAtendimento,
   consultarCnpj,
   googleConfigurado,
   notaDoLead,
@@ -17,7 +20,7 @@ import {
   type Lead,
   type StatusLead,
 } from '../lib/prospectData';
-import type { Cliente } from '../types';
+import type { Cliente, ConversaChat, Vendedor } from '../types';
 
 const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
 const STATUS: Array<{ id: StatusLead; nome: string; cor: string }> = [
@@ -25,7 +28,9 @@ const STATUS: Array<{ id: StatusLead; nome: string; cor: string }> = [
   { id: 'contatado', nome: 'Contatado', cor: 'bg-amber-100 text-amber-700' },
   { id: 'interessado', nome: 'Interessado', cor: 'bg-emerald-100 text-emerald-700' },
   { id: 'descartado', nome: 'Descartado', cor: 'bg-slate-100 text-slate-500' },
+  { id: 'transferido', nome: 'No CRM', cor: 'bg-orange-100 text-orange-700' },
 ];
+const COLUNAS = STATUS.filter((s) => s.id !== 'transferido');
 const fim9 = (s?: string) => (s ?? '').replace(/\D/g, '').slice(-9);
 const corNota = (n: number) => (n >= 70 ? '#27AE60' : n >= 45 ? '#E67E22' : '#C0392B');
 
@@ -44,7 +49,10 @@ function erroDeSalvar(e: unknown): string {
 }
 
 export default function Prospect() {
-  const { empresa, perfil } = useAuth();
+  const { empresa, perfil, papel, sessaoVendedor } = useAuth();
+  const souAdmin = papel === 'admin';
+  const meuLogin = souAdmin ? '__admin__' : (sessaoVendedor?.vendedor.login ?? '');
+  const meuNome = souAdmin ? (perfil?.nome ?? 'Administrador') : (sessaoVendedor?.vendedor.nome ?? '');
   const navigate = useNavigate();
   const empresaId = empresa?.id;
   const temChat = !!empresa && modulosDaEmpresa(empresa).includes('chat');
@@ -62,6 +70,9 @@ export default function Prospect() {
   const [proxima, setProxima] = useState<string | undefined>();
   const [salvos, setSalvos] = useState<Lead[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [conversas, setConversas] = useState<ConversaChat[]>([]);
+  const [vendedores, setVendedores] = useState<Vendedor[]>([]);
+  const [agenda, setAgenda] = useState<Agendamento[]>([]);
   const [aberto, setAberto] = useState<string | null>(null);
   const [cnpjTxt, setCnpjTxt] = useState('');
   const [msg, setMsg] = useState('');
@@ -71,12 +82,55 @@ export default function Prospect() {
     const a = ouvirLeads(empresaId, setSalvos, (m) => setErro('Não consegui ler os leads salvos: ' + m));
     const b = ouvirClientes(empresaId, setClientes);
     const c = ouvirConexaoWhatsapp(empresaId, setConexao);
+    const d = ouvirTodasConversas(empresaId, setConversas);
+    const e = ouvirVendedores(empresaId, setVendedores);
+    const f = ouvirAgenda(empresaId, undefined, setAgenda);
     return () => {
       a();
       b();
       c();
+      d();
+      e();
+      f();
     };
   }, [empresaId]);
+
+  // Colunas automáticas: conversa iniciada pela equipe = Contatado; cliente respondeu = Interessado.
+  useEffect(() => {
+    if (!empresaId || conversas.length === 0) return;
+    for (const l of salvos) {
+      if (l.status !== 'novo' && l.status !== 'contatado') continue;
+      const k = fim9(l.whatsapp);
+      if (k.length !== 9) continue;
+      const conv = conversas.find((x) => fim9(x.telefone) === k);
+      if (!conv) continue;
+      const proximo: StatusLead | null = l.status === 'novo' ? (conv.ultimaDe === 'cliente' && !conv.primeiroContato ? 'interessado' : conv.teveResposta || conv.vendedorLogin || conv.ultimaDe === 'equipe' ? 'contatado' : null) : conv.ultimaDe === 'cliente' ? 'interessado' : null;
+      if (proximo) void atualizarLead(empresaId, l.id, { status: proximo }).catch(() => {});
+    }
+  }, [empresaId, conversas, salvos]);
+
+  async function transferir(l: Lead) {
+    if (!empresaId) return;
+    try {
+      await transferirParaAtendimento(empresaId, l, { login: meuLogin, nome: meuNome }, clientes);
+      setMsg(`${l.nome} foi para o CRM, coluna Em atendimento, com a tag Prospect.`);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Não consegui transferir.');
+    }
+  }
+  async function mandarRodizio(l: Lead) {
+    if (!empresaId) return;
+    const ativos = vendedores.filter((v) => v.ativo);
+    if (ativos.length === 0) return setErro('Não há vendedor ativo para receber o lead.');
+    const carga = (login: string) => agenda.filter((a) => a.vendedorLogin === login && a.status === 'pendente').length;
+    const v = [...ativos].sort((x, y) => carga(x.login) - carga(y.login))[0];
+    try {
+      await enviarAoRodizio(empresaId, l, { login: v.login, nome: v.nome }, meuNome, clientes);
+      setMsg(`${l.nome} foi para o rodízio: ${v.nome} recebe o lead na tela agora.`);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Não consegui enviar ao rodízio.');
+    }
+  }
 
   const telefonesClientes = useMemo(() => new Set(clientes.map((c) => fim9(c.telefone)).filter((t) => t.length === 9)), [clientes]);
   const idsSalvos = useMemo(() => new Set(salvos.map((l) => l.id)), [salvos]);
@@ -186,9 +240,7 @@ export default function Prospect() {
     return (
       <div
         key={l.id}
-        draggable={card}
-        onDragStart={card ? (e) => e.dataTransfer.setData('text/plain', l.id) : undefined}
-        className={card ? `bg-white border border-line rounded-xl p-3 flex flex-col gap-2 shadow-sm cursor-grab active:cursor-grabbing ${cli ? 'opacity-60' : ''}` : `py-3 flex gap-3 items-start ${cli ? 'opacity-60' : ''}`}
+        className={card ? `bg-white border border-line rounded-xl p-3 flex flex-col gap-2 shadow-sm ${cli ? 'opacity-60' : ''}` : `py-3 flex gap-3 items-start ${cli ? 'opacity-60' : ''}`}
       >
         <Nota lead={l} />
         <div className="min-w-0 flex-1">
@@ -275,9 +327,19 @@ export default function Prospect() {
             )
           ) : (
             <>
-              <select value={l.status} onChange={(e) => void mudarStatus(l, e.target.value as StatusLead)} className="h-8 rounded-lg border border-line px-1 text-xs bg-white">
-                {STATUS.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}
-              </select>
+              {(l.status === 'contatado' || l.status === 'interessado') && !souAdmin && (
+                <button onClick={() => void transferir(l)} className="text-xs font-bold rounded-lg px-3 py-1.5 bg-orange-500 text-white" title="Leva o lead para o CRM, coluna Em atendimento, com a tag Prospect">Transferir para atendimento</button>
+              )}
+              {souAdmin && ['novo', 'contatado', 'interessado'].includes(l.status) && !l.rodizioLogin && (
+                <button onClick={() => void mandarRodizio(l)} className="text-xs font-bold rounded-lg px-3 py-1.5 bg-violet-600 text-white" title="Entrega o lead a um vendedor: explode na tela dele para iniciar o atendimento">Enviar ao rodízio</button>
+              )}
+              {l.rodizioLogin && l.status !== 'transferido' && <span className="text-[11px] font-bold text-violet-700">no rodízio</span>}
+              {l.status === 'transferido' && <span className="text-[11px] font-bold text-orange-700">no CRM</span>}
+              {l.status === 'descartado' ? (
+                <button onClick={() => void mudarStatus(l, 'novo')} className="text-xs font-bold border border-line rounded-lg px-2 py-1">Reabrir</button>
+              ) : l.status !== 'transferido' ? (
+                <button onClick={() => void mudarStatus(l, 'descartado')} className="text-xs font-bold border border-line text-ink-soft rounded-lg px-2 py-1">Descartar</button>
+              ) : null}
               <div className="flex gap-1">
                 <button onClick={() => { setAberto(aberto === l.id ? null : l.id); setCnpjTxt(l.cnpj ?? ''); }} className="text-xs font-bold border border-line rounded-lg px-2 py-1">Detalhes</button>
                 <button onClick={() => { if (empresaId && window.confirm('Remover este lead?')) void removerLead(empresaId, l.id); }} className="text-xs font-bold border border-line text-ink-soft rounded-lg px-2 py-1">Remover</button>
@@ -395,17 +457,11 @@ export default function Prospect() {
         </>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 items-start">
-          {STATUS.map((col) => {
+          {COLUNAS.map((col) => {
             const itens = salvos.filter((l) => l.status === col.id).sort((x, y) => y.nota - x.nota);
             return (
               <div
                 key={col.id}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  const lead = salvos.find((x) => x.id === e.dataTransfer.getData('text/plain'));
-                  if (lead && lead.status !== col.id) void mudarStatus(lead, col.id);
-                }}
                 className="bg-slate-50 border border-line rounded-xl p-2 min-h-[240px]"
               >
                 <div className="flex items-center justify-between px-1 pb-2">
@@ -413,7 +469,7 @@ export default function Prospect() {
                   <span className="text-xs font-bold text-ink-soft">{itens.length}</span>
                 </div>
                 <div className="space-y-2 max-h-[75vh] overflow-y-auto">
-                  {itens.length === 0 ? <p className="text-xs text-ink-soft px-1 py-4 text-center">Arraste leads para cá.</p> : itens.map((l) => renderLinha(l, true, true))}
+                  {itens.length === 0 ? <p className="text-xs text-ink-soft px-1 py-4 text-center">Automático: o lead entra aqui sozinho.</p> : itens.map((l) => renderLinha(l, true, true))}
                 </div>
               </div>
             );

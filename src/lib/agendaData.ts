@@ -146,7 +146,7 @@ export function planejarRodizio(
     tentou.set(a.clienteId, st);
   }
   const fila = clientes
-    .filter((c) => diasSemAtend(c) > diasInatividade && !bloqueados.has(c.id) && (c.telefone ?? '').replace(/\D/g, '').length >= 8)
+    .filter((c) => diasSemAtend(c) > diasInatividade && !(c.prospect && !((c.totalGeral ?? 0) > 0)) && !bloqueados.has(c.id) && (c.telefone ?? '').replace(/\D/g, '').length >= 8)
     .sort((a, b) => (b.dtUltCompra ?? '').localeCompare(a.dtUltCompra ?? '')); // do cliente mais recente para o mais antigo
   const removerIds = new Set<string>();
   let reatribuidos = 0;

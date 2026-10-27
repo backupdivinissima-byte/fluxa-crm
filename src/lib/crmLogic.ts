@@ -910,3 +910,25 @@ export function padronizarColunas(existentes: ColunaCrm[]): ColunaCrm[] {
     return { ...padrao, id: igual.id };
   });
 }
+
+
+/** Mês (AAAA-MM) da primeira compra conhecida do cliente. */
+function mesPrimeiraCompra(c: Cliente): string | undefined {
+  if (c.origensImportacao) {
+    const meses = Object.keys(c.origensImportacao)
+      .map((k) => /^mes-(\d{4}-\d{2})$/.exec(k)?.[1])
+      .filter((m): m is string => Boolean(m));
+    if (meses.length > 0) return meses.sort()[0];
+  }
+  return c.dtUltCompra?.slice(0, 7);
+}
+
+/** Tag automática do cliente: "prospect" (veio do Prospect e ainda não comprou),
+ * "novo" (primeira compra dentro do mês atual) ou nenhuma. */
+export function tagAutomaticaCliente(c: Cliente, hoje: Date = new Date()): 'prospect' | 'novo' | null {
+  const comprou = (c.totalGeral ?? 0) > 0 || !!c.dtUltCompra;
+  if (c.prospect && !comprou) return 'prospect';
+  if (!comprou) return null;
+  const mes = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
+  return mesPrimeiraCompra(c) === mes ? 'novo' : null;
+}
