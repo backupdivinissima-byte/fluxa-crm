@@ -22,6 +22,7 @@ import pino from 'pino';
 import { guardarNoDrive, driveLigado } from './drive-midia.js';
 import { criarRobo } from './robo.js';
 import { criarSupervisora } from './supervisora.js';
+import { iniciarBuscaInstagram } from './prospect-instagram.js';
 
 // MODO TESTE: sem banco. Mostra o QR Code no terminal e escreve as mensagens
 // recebidas na tela. Ativa com MODO_TESTE=1 ou quando não há credenciais.
@@ -1059,6 +1060,7 @@ async function enviarSaida(d) {
 
 if (!MODO_TESTE) {
   supervisora = criarSupervisora({ base, agora });
+  iniciarBuscaInstagram({ base });
   robo = criarRobo({
     refConexao,
     base,

@@ -203,6 +203,8 @@ export default function Prospect() {
             {l.site && <a href={l.site} target="_blank" rel="noreferrer" className="text-blue-600 underline">site</a>}
             {l.instagram ? (
               <a href={`https://instagram.com/${l.instagram}`} target="_blank" rel="noreferrer" className="text-pink-600 font-bold">@{l.instagram}</a>
+            ) : l.buscarInstagram ? (
+              <span className="text-ink-soft">procurando @…</span>
             ) : (
               <a href={`https://www.google.com/search?q=${encodeURIComponent(`${l.nome} ${l.endereco?.split(',').slice(-2, -1)[0]?.trim() ?? ''} instagram`)}`} target="_blank" rel="noreferrer" className="text-ink-soft underline" title="Procurar o Instagram desta loja no Google">achar instagram</a>
             )}
@@ -223,6 +225,15 @@ export default function Prospect() {
               </div>
               <div className="flex gap-2 items-center">
                 <span className="text-xs font-bold text-ink-soft">Instagram @</span>
+                {l.site && (
+                  <button
+                    onClick={() => empresaId && void atualizarLead(empresaId, l.id, { buscarInstagram: true, instagramStatus: undefined })}
+                    className="h-8 rounded-lg border border-line text-xs font-bold px-2 bg-white"
+                    title="O servidor lê o site da loja e procura o link do Instagram"
+                  >
+                    Buscar no site
+                  </button>
+                )}
                 <input
                   defaultValue={l.instagram ?? ''}
                   onBlur={(e) => {
@@ -232,6 +243,8 @@ export default function Prospect() {
                   placeholder="nomedaloja"
                   className="h-8 rounded-lg border border-line px-2 text-xs w-48 bg-white"
                 />
+                {l.instagramStatus === 'nao_achou' && <span className="text-[11px] text-ink-soft">o site não tem link do Instagram</span>}
+                {l.instagramStatus === 'erro' && <span className="text-[11px] text-red-600">não consegui abrir o site</span>}
               </div>
               <textarea
                 defaultValue={l.obs ?? ''}

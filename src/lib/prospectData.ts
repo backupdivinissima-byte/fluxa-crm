@@ -19,6 +19,8 @@ export interface Lead {
   tipos?: string[];
   cnpj?: string;
   instagram?: string; // @ do Instagram (sem o @)
+  buscarInstagram?: boolean; // pedido ao servidor: ler o site da loja e achar o @
+  instagramStatus?: 'achou' | 'nao_achou' | 'sem_site' | 'erro';
   receita?: { razao?: string; fantasia?: string; situacao?: string; cnae?: string; porte?: string; abertura?: string; municipio?: string; uf?: string; telefone?: string; email?: string };
   nota: number; // 0–100
   motivos: string[];
@@ -49,7 +51,8 @@ function semUndef<T extends object>(o: T): T {
   return JSON.parse(JSON.stringify(o)) as T;
 }
 export async function salvarLead(empresaId: string, l: Lead) {
-  await setDoc(doc(col(empresaId), l.id), semUndef({ ...l, atualizadoEm: new Date().toISOString() }));
+  const pedir = !!l.site && !l.instagram && l.instagramStatus === undefined; // lead novo com site: o servidor procura o @ no site
+  await setDoc(doc(col(empresaId), l.id), semUndef({ ...l, ...(pedir ? { buscarInstagram: true } : {}), atualizadoEm: new Date().toISOString() }));
 }
 export async function atualizarLead(empresaId: string, id: string, patch: Partial<Lead>) {
   await updateDoc(doc(col(empresaId), id), semUndef({ ...patch, atualizadoEm: new Date().toISOString() }));
