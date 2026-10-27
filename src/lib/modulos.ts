@@ -15,7 +15,7 @@ export function modulosDaEmpresa(e: Empresa | null | undefined): Modulo[] {
   return e?.id && PROSPECT_LIBERADO_PARA.includes(e.id) && !base.includes('prospect') ? [...base, 'prospect'] : base;
 }
 
-function modulosBase(e: Empresa | null | undefined): Modulo[] {
+export function modulosBase(e: Empresa | null | undefined): Modulo[] {
   if (e?.modulos && e.modulos.length > 0) return e.modulos;
   if (e?.produto === 'marketing') return ['marketing'];
   return ['crm', 'marketing'];

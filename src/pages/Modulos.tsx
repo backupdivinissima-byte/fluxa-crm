@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { collection, doc, getDocs, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { modulosDaEmpresa, type Modulo } from '../lib/modulos';
+import { modulosBase, type Modulo } from '../lib/modulos';
 import type { Empresa } from '../types';
 
 /** Logins que administram a plataforma Fluxa (quem vende os módulos). Só eles veem esta tela. */
@@ -37,7 +37,7 @@ export default function Modulos() {
   if (!dono) return <div className="p-6 text-sm text-ink-soft">Esta tela é só do administrador da plataforma.</div>;
 
   async function alternar(e: Empresa, m: Modulo) {
-    const atuais = modulosDaEmpresa(e);
+    const atuais = modulosBase(e);
     const novos = atuais.includes(m) ? atuais.filter((x) => x !== m) : [...atuais, m];
     if (novos.length === 0) {
       setErro('A empresa precisa ficar com pelo menos um módulo.');
@@ -73,7 +73,7 @@ export default function Modulos() {
       ) : (
         <div className="bg-white border border-line rounded-2xl divide-y divide-line">
           {empresas.map((e) => {
-            const mods = modulosDaEmpresa(e);
+            const mods = modulosBase(e);
             return (
               <div key={e.id} className="flex flex-wrap items-center gap-4 p-4">
                 <div className="min-w-0 flex-1">
