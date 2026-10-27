@@ -83,8 +83,8 @@ export default function Layout() {
   const vinculaveis = modulos.filter((m) => !MODULOS_SEPARADOS.includes(m));
   const separados = modulos.filter((m) => MODULOS_SEPARADOS.includes(m));
   const varios = modulos.length > 1;
-  const variosVinculaveis = vinculaveis.length > 1;
-  const vinculados = variosVinculaveis && empresa?.modulosVinculados === true;
+  // Cada módulo é separado (CRM, Marketing, Chat, ERP, Prospect): nunca juntamos as abas num grupo só.
+  const vinculados = false;
   const [moduloEscolhido, setModuloEscolhido] = useState<Modulo | null>(() => {
     try {
       return sessionStorage.getItem(CHAVE_MODULO_ATUAL) as Modulo | null;
@@ -99,7 +99,7 @@ export default function Layout() {
   const visiveisAdmin: Modulo[] = !varios ? modulos : MODULOS_SEPARADOS.includes(moduloAtual) ? [moduloAtual] : vinculados ? vinculaveis : [moduloAtual];
   // Vendedor não troca de módulo: vê o que o gerencial liberou (abas filtradas abaixo).
   const visiveis: Modulo[] = papel === 'admin' ? visiveisAdmin : modulos;
-  const perguntarVinculo = papel === 'admin' && variosVinculaveis && empresa?.modulosVinculados === undefined;
+  const perguntarVinculo = false;
 
   function trocarModulo(m: Modulo) {
     setModuloEscolhido(m);
