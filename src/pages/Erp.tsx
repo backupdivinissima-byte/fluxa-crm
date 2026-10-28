@@ -65,12 +65,15 @@ export default function Erp() {
 
   const vista = SUBS[aba] ? (sub || SUBS[aba]?.[0].id) : aba;
 
+  const NOMES_ABA: Record<Aba, string> = { inicio: 'Início', vendas: 'Vendas', estoque: 'Estoque', financeiro: 'Financeiro', cadastros: 'Cadastros', api: 'Integrações' };
+  const subAtual = SUBS[aba]?.find((x) => x.id === (vista === 'importar' ? 'produtos' : vista))?.nome;
+  const tituloPagina = `Fluxa ERP — ${NOMES_ABA[aba]}${subAtual ? ` — ${subAtual}` : ''}`;
+
   if (papel !== 'admin') return <div className="p-6 text-sm text-ink-soft">Somente administradores acessam o Estoque.</div>;
 
   return (
     <div className="p-5 w-full">
-      <div className="flex items-center gap-2 mb-1"><IconEstoque className="w-6 h-6" /><h1 className="text-xl font-extrabold text-ink">{aba === 'estoque' ? (SUBS.estoque?.find((x) => x.id === (vista === 'importar' ? 'produtos' : vista))?.nome ?? 'Estoque') : 'Fluxa ERP'}</h1></div>
-      <p className="text-sm text-ink-soft mb-4">Vendas, estoque, financeiro e cadastros num só lugar.</p>
+      <h1 className="text-base font-extrabold text-ink flex items-center gap-2 mb-4"><IconEstoque className="w-5 h-5" /> {tituloPagina}</h1>
 
       {aba === 'estoque' && vista !== 'auditoria' && <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
         <Card t="Produtos ativos" v={String(resumo.itens)} />
