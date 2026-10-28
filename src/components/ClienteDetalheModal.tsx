@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { Cliente, Vendedor } from '../types';
 import {
   DIAS_INATIVIDADE_PADRAO,
@@ -10,7 +11,7 @@ import {
 } from '../lib/crmLogic';
 import { atualizarCampoCliente, removerCliente } from '../lib/crmData';
 import { useAuth } from '../contexts/AuthContext';
-import { chaveTelefone, vincularPorTelefone } from '../lib/chatData';
+import { chaveTelefone, corrigirNonoDigito, vincularPorTelefone } from '../lib/chatData';
 
 interface Props {
   empresaId: string;
@@ -61,6 +62,7 @@ export default function ClienteDetalheModal({
   onClose,
 }: Props) {
   const { papel, sessaoVendedor } = useAuth();
+  const navigate = useNavigate();
   const [cnpj, setCnpj] = useState(cliente.cnpj ?? '');
   const [telefone, setTelefone] = useState(telefoneInicial || cliente.telefone || '');
   const [cidadeUf, setCidadeUf] = useState(juntarCidadeUf(cliente.cidade, cliente.uf));
@@ -200,6 +202,18 @@ export default function ClienteDetalheModal({
                 placeholder="Digite o telefone"
                 className={CAMPO}
               />
+              {!embutido && telefone.replace(/\D/g, '').length >= 8 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    navigate(`/chat?tel=${encodeURIComponent(corrigirNonoDigito(telefone))}&nome=${encodeURIComponent(cliente.razao || cliente.nome || cliente.cod)}`);
+                  }}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-700 text-sm font-bold px-3 py-1.5 hover:bg-emerald-100"
+                >
+                  💬 Abrir Chat e iniciar conversa
+                </button>
+              )}
             </div>
 
             <div>
