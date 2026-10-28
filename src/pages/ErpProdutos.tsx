@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ouvirCadastro, type RegistroCad } from '../lib/erpCadastros';
 import { formatarMoeda, parseValorBR } from '../lib/crmLogic';
 import type { Produto } from '../types';
@@ -8,6 +8,25 @@ const campo = 'w-full rounded-lg border border-line px-3 h-10 text-sm bg-white';
 const rotulo = 'block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1';
 const num = (t: string) => { const n = parseValorBR(t); return Number.isNaN(n) ? 0 : n; };
 const txt = (n?: number) => (n === undefined || n === null ? '' : String(n).replace('.', ','));
+
+/** Reduz a foto escolhida no computador (até 800 px, JPEG) e devolve como data URL para guardar no próprio produto. */
+function reduzirImagem(arquivo: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(arquivo);
+    const img = new Image();
+    img.onload = () => {
+      const esc = Math.min(1, 800 / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * esc);
+      c.height = Math.round(img.height * esc);
+      c.getContext('2d')?.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/jpeg', 0.82));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Não consegui abrir essa imagem.')); };
+    img.src = url;
+  });
+}
 
 const ABAS = ['Dados gerais', 'Características', 'Estoque', 'Tributação', 'Fornecedor', 'Imagem', 'Observações'] as const;
 type Aba = (typeof ABAS)[number];
@@ -143,6 +162,7 @@ function FormProduto({ empresaId, dados, onFechar, onSalvar, onExcluir, onMovime
   const [fornecedores, setFornecedores] = useState<RegistroCad[]>([]);
   const [erro, setErro] = useState('');
   const [salvando, setSalvando] = useState(false);
+  const arquivoRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     const a = ouvirCadastro(empresaId, 'categoriasProduto', setCats);
     const b = ouvirCadastro(empresaId, 'marcasProduto', setMarcas);
@@ -270,7 +290,22 @@ function FormProduto({ empresaId, dados, onFechar, onSalvar, onExcluir, onMovime
         )}
         {aba === 'Imagem' && (
           <>
-            <G span={3}><label className={rotulo}>Endereço (URL) da imagem</label><input className={campo} value={v.imagemUrl} onChange={(e) => set('imagemUrl', e.target.value)} placeholder="https://..." /></G>
+            <G span={3}>
+              <label className={rotulo}>Imagem do produto</label>
+              <input ref={arquivoRef} type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                const f = e.target.files?.[0];
+                e.target.value = '';
+                if (!f) return;
+                try { set('imagemUrl', await reduzirImagem(f)); setErro(''); } catch (err) { setErro(err instanceof Error ? err.message : 'Não consegui usar essa imagem.'); }
+              }} />
+              <div className="flex gap-2 flex-wrap mb-3">
+                <button type="button" onClick={() => arquivoRef.current?.click()} className="rounded-xl bg-emerald-600 text-white text-sm font-bold px-4 h-10">📁 Buscar imagem no computador</button>
+                {v.imagemUrl && <button type="button" onClick={() => set('imagemUrl', '')} className="rounded-xl border border-line text-sm font-bold px-4 h-10">Remover imagem</button>}
+              </div>
+              <label className={rotulo}>Ou cole o endereço (URL) da imagem</label>
+              <input className={campo} value={v.imagemUrl.startsWith('data:') ? '' : v.imagemUrl} onChange={(e) => set('imagemUrl', e.target.value)} placeholder="https://..." />
+              <p className="text-[11px] text-ink-soft mt-1">A foto escolhida é reduzida automaticamente (até 800 px) para ficar leve.</p>
+            </G>
             <G>{v.imagemUrl ? <img src={v.imagemUrl} alt="" className="w-32 h-32 rounded-xl object-cover border border-line" /> : <div className="w-32 h-32 rounded-xl bg-slate-100" />}</G>
           </>
         )}

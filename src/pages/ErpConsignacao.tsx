@@ -1,3 +1,4 @@
+import BuscaProduto from '../components/BuscaProduto';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { acertarConsignacao, criarConsignacao, ouvirConsignacoes } from '../lib/erpData';
@@ -66,7 +67,6 @@ function FormNova({ empresaId, produtos, onFechar }: { empresaId: string; produt
   const [parteId, setParteId] = useState('');
   const [nome, setNome] = useState('');
   const [itens, setItens] = useState<ItemConsig[]>([]);
-  const [prodId, setProdId] = useState('');
   const [erro, setErro] = useState('');
   const [salvando, setSalvando] = useState(false);
   useEffect(() => { setParteId(''); return ouvirCadastro(empresaId, tipo === 'cliente' ? 'clientes' : 'fornecedores', setPartes); }, [empresaId, tipo]);
@@ -81,8 +81,7 @@ function FormNova({ empresaId, produtos, onFechar }: { empresaId: string; produt
       </div>
       <label className={`${rotulo} mt-4`}>Peças</label>
       <div className="flex gap-2">
-        <select className={campo} value={prodId} onChange={(e) => setProdId(e.target.value)}><option value="">Escolha…</option>{produtos.filter((p) => p.ativo).map((p) => <option key={p.id} value={p.id}>{p.sku} — {p.nome} (estoque {p.estoque})</option>)}</select>
-        <button className="rounded-xl border border-line text-sm font-bold px-3" onClick={() => { const p = produtos.find((x) => x.id === prodId); if (!p) return; setItens((a) => a.some((i) => i.produtoId === p.id) ? a : [...a, { produtoId: p.id, sku: p.sku, nome: p.nome, enviada: 1, vendida: 0, devolvida: 0, preco: p.preco, custo: p.custo }]); setProdId(''); }}>Incluir</button>
+        <BuscaProduto produtos={produtos.filter((p) => p.ativo)} aoEscolher={(p) => setItens((a) => a.some((i) => i.produtoId === p.id) ? a : [...a, { produtoId: p.id, sku: p.sku, nome: p.nome, enviada: 1, vendida: 0, devolvida: 0, preco: p.preco, custo: p.custo }])} />
       </div>
       {itens.length > 0 && (
         <div className="mt-2 rounded-lg border border-line divide-y divide-line">

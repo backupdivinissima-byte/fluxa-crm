@@ -1,3 +1,4 @@
+import BuscaProduto from '../components/BuscaProduto';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { converterOrcamento, criarPedido, mudarStatusPedido, ouvirPedidos, totalDoPedido } from '../lib/erpData';
@@ -116,7 +117,6 @@ function FormPedido({ empresaId, produtos, onFechar, onSalvar }: { empresaId: st
     return Math.round(base * aj * ds * 100) / 100;
   }
   const [itens, setItens] = useState<ItemPedido[]>([]);
-  const [prodId, setProdId] = useState('');
   const [qtd, setQtd] = useState('1');
   const [desc, setDesc] = useState('0');
   const [frete, setFrete] = useState('0');
@@ -126,15 +126,14 @@ function FormPedido({ empresaId, produtos, onFechar, onSalvar }: { empresaId: st
   const [salvando, setSalvando] = useState(false);
   const total = totalDoPedido(itens, num(desc), num(frete));
 
-  function adicionar() {
-    const p = produtos.find((x) => x.id === prodId);
+  function adicionar(p: Produto) {
     const q = num(qtd);
     if (!p || q <= 0) return;
     setItens((atual) => {
       const ex = atual.find((i) => i.produtoId === p.id);
       return ex ? atual.map((i) => (i.produtoId === p.id ? { ...i, quantidade: i.quantidade + q } : i)) : [...atual, { produtoId: p.id, sku: p.sku, nome: p.nome, quantidade: q, preco: precoParaCliente(p.preco) }];
     });
-    setProdId(''); setQtd('1');
+    setQtd('1');
   }
 
   return (
@@ -154,12 +153,8 @@ function FormPedido({ empresaId, produtos, onFechar, onSalvar }: { empresaId: st
         <label className="flex items-center gap-2 text-sm mt-3"><input type="checkbox" checked={orcamento} onChange={(e) => setOrcamento(e.target.checked)} /> Salvar como <b>orçamento</b> (não baixa o estoque até converter em pedido)</label>
         <label className={`${rotulo} mt-4`}>Adicionar produto</label>
         <div className="flex gap-2">
-          <select className={campo} value={prodId} onChange={(e) => setProdId(e.target.value)}>
-            <option value="">Escolha…</option>
-            {produtos.map((p) => <option key={p.id} value={p.id}>{p.sku} — {p.nome} (estoque {p.estoque})</option>)}
-          </select>
-          <input className={`${campo} max-w-[80px]`} value={qtd} onChange={(e) => setQtd(e.target.value)} />
-          <button onClick={adicionar} className="rounded-xl border border-line text-sm font-bold px-3">Incluir</button>
+          <BuscaProduto produtos={produtos} aoEscolher={(p) => adicionar(p)} />
+          <input className={`${campo} max-w-[80px]`} value={qtd} onChange={(e) => setQtd(e.target.value)} title="Quantidade" />
         </div>
         {itens.length > 0 && (
           <div className="mt-3 rounded-lg border border-line divide-y divide-line">
