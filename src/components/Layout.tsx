@@ -20,6 +20,8 @@ import {
   IconChat,
   IconAgenda,
   IconEstoque,
+  IconProdutoMenu,
+  IconAuditoria,
   IconErpInicio,
   IconErpVendas,
   IconErpFinanceiro,
@@ -45,7 +47,7 @@ const itens = [
   // Produtos e estoque (Fluxa ERP): só admin.
   { to: '/erp/inicio', label: 'Início', icon: <IconErpInicio />, apenasAdmin: true },
   { to: '/erp/cadastros', label: 'Cadastros', icon: <IconErpCadastros />, apenasAdmin: true },
-  { to: '/erp/estoque', label: 'Estoque', icon: <IconEstoque />, apenasAdmin: true, menu: [{ label: 'Produtos', to: '/erp/estoque' }, { label: 'Auditoria', to: '/erp/estoque?v=auditoria' }] as { label: string; to: string }[] },
+  { to: '/erp/estoque', label: 'Estoque', icon: <IconEstoque />, apenasAdmin: true, menu: [{ label: 'Produtos', to: '/erp/estoque', icon: <IconProdutoMenu /> }, { label: 'Auditoria', to: '/erp/estoque?v=auditoria', icon: <IconAuditoria /> }] as { label: string; to: string; icon?: React.ReactNode }[] },
   { to: '/erp/vendas', label: 'Vendas', icon: <IconErpVendas />, apenasAdmin: true },
   { to: '/erp/financeiro', label: 'Financeiro', icon: <IconErpFinanceiro />, apenasAdmin: true },
   { to: '/erp/integracoes', label: 'Integrações', icon: <IconErpIntegracoes />, apenasAdmin: true },
@@ -162,7 +164,7 @@ export default function Layout() {
               .filter((item) => !('apenasDono' in item) || (!!perfil?.email && DONOS_PLATAFORMA.includes(perfil.email.toLowerCase())))
               .filter((item) => visiveis.includes(moduloDaRota(item.to, modulos)))
               .map((item) => {
-                const menu = 'menu' in item ? (item.menu as { label: string; to: string }[]) : undefined;
+                const menu = 'menu' in item ? (item.menu as { label: string; to: string; icon?: React.ReactNode }[]) : undefined;
                 if (!menu) {
                   return (
                     <NavLink
@@ -196,9 +198,9 @@ export default function Layout() {
                           <button
                             key={m.to}
                             onClick={() => { setMenuAberto(null); navigate(m.to); }}
-                            className="block w-full text-left px-4 py-2.5 text-sm font-semibold text-ink-soft hover:bg-surface hover:text-teal-500 border-b border-line last:border-0"
+                            className="flex items-center gap-2 w-full text-left px-4 py-2.5 text-sm font-semibold text-ink-soft hover:bg-surface hover:text-teal-500 border-b border-line last:border-0"
                           >
-                            {m.label}
+                            {m.icon} {m.label}
                           </button>
                         ))}
                       </div>

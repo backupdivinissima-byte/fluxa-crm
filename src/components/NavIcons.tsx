@@ -228,3 +228,21 @@ export function IconAgenda(props: { className?: string }) {
     </NavIcon>
   );
 }
+
+export function IconProdutoMenu(props: { className?: string }) {
+  return (
+    <NavIcon {...props}>
+      <path d="M3.5 12.5V4.5a1 1 0 0 1 1-1h8l8 8-9 9-8-8Z" />
+      <circle cx="8.5" cy="8.5" r="1.3" />
+    </NavIcon>
+  );
+}
+
+export function IconAuditoria(props: { className?: string }) {
+  return (
+    <NavIcon {...props}>
+      <rect x="5" y="4" width="14" height="17" rx="2" />
+      <path d="M9 4V3h6v1M8.5 12l2 2 4-4M8.5 17h7" />
+    </NavIcon>
+  );
+}
