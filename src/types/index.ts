@@ -440,6 +440,25 @@ export interface Produto {
   estoqueMinimo: number;
   ativo: boolean;
   origem?: 'manual' | 'importado';
+  // Cadastro completo (estilo ERP): tudo opcional
+  tipo?: 'simples' | 'variacao' | 'kit';
+  gtin?: string;
+  descricaoComplementar?: string;
+  precoPromocional?: number;
+  pesoLiquido?: number;
+  pesoBruto?: number;
+  largura?: number;
+  altura?: number;
+  profundidade?: number;
+  estoqueMaximo?: number;
+  localizacao?: string;
+  ncm?: string;
+  cest?: string;
+  origemFiscal?: string;
+  fornecedorId?: string;
+  codigoFornecedor?: string;
+  imagemUrl?: string;
+  observacoes?: string;
   criadoEm: string;
   atualizadoEm: string;
 }

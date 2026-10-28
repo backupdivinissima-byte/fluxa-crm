@@ -11,6 +11,7 @@ import ErpConsignacao from './ErpConsignacao';
 import { ListaTrocas } from './ErpTrocas';
 import ErpCadastros from './ErpCadastros';
 import ErpApi from './ErpApi';
+import ErpProdutos from './ErpProdutos';
 import { ouvirCadastro, type RegistroCad } from '../lib/erpCadastros';
 import { IconEstoque } from '../components/NavIcons';
 import type { MovimentoEstoque, Produto } from '../types';
@@ -37,9 +38,7 @@ export default function Erp() {
   useEffect(() => { setSub(''); }, [aba]);
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [movimentos, setMovimentos] = useState<MovimentoEstoque[]>([]);
-  const [busca, setBusca] = useState('');
   const [soBaixos, setSoBaixos] = useState(false);
-  const [edicao, setEdicao] = useState<Partial<Produto> | null>(null);
   const [gerarVar, setGerarVar] = useState(false);
   const [mov, setMov] = useState<{ produto: Produto; tipo: MovimentoEstoque['tipo'] } | null>(null);
   const [erro, setErro] = useState('');
@@ -62,10 +61,6 @@ export default function Erp() {
     };
   }, [produtos]);
 
-  const lista = useMemo(() => {
-    const q = busca.trim().toLowerCase();
-    return produtos.filter((p) => (!q || p.nome.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q) || (p.categoria ?? '').toLowerCase().includes(q)) && (!soBaixos || (p.ativo && p.estoque <= p.estoqueMinimo)));
-  }, [produtos, busca, soBaixos]);
 
   const vista = SUBS[aba] ? (sub || SUBS[aba]?.[0].id) : aba;
 
@@ -92,45 +87,17 @@ export default function Erp() {
       )}
       {erro && <p className="text-sm text-red-600 mb-3">{erro}</p>}
 
-      {vista === 'produtos' && (
-        <>
-          <div className="flex gap-2 flex-wrap mb-3">
-            <input className={`${campo} max-w-xs`} placeholder="Buscar por nome, código ou categoria" value={busca} onChange={(e) => setBusca(e.target.value)} />
-            <label className="flex items-center gap-2 text-sm text-ink-soft"><input type="checkbox" checked={soBaixos} onChange={(e) => setSoBaixos(e.target.checked)} /> Só estoque baixo</label>
-            <button onClick={() => setGerarVar(true)} className="ml-auto rounded-xl border border-line text-sm font-bold px-4 h-10">Produto com variações</button>
-            <button onClick={() => setEdicao({ ativo: true, unidade: 'un', preco: 0, custo: 0, estoque: 0, estoqueMinimo: 0 })} className="rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-4 h-10">+ Novo produto</button>
-          </div>
-          <div className="overflow-x-auto rounded-xl border border-line bg-white">
-            <table className="w-full text-sm">
-              <thead className="text-xs uppercase text-ink-soft bg-surface"><tr>
-                <th className="text-left p-3">Código</th><th className="text-left p-3">Produto</th><th className="text-left p-3">Categoria</th>
-                <th className="text-right p-3">Preço</th><th className="text-right p-3">Custo</th><th className="text-right p-3">Estoque</th><th className="p-3" />
-              </tr></thead>
-              <tbody>
-                {lista.map((p) => {
-                  const baixo = p.ativo && p.estoque <= p.estoqueMinimo;
-                  return (
-                    <tr key={p.id} className={`border-t border-line ${p.ativo ? '' : 'opacity-50'}`}>
-                      <td className="p-3 font-mono text-xs">{p.sku}</td>
-                      <td className="p-3 font-semibold text-ink">{p.nome}</td>
-                      <td className="p-3 text-ink-soft">{p.categoria ?? '—'}</td>
-                      <td className="p-3 text-right">{formatarMoeda(p.preco)}</td>
-                      <td className="p-3 text-right text-ink-soft">{formatarMoeda(p.custo)}</td>
-                      <td className={`p-3 text-right font-bold ${baixo ? 'text-red-600' : ''}`}>{p.estoque} {p.unidade}{baixo && <span className="block text-[10px] font-bold uppercase">baixo (mín. {p.estoqueMinimo})</span>}</td>
-                      <td className="p-3 whitespace-nowrap text-right">
-                        <button className="text-xs font-bold text-teal-500 mr-2" onClick={() => setMov({ produto: p, tipo: 'entrada' })}>Entrada</button>
-                        <button className="text-xs font-bold text-ink-soft mr-2" onClick={() => setMov({ produto: p, tipo: 'saida' })}>Saída</button>
-                        <button className="text-xs font-bold text-ink-soft mr-2" onClick={() => setMov({ produto: p, tipo: 'ajuste' })}>Ajuste</button>
-                        <button className="text-xs font-bold text-ink-soft" onClick={() => setEdicao(p)}>Editar</button>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {lista.length === 0 && <tr><td colSpan={7} className="p-6 text-center text-ink-soft">{produtos.length === 0 ? 'Nenhum produto ainda. Cadastre o primeiro ou importe uma planilha.' : 'Nada encontrado.'}</td></tr>}
-              </tbody>
-            </table>
-          </div>
-        </>
+      {vista === 'produtos' && empresaId && (
+        <ErpProdutos
+          empresaId={empresaId}
+          produtos={produtos}
+          alertaBaixo={soBaixos}
+          setAlertaBaixo={setSoBaixos}
+          onVariacoes={() => setGerarVar(true)}
+          onMovimentar={(produto, tipo) => setMov({ produto, tipo })}
+          onSalvar={async (d, ex) => { setErro(''); await salvarProduto(empresaId, d, ex); }}
+          onExcluir={async (p) => { await excluirProduto(empresaId, p.id); }}
+        />
       )}
 
       {aba === 'inicio' && empresaId && <ErpInicio empresaId={empresaId} produtos={produtos} ir={(d) => { setAba(d.aba); setSub(d.sub ?? ''); }} />}
@@ -165,7 +132,6 @@ export default function Erp() {
 
       {vista === 'importar' && empresaId && <Importar empresaId={empresaId} />}
 
-      {edicao && empresaId && <FormProduto empresaId={empresaId} dados={edicao} onFechar={() => setEdicao(null)} onSalvar={async (d, ex) => { try { await salvarProduto(empresaId, d, ex); setEdicao(null); setErro(''); } catch (e) { setErro(e instanceof Error ? e.message : 'Erro ao salvar.'); } }} onExcluir={edicao.id ? async () => { if (confirm('Excluir este produto?')) { await excluirProduto(empresaId, edicao.id as string); setEdicao(null); } } : undefined} />}
       {gerarVar && empresaId && <FormVariacoes empresaId={empresaId} onFechar={() => setGerarVar(false)} />}
       {mov && empresaId && <FormMov dados={mov} onFechar={() => setMov(null)} onConfirmar={async (valor, motivo) => { try { await movimentarEstoque(empresaId, mov.produto, mov.tipo, valor, motivo, perfil?.nome); setMov(null); setErro(''); } catch (e) { setErro(e instanceof Error ? e.message : 'Erro.'); setMov(null); } }} />}
     </div>
@@ -189,46 +155,6 @@ function Modal({ titulo, children, onFechar }: { titulo: string; children: React
         {children}
       </div>
     </div>
-  );
-}
-
-function FormProduto({ empresaId, dados, onFechar, onSalvar, onExcluir }: { empresaId: string; dados: Partial<Produto>; onFechar: () => void; onSalvar: (d: Parameters<typeof salvarProduto>[1], ex?: Produto) => Promise<void>; onExcluir?: () => void }) {
-  const existente = dados.id ? (dados as Produto) : undefined;
-  const [sku, setSku] = useState(dados.sku ?? '');
-  const [nome, setNome] = useState(dados.nome ?? '');
-  const [categoria, setCategoria] = useState(dados.categoria ?? '');
-  const [marca, setMarca] = useState(dados.marca ?? '');
-  const [cats, setCats] = useState<RegistroCad[]>([]);
-  const [marcas, setMarcas] = useState<RegistroCad[]>([]);
-  useEffect(() => { const a = ouvirCadastro(empresaId, 'categoriasProduto', setCats); const b = ouvirCadastro(empresaId, 'marcasProduto', setMarcas); return () => { a(); b(); }; }, [empresaId]);
-  const [unidade, setUnidade] = useState(dados.unidade ?? 'un');
-  const [preco, setPreco] = useState(String(dados.preco ?? 0).replace('.', ','));
-  const [custo, setCusto] = useState(String(dados.custo ?? 0).replace('.', ','));
-  const [estoque, setEstoque] = useState('0');
-  const [minimo, setMinimo] = useState(String(dados.estoqueMinimo ?? 0));
-  const [ativo, setAtivo] = useState(dados.ativo ?? true);
-  const ok = sku.trim() && nome.trim();
-  return (
-    <Modal titulo={existente ? 'Editar produto' : 'Novo produto'} onFechar={onFechar}>
-      <div className="grid grid-cols-2 gap-3">
-        <div><label className={rotulo}>Código (SKU)</label><input className={campo} value={sku} disabled={!!existente} onChange={(e) => setSku(e.target.value)} /></div>
-        <div><label className={rotulo}>Unidade</label><input className={campo} value={unidade} onChange={(e) => setUnidade(e.target.value)} /></div>
-        <div className="col-span-2"><label className={rotulo}>Nome</label><input className={campo} value={nome} onChange={(e) => setNome(e.target.value)} /></div>
-        <div><label className={rotulo}>Categoria</label><input list="lista-categorias" className={campo} value={categoria} onChange={(e) => setCategoria(e.target.value)} /><datalist id="lista-categorias">{cats.map((c) => <option key={c.id} value={String(c.nome)} />)}</datalist></div>
-        <div><label className={rotulo}>Marca</label><input list="lista-marcas" className={campo} value={marca} onChange={(e) => setMarca(e.target.value)} /><datalist id="lista-marcas">{marcas.map((c) => <option key={c.id} value={String(c.nome)} />)}</datalist></div>
-        <div><label className={rotulo}>Preço de venda</label><input className={campo} value={preco} onChange={(e) => setPreco(e.target.value)} /></div>
-        <div><label className={rotulo}>Custo</label><input className={campo} value={custo} onChange={(e) => setCusto(e.target.value)} /></div>
-        {!existente && <div><label className={rotulo}>Estoque inicial</label><input className={campo} value={estoque} onChange={(e) => setEstoque(e.target.value)} /></div>}
-        <div><label className={rotulo}>Estoque mínimo</label><input className={campo} value={minimo} onChange={(e) => setMinimo(e.target.value)} /></div>
-        <label className="col-span-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={ativo} onChange={(e) => setAtivo(e.target.checked)} /> Produto ativo</label>
-      </div>
-      <div className="flex gap-2 mt-4">
-        <button disabled={!ok} onClick={() => void onSalvar({ sku, nome, categoria, marca, unidade, preco: numero(preco), custo: numero(custo), estoque: numero(estoque), estoqueMinimo: numero(minimo), ativo }, existente)} className="flex-1 rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold h-10 disabled:opacity-40">Salvar</button>
-        {onExcluir && <button onClick={onExcluir} className="rounded-xl border border-red-300 text-red-600 text-sm font-bold px-4">Excluir</button>}
-        <button onClick={onFechar} className="rounded-xl border border-line text-sm font-bold px-4">Cancelar</button>
-      </div>
-      {existente && <p className="text-xs text-ink-soft mt-3">Para mudar o estoque use Entrada, Saída ou Ajuste: assim fica no histórico.</p>}
-    </Modal>
   );
 }
 

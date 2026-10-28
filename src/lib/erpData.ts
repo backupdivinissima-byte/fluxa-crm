@@ -52,6 +52,13 @@ export async function salvarProduto(empresaId: string, dados: DadosProduto, exis
       estoqueMinimo: dados.estoqueMinimo,
       ativo: dados.ativo,
       origem: existente?.origem ?? 'manual',
+      tipo: dados.tipo, gtin: dados.gtin?.trim() || undefined, descricaoComplementar: dados.descricaoComplementar?.trim() || undefined,
+      precoPromocional: dados.precoPromocional, pesoLiquido: dados.pesoLiquido, pesoBruto: dados.pesoBruto,
+      largura: dados.largura, altura: dados.altura, profundidade: dados.profundidade,
+      estoqueMaximo: dados.estoqueMaximo, localizacao: dados.localizacao?.trim() || undefined,
+      ncm: dados.ncm?.trim() || undefined, cest: dados.cest?.trim() || undefined, origemFiscal: dados.origemFiscal || undefined,
+      fornecedorId: dados.fornecedorId || undefined, codigoFornecedor: dados.codigoFornecedor?.trim() || undefined,
+      imagemUrl: dados.imagemUrl?.trim() || undefined, observacoes: dados.observacoes?.trim() || undefined,
       atualizadoEm: agora,
     };
     if (existente) tx.set(ref, semUndefined(base), { merge: true });
