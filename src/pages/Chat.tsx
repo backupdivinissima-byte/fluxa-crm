@@ -9,6 +9,8 @@ import {
   acharClientePorTelefone,
   assumirConversa,
   definirTagsConversa,
+  abrirContatoChat,
+  ouvirConversaUnica,
   desistirDoContato,
   excluirTag,
   ouvirTags,
@@ -309,6 +311,7 @@ export default function Chat() {
   const [filtroTag, setFiltroTag] = useState<string | null>(null); // 'origem:instagram' ou 'tag:<id>'
   const [filtro, setFiltro] = useState<'todas' | 'novos' | 'minhas' | 'aguardando' | 'atendimento' | 'semresposta' | 'alerta'>('todas');
   const [abertaId, setAbertaId] = useState<string | null>(null);
+  const [conversaFora, setConversaFora] = useState<ConversaChat | null>(null); // conversa aberta que não está entre as 300 da lista
   const [respondendo, setRespondendo] = useState<MensagemChat | null>(null);
   const [encaminhando, setEncaminhando] = useState<MensagemChat | null>(null);
   const [buscaEnc, setBuscaEnc] = useState('');
@@ -372,6 +375,11 @@ export default function Chat() {
   }, [empresaId]);
 
   useEffect(() => {
+    if (!empresaId || !abertaId || conversas.some((c) => c.id === abertaId)) return;
+    return ouvirConversaUnica(empresaId, abertaId, setConversaFora);
+  }, [empresaId, abertaId, conversas]);
+
+  useEffect(() => {
     if (!telParam || !empresaId) return;
     if (telAbertoRef.current === telParam) return;
     const fim = telParam.replace(/\D/g, '').slice(-8);
@@ -386,14 +394,14 @@ export default function Chat() {
       if (telAbertoRef.current === telParam) return;
       telAbertoRef.current = telParam;
       try {
-        const conv = await criarContatoChat(empresaId, params.get('nome') || telParam, telParam);
+        const conv = await abrirContatoChat(empresaId, params.get('nome') || telParam, telParam);
         setAbertaId(conv.id);
       } catch (e) {
         const msg = 'Não consegui abrir a conversa deste cliente: ' + (e instanceof Error ? e.message : String(e));
         setErro(msg);
         setErroAbrir(msg);
       }
-    }, 3000);
+    }, conversas.length > 0 ? 800 : 3000);
     return () => clearTimeout(t);
   }, [telParam, conversas, empresaId, params]);
 
@@ -594,7 +602,8 @@ export default function Chat() {
     }
   }
 
-  const aberta = conversas.find((c) => c.id === abertaId) ?? null;
+  const abertaNaLista = conversas.find((c) => c.id === abertaId) ?? null;
+  const aberta = abertaNaLista ?? (conversaFora && conversaFora.id === abertaId ? conversaFora : null);
   // Nome no cadastro do CRM (cliente ligado à conversa ou com o mesmo telefone) e nome salvo na agenda.
   const clienteCrm = aberta
     ? clientes.find((c) => c.id === aberta.clienteId) ?? (aberta.telefone ? acharClientePorTelefone(clientes, aberta.telefone) : undefined)

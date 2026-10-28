@@ -461,6 +461,25 @@ export async function criarContatoChat(empresaId: string, nome: string, telefone
   return { id, ...nova };
 }
 
+/** Acompanha UMA conversa pelo id (para abrir conversas que não estão entre as 300 mais recentes da lista). */
+export function ouvirConversaUnica(empresaId: string, conversaId: string, cb: (c: ConversaChat | null) => void): Unsubscribe {
+  return aposChatPronto(() =>
+    onSnapshot(doc(db, 'empresas', empresaId, 'conversas', conversaId), (snap) => cb(snap.exists() ? ({ id: snap.id, ...(snap.data() as Omit<ConversaChat, 'id'>) }) : null), () => cb(null))
+  );
+}
+
+/** Abre a conversa de um telefone: se já existe (mesmo fora da lista das 300 mais recentes), devolve como está,
+ * sem trocar o nome salvo; se não existe, cria o contato. */
+export async function abrirContatoChat(empresaId: string, nome: string, telefone: string): Promise<ConversaChat> {
+  await chatPronto;
+  const d = normalizarTelefone(telefone);
+  if (!validarTelefoneWhatsApp(telefone)) {
+    const atual = await getDoc(doc(db, 'empresas', empresaId, 'conversas', `whatsapp_${d}`));
+    if (atual.exists()) return { id: atual.id, ...(atual.data() as Omit<ConversaChat, 'id'>) };
+  }
+  return criarContatoChat(empresaId, nome, telefone);
+}
+
 export interface MensagemAgendada {
   id: string;
   texto: string;
