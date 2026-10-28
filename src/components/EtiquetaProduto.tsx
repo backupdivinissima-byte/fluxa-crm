@@ -25,26 +25,33 @@ function svgBarras(valor: string): string {
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
 
-/** Imprime etiquetas no formato: descrição em cima, código de barras e código embaixo. */
+export interface ItemLote { d: DadosEtiqueta; copias: number; promo?: boolean }
+
+/** Imprime etiquetas de um ou vários produtos (descrição em cima, código de barras no meio, código e preço embaixo). */
 export function imprimirEtiquetas(d: DadosEtiqueta, copias: number, tamanho: string, promo = false) {
-  const valor = promo ? d.precoPromocional : d.preco;
-  const precoTxt = valor === undefined ? '' : `${promo ? 'PROMO ' : ''}${moeda(valor)}`;
+  imprimirLote([{ d, copias, promo }], tamanho);
+}
+
+export function imprimirLote(itensLote: ItemLote[], tamanho = '29x12x3') {
   const t = TAMANHOS[tamanho] ?? TAMANHOS['29x12x3'];
-  const codigo = d.sku.trim();
-  const barras = svgBarras(codigo);
-  const nome = esc(d.nome.toUpperCase());
-  const um = `<div class="et"><div class="nm">${nome}</div><div class="br">${barras}</div><div class="cd"><span>${esc(d.sku)}</span>${precoTxt ? `<span>${esc(precoTxt)}</span>` : ''}</div></div>`;
-  const n = Math.max(1, copias);
+  const todas: string[] = [];
+  for (const it of itensLote) {
+    const valor = it.promo ? it.d.precoPromocional : it.d.preco;
+    const precoTxt = valor === undefined ? '' : `${it.promo ? 'PROMO ' : ''}${moeda(valor)}`;
+    const um = `<div class="et"><div class="nm">${esc(it.d.nome.toUpperCase())}</div><div class="br">${svgBarras(it.d.sku.trim())}</div><div class="cd"><span>${esc(it.d.sku)}</span>${precoTxt ? `<span>${esc(precoTxt)}</span>` : ''}</div></div>`;
+    for (let k = 0; k < Math.max(1, it.copias); k++) todas.push(um);
+  }
+  const n = todas.length;
   const col = t.col ?? 1;
   const GL = 3, GV = 3, M = 1.5; // espaço entre etiquetas (mm) e margem lateral do rolo
   const largura = col * t.l + (col - 1) * GL + 2 * M;
   const altura = t.a + (col > 1 ? GV : 0);
   const linhas: string[] = [];
   for (let i = 0; i < n; i += col) {
-    const itens = Array.from({ length: Math.min(col, n - i) }, () => um).join('');
+    const itens = todas.slice(i, i + col).join('');
     linhas.push(`<div class="ln">${itens}</div>`);
   }
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Etiqueta ${esc(d.sku)}</title><style>
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Etiquetas</title><style>
 @page{size:${largura}mm ${altura}mm;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;color:#000}
 .ln{width:${largura}mm;height:${altura}mm;padding:0 ${M}mm;display:flex;gap:${GL}mm;align-items:flex-start;page-break-after:always;break-after:page;overflow:hidden}
 .et{width:${t.l}mm;height:${t.a}mm;padding:${t.a * 0.07}mm ${t.l * 0.05}mm;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden}

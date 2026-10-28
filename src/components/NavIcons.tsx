@@ -283,3 +283,11 @@ export function IconTabelaPreco(props: { className?: string }) {
     </NavIcon>
   );
 }
+
+export function IconEtiqueta(props: { className?: string }) {
+  return (
+    <NavIcon {...props}>
+      <path d="M4 5v14M7.500 5v14M11 5v14M15 5v14M18 5v14M20.500 5v14" />
+    </NavIcon>
+  );
+}
