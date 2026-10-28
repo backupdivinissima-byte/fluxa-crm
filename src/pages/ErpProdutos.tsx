@@ -3,6 +3,7 @@ import { ouvirCadastro, type RegistroCad } from '../lib/erpCadastros';
 import { formatarMoeda, parseValorBR } from '../lib/crmLogic';
 import type { Produto } from '../types';
 import type { DadosProduto } from '../lib/erpData';
+import EtiquetaDialogo, { type DadosEtiqueta } from '../components/EtiquetaProduto';
 
 const campo = 'w-full rounded-lg border border-line px-3 h-10 text-sm bg-white';
 const rotulo = 'block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1';
@@ -49,6 +50,7 @@ export default function ErpProdutos({ empresaId, produtos, onSalvar, onExcluir, 
   const [categoria, setCategoria] = useState('');
   const [estoqueFiltro, setEstoqueFiltro] = useState<'todos' | 'baixo' | 'zerado'>('todos');
   const [edicao, setEdicao] = useState<Partial<Produto> | null>(null);
+  const [etiqueta, setEtiqueta] = useState<{ d: DadosEtiqueta; titulo?: string } | null>(null);
 
   const categorias = useMemo(() => Array.from(new Set(produtos.map((p) => p.categoria).filter(Boolean) as string[])).sort(), [produtos]);
   const lista = useMemo(() => {
@@ -65,13 +67,18 @@ export default function ErpProdutos({ empresaId, produtos, onSalvar, onExcluir, 
   }, [produtos, busca, situacao, categoria, estoqueFiltro, alertaBaixo]);
 
   if (edicao) {
-    return <FormProduto empresaId={empresaId} dados={edicao} onFechar={() => setEdicao(null)} onMovimentar={onMovimentar}
-      onSalvar={async (d, ex) => { await onSalvar(d, ex); setEdicao(null); }}
-      onExcluir={edicao.id ? async () => { await onExcluir(edicao as Produto); setEdicao(null); } : undefined} />;
+    return <>
+      <FormProduto empresaId={empresaId} dados={edicao} onFechar={() => setEdicao(null)} onMovimentar={onMovimentar}
+        onSalvar={async (d, ex) => { await onSalvar(d, ex); setEdicao(null); setEtiqueta({ d: { sku: d.sku.trim().toUpperCase(), nome: d.nome, gtin: d.gtin }, titulo: 'Produto salvo! Imprimir etiqueta?' }); }}
+        onEtiqueta={(d) => setEtiqueta({ d })}
+        onExcluir={edicao.id ? async () => { await onExcluir(edicao as Produto); setEdicao(null); } : undefined} />
+      {etiqueta && <EtiquetaDialogo dados={etiqueta.d} titulo={etiqueta.titulo} onFechar={() => setEtiqueta(null)} />}
+    </>;
   }
 
   return (
     <>
+      {etiqueta && <EtiquetaDialogo dados={etiqueta.d} titulo={etiqueta.titulo} onFechar={() => setEtiqueta(null)} />}
       <div className="flex gap-2 flex-wrap items-end mb-3 rounded-xl border border-line bg-white p-3">
         <div className="flex-1 min-w-[220px]">
           <label className={rotulo}>Pesquisar</label>
@@ -121,7 +128,8 @@ export default function ErpProdutos({ empresaId, produtos, onSalvar, onExcluir, 
                   <td className="p-3 whitespace-nowrap text-right" onClick={(e) => e.stopPropagation()}>
                     <button className="text-xs font-bold text-teal-500 mr-2" onClick={() => onMovimentar(p, 'entrada')}>Entrada</button>
                     <button className="text-xs font-bold text-ink-soft mr-2" onClick={() => onMovimentar(p, 'saida')}>Saída</button>
-                    <button className="text-xs font-bold text-ink-soft" onClick={() => onMovimentar(p, 'ajuste')}>Ajuste</button>
+                    <button className="text-xs font-bold text-ink-soft mr-2" onClick={() => onMovimentar(p, 'ajuste')}>Ajuste</button>
+                    <button className="text-xs font-bold text-ink-soft" title="Imprimir etiqueta" onClick={() => setEtiqueta({ d: { sku: p.sku, nome: p.nome, gtin: p.gtin } })}>🏷️</button>
                   </td>
                 </tr>
               );
@@ -139,7 +147,8 @@ function G({ children, span = 1 }: { children: React.ReactNode; span?: number })
   return <div className={span === 4 ? 'md:col-span-4' : span === 3 ? 'md:col-span-3' : span === 2 ? 'md:col-span-2' : ''}>{children}</div>;
 }
 
-function FormProduto({ empresaId, dados, onFechar, onSalvar, onExcluir, onMovimentar }: {
+function FormProduto({ empresaId, dados, onFechar, onSalvar, onExcluir, onMovimentar, onEtiqueta }: {
+  onEtiqueta: (d: DadosEtiqueta) => void;
   empresaId: string; dados: Partial<Produto>; onFechar: () => void;
   onSalvar: (d: DadosProduto, ex?: Produto) => Promise<void>; onExcluir?: () => Promise<void>;
   onMovimentar: (p: Produto, tipo: 'entrada' | 'saida' | 'ajuste') => void;
@@ -198,6 +207,7 @@ function FormProduto({ empresaId, dados, onFechar, onSalvar, onExcluir, onMovime
         <button onClick={onFechar} className="text-sm font-bold text-ink-soft">← Voltar</button>
         <h2 className="text-lg font-extrabold text-ink">{existente ? `Produto: ${existente.nome}` : 'Novo produto'}</h2>
         <div className="ml-auto flex gap-2">
+          {existente && <button onClick={() => onEtiqueta({ sku: existente.sku, nome: existente.nome, gtin: existente.gtin })} className="rounded-xl border border-line text-sm font-bold px-4 h-10">🏷️ Etiqueta</button>}
           {onExcluir && <button onClick={() => { if (confirm('Excluir este produto?')) void onExcluir(); }} className="rounded-xl border border-red-300 text-red-600 text-sm font-bold px-4 h-10">Excluir</button>}
           <button onClick={onFechar} className="rounded-xl border border-line text-sm font-bold px-4 h-10">Cancelar</button>
           <button disabled={!ok || salvando} onClick={() => void salvar()} className="rounded-xl bg-emerald-600 text-white text-sm font-bold px-5 h-10 disabled:opacity-40">{salvando ? 'Salvando…' : 'Salvar'}</button>
