@@ -32,11 +32,16 @@ function col(empresaId: string) {
 }
 
 /** vendedorLogin vazio = tudo (admin). */
-export function ouvirAgenda(empresaId: string, vendedorLogin: string | undefined, cb: (a: Agendamento[]) => void, aoErro?: (msg: string) => void): Unsubscribe {
-  const q = vendedorLogin ? query(col(empresaId), where('vendedorLogin', '==', vendedorLogin)) : col(empresaId);
+export function ouvirAgenda(empresaId: string, vendedorLogin: string | undefined, cb: (a: Agendamento[]) => void, aoErro?: (msg: string) => void, vendedorNome?: string): Unsubscribe {
+  // Com o nome do vendedor, lê tudo e filtra por login OU nome: o aviso não se perde se o login gravado no rodízio for diferente do login da sessão.
+  const nomeNorm = (vendedorNome ?? '').trim().toLowerCase();
+  const q = vendedorLogin && !nomeNorm ? query(col(empresaId), where('vendedorLogin', '==', vendedorLogin)) : col(empresaId);
   return onSnapshot(
     q,
-    (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Agendamento)),
+    (snap) => {
+      const todos = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Agendamento);
+      cb(vendedorLogin && nomeNorm ? todos.filter((a) => a.vendedorLogin === vendedorLogin || (a.vendedorNome ?? '').trim().toLowerCase() === nomeNorm) : todos);
+    },
     (e) => {
       aoErro?.(e.message);
       cb([]);

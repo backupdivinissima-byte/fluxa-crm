@@ -24,8 +24,8 @@ export default function AgendaLembrete() {
 
   useEffect(() => {
     if (!empresaId || !login) return;
-    return ouvirAgenda(empresaId, login, setLista);
-  }, [empresaId, login]);
+    return ouvirAgenda(empresaId, login, setLista, undefined, sessaoVendedor?.vendedor.nome);
+  }, [empresaId, login, sessaoVendedor?.vendedor.nome]);
 
   useEffect(() => {
     if (!empresaId) return;

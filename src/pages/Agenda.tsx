@@ -72,16 +72,16 @@ export default function Agenda() {
       ouvirClientes(empresaId, setClientes),
       ouvirVendedores(empresaId, setVendedores),
       ouvirTodasConversas(empresaId, setConversas),
-      ouvirAgenda(empresaId, loginAtual, setAgenda, (m) => setAviso({ ok: false, texto: '❌ Não consegui ler a agenda: ' + m })),
+      ouvirAgenda(empresaId, loginAtual, setAgenda, (m) => setAviso({ ok: false, texto: '❌ Não consegui ler a agenda: ' + m }), ehAdmin ? undefined : nomeAtual),
       ouvirEmpresa(empresaId, (e) => setDiasInatividade(e?.diasInatividade ?? DIAS_INATIVIDADE_PADRAO)),
     ];
     return () => u.forEach((f) => f());
-  }, [empresaId, loginAtual]);
+  }, [empresaId, loginAtual, nomeAtual, ehAdmin]);
 
   const vendedoresAtivos = useMemo(() => vendedores.filter((v) => v.ativo), [vendedores]);
   const visiveis = useMemo(() => {
     // Vendedor: só os dele (dia, pendentes e atrasados). Admin: todos, ou os do vendedor filtrado.
-    if (!ehAdmin) return agenda.filter((a) => a.vendedorLogin === loginAtual);
+    if (!ehAdmin) return agenda; // já vem filtrado pelo login ou nome do vendedor
     return filtroVend ? agenda.filter((a) => a.vendedorLogin === filtroVend) : agenda;
   }, [agenda, filtroVend, ehAdmin, loginAtual]);
 

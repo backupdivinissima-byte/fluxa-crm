@@ -34,11 +34,11 @@ export default function AcompanhamentoCarteira() {
     const offs = [
       ouvirClientes(empresaId, setClientes),
       ouvirTodasConversas(empresaId, setConversas),
-      ouvirAgenda(empresaId, login, setAgenda),
+      ouvirAgenda(empresaId, login, setAgenda, undefined, nomeVend),
       ouvirEmpresa(empresaId, (e) => setDiasInat(e?.diasInatividade ?? DIAS_INATIVIDADE_PADRAO)),
     ];
     return () => offs.forEach((o) => o && o());
-  }, [empresaId, login]);
+  }, [empresaId, login, nomeVend]);
 
   useEffect(() => {
     const t = setInterval(() => setAgora(Date.now()), 60000);
