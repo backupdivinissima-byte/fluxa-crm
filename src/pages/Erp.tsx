@@ -20,7 +20,7 @@ type Aba = 'inicio' | 'vendas' | 'estoque' | 'financeiro' | 'cadastros' | 'api';
 const ROTA_ABA: Record<string, Aba> = { inicio: 'inicio', vendas: 'vendas', estoque: 'estoque', financeiro: 'financeiro', cadastros: 'cadastros', integracoes: 'api' };
 const SUBS: Partial<Record<Aba, { id: string; nome: string }[]>> = {
   vendas: [{ id: 'pedidos', nome: 'Pedidos e orçamentos' }, { id: 'trocas', nome: 'Trocas e devoluções' }, { id: 'consignacao', nome: 'Consignação' }],
-  estoque: [{ id: 'produtos', nome: 'Produtos' }, { id: 'movimentos', nome: 'Movimentações' }, { id: 'importar', nome: 'Importar (Bling / Olist)' }],
+  estoque: [{ id: 'produtos', nome: 'Produtos' }, { id: 'movimentos', nome: 'Movimentações' }, { id: 'importar', nome: 'Importar' }],
 };
 const campo = 'w-full rounded-lg border border-line px-3 h-10 text-sm bg-white';
 const rotulo = 'block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1';
@@ -194,8 +194,8 @@ function Importar({ empresaId }: { empresaId: string }) {
   }
   return (
     <div className="rounded-xl border border-line bg-white p-5">
-      <h2 className="font-extrabold text-ink mb-1">Trazer produtos do Bling, Olist/Tiny ou planilha</h2>
-      <p className="text-sm text-ink-soft mb-3">No Bling ou no Olist, exporte seus produtos (CSV ou Excel) e envie aqui. O Fluxa reconhece as colunas Código, Descrição, Preço, Preço de custo, Estoque e Categoria. Importar de novo o mesmo código atualiza o produto em vez de duplicar.</p>
+      <h2 className="font-extrabold text-ink mb-1">Importar produtos por planilha</h2>
+      <p className="text-sm text-ink-soft mb-3">Envie sua planilha de produtos (CSV ou Excel). O Fluxa reconhece as colunas Código, Descrição, Preço, Preço de custo, Estoque e Categoria. Importar de novo o mesmo código atualiza o produto em vez de duplicar.</p>
       <div className="flex gap-2 flex-wrap">
         <input ref={ref} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={(e) => void aoEscolher(e.target.files?.[0])} />
         <button onClick={() => ref.current?.click()} className="rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-4 h-10">Escolher arquivo</button>
