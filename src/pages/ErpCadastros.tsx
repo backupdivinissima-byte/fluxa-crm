@@ -15,8 +15,11 @@ function useRefs(empresaId: string, keys: string[]) {
   return dados;
 }
 
-export default function ErpCadastros({ empresaId }: { empresaId: string }) {
-  const [key, setKey] = useState(ENTIDADES[0].key);
+/** `fixa`: abre direto um cadastro (sem o menu lateral) — usado no menu Estoque. Sem `fixa`, mostra os cadastros que não são de produto. */
+export default function ErpCadastros({ empresaId, fixa }: { empresaId: string; fixa?: string }) {
+  const entidadesVisiveis = fixa ? ENTIDADES.filter((e) => e.key === fixa) : ENTIDADES.filter((e) => e.grupo !== 'Produtos');
+  const [key, setKey] = useState(entidadesVisiveis[0].key);
+  useEffect(() => { if (fixa) setKey(fixa); }, [fixa]);
   const ent = entidadePorKey(key) as EntidadeCad;
   const [registros, setRegistros] = useState<RegistroCad[]>([]);
   const [busca, setBusca] = useState('');
@@ -36,20 +39,20 @@ export default function ErpCadastros({ empresaId }: { empresaId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [registros, busca, refs, key]);
 
-  const grupos = Array.from(new Set(ENTIDADES.map((e) => e.grupo)));
+  const grupos = Array.from(new Set(entidadesVisiveis.map((e) => e.grupo)));
 
   return (
     <div className="flex gap-5 flex-col md:flex-row">
-      <aside className="md:w-56 shrink-0">
+      {!fixa && <aside className="md:w-56 shrink-0">
         {grupos.map((g) => (
           <div key={g} className="mb-3">
             <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft mb-1">{g}</div>
-            {ENTIDADES.filter((e) => e.grupo === g).map((e) => (
+            {entidadesVisiveis.filter((e) => e.grupo === g).map((e) => (
               <button key={e.key} onClick={() => setKey(e.key)} className={`block w-full text-left px-3 py-1.5 rounded-lg text-sm font-semibold ${e.key === key ? 'bg-teal-500/10 text-teal-500' : 'text-ink-soft hover:bg-surface'}`}>{e.titulo}</button>
             ))}
           </div>
         ))}
-      </aside>
+      </aside>}
 
       <section className="flex-1 min-w-0">
         <div className="flex items-start gap-3 flex-wrap mb-3">

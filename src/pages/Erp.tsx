@@ -21,7 +21,7 @@ type Aba = 'inicio' | 'vendas' | 'estoque' | 'financeiro' | 'cadastros' | 'api';
 const ROTA_ABA: Record<string, Aba> = { inicio: 'inicio', vendas: 'vendas', estoque: 'estoque', financeiro: 'financeiro', cadastros: 'cadastros', integracoes: 'api' };
 const SUBS: Partial<Record<Aba, { id: string; nome: string }[]>> = {
   vendas: [{ id: 'pedidos', nome: 'Pedidos e orçamentos' }, { id: 'trocas', nome: 'Trocas e devoluções' }, { id: 'consignacao', nome: 'Consignação' }],
-  estoque: [{ id: 'produtos', nome: 'Produtos' }, { id: 'auditoria', nome: 'Auditoria' }],
+  estoque: [{ id: 'produtos', nome: 'Produtos' }, { id: 'auditoria', nome: 'Auditoria' }, { id: 'categoriasProduto', nome: 'Categoria de produto' }, { id: 'variacoesProduto', nome: 'Variações de produto' }, { id: 'gruposProduto', nome: 'Grupo de produtos' }, { id: 'marcasProduto', nome: 'Marca' }, { id: 'tabelasPreco', nome: 'Tabela de preço' }],
 };
 const campo = 'w-full rounded-lg border border-line px-3 h-10 text-sm bg-white';
 const rotulo = 'block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1';
@@ -75,9 +75,9 @@ export default function Erp() {
 
       <div>
       <section className="min-w-0">
-      {aba === 'estoque' && <h2 className="text-lg font-extrabold text-ink mb-3">{vista === 'auditoria' ? 'Auditoria' : 'Produtos'}</h2>}
+      {aba === 'estoque' && (vista === 'auditoria' || vista === 'produtos' || vista === 'importar') && <h2 className="text-lg font-extrabold text-ink mb-3">{vista === 'auditoria' ? 'Auditoria' : 'Produtos'}</h2>}
 
-      {aba === 'estoque' && vista !== 'auditoria' && <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+      {aba === 'estoque' && (vista === 'produtos' || vista === 'importar') && <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
         <Card t="Produtos ativos" v={String(resumo.itens)} />
         <Card t="Unidades em estoque" v={resumo.unidades.toLocaleString('pt-BR')} />
         <Card t="Valor em estoque (custo)" v={formatarMoeda(resumo.valorCusto)} />
@@ -116,6 +116,7 @@ export default function Erp() {
       {aba === 'cadastros' && empresaId && <ErpCadastros empresaId={empresaId} />}
       {aba === 'api' && empresaId && <ErpApi empresaId={empresaId} />}
 
+      {aba === 'estoque' && ['categoriasProduto', 'variacoesProduto', 'gruposProduto', 'marcasProduto', 'tabelasPreco'].includes(vista as string) && empresaId && <ErpCadastros empresaId={empresaId} fixa={vista as string} />}
       {vista === 'auditoria' && empresaId && <ErpAuditoria empresaId={empresaId} produtos={produtos} movimentos={movimentos} usuario={perfil?.nome} />}
 
       {vista === 'importar' && empresaId && <Importar empresaId={empresaId} onVoltar={() => setSub('produtos')} />}

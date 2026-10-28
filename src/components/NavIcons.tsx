@@ -246,3 +246,40 @@ export function IconAuditoria(props: { className?: string }) {
     </NavIcon>
   );
 }
+
+export function IconCategoria(props: { className?: string }) {
+  return (
+    <NavIcon {...props}>
+      <rect x="4" y="4" width="6.5" height="6.5" rx="1" /><rect x="13.5" y="4" width="6.5" height="6.5" rx="1" />
+      <rect x="4" y="13.5" width="6.5" height="6.5" rx="1" /><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1" />
+    </NavIcon>
+  );
+}
+export function IconVariacoes(props: { className?: string }) {
+  return (
+    <NavIcon {...props}>
+      <path d="M12 3.5 21 8l-9 4.5L3 8l9-4.5Z" /><path d="m3 12 9 4.5 9-4.5M3 16l9 4.5 9-4.5" />
+    </NavIcon>
+  );
+}
+export function IconGrupoProduto(props: { className?: string }) {
+  return (
+    <NavIcon {...props}>
+      <path d="M3.5 7a1.5 1.5 0 0 1 1.5-1.5h4l2 2.5h8A1.5 1.5 0 0 1 20.5 9.5v8A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5V7Z" />
+    </NavIcon>
+  );
+}
+export function IconMarca(props: { className?: string }) {
+  return (
+    <NavIcon {...props}>
+      <path d="m12 3.5 2.6 5.3 5.9.9-4.250 4.100 1 5.800L12 16.800 6.750 19.600l1-5.800L3.500 9.700l5.900-.9L12 3.500Z" />
+    </NavIcon>
+  );
+}
+export function IconTabelaPreco(props: { className?: string }) {
+  return (
+    <NavIcon {...props}>
+      <rect x="3.5" y="5" width="17" height="14" rx="2" /><path d="M3.5 10h17M9 10v9M14 13.500h3.500M14 16h3.500" />
+    </NavIcon>
+  );
+}
