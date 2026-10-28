@@ -39,12 +39,13 @@ interface Props {
   onExcluir: (p: Produto) => Promise<void>;
   onMovimentar: (p: Produto, tipo: 'entrada' | 'saida' | 'ajuste') => void;
   onVariacoes: () => void;
+  onImportar: () => void;
   alertaBaixo: boolean;
   setAlertaBaixo: (v: boolean) => void;
 }
 
 /** Lista de produtos e janela de cadastro com abas (dados gerais, características, estoque, tributação, fornecedor, imagem). */
-export default function ErpProdutos({ empresaId, produtos, onSalvar, onExcluir, onMovimentar, onVariacoes, alertaBaixo, setAlertaBaixo }: Props) {
+export default function ErpProdutos({ empresaId, produtos, onSalvar, onExcluir, onMovimentar, onVariacoes, onImportar, alertaBaixo, setAlertaBaixo }: Props) {
   const [busca, setBusca] = useState('');
   const [situacao, setSituacao] = useState<'todos' | 'ativo' | 'inativo'>('ativo');
   const [categoria, setCategoria] = useState('');
@@ -102,6 +103,7 @@ export default function ErpProdutos({ empresaId, produtos, onSalvar, onExcluir, 
             <option value="todos">Todos</option><option value="baixo">Abaixo do mínimo</option><option value="zerado">Zerado</option>
           </select>
         </div>
+        <button onClick={onImportar} className="rounded-xl border border-line text-sm font-bold px-4 h-10">Importar</button>
         <button onClick={onVariacoes} className="rounded-xl border border-line text-sm font-bold px-4 h-10">Produto com variações</button>
         <button onClick={() => setEdicao({ ativo: true, tipo: 'simples', unidade: 'un', preco: 0, custo: 0, estoque: 0, estoqueMinimo: 0 })} className="rounded-xl bg-emerald-600 text-white text-sm font-bold px-4 h-10">+ Incluir produto</button>
       </div>

@@ -12,6 +12,7 @@ import { ListaTrocas } from './ErpTrocas';
 import ErpCadastros from './ErpCadastros';
 import ErpApi from './ErpApi';
 import ErpProdutos from './ErpProdutos';
+import ErpAuditoria from './ErpAuditoria';
 import { ouvirCadastro, type RegistroCad } from '../lib/erpCadastros';
 import { IconEstoque } from '../components/NavIcons';
 import type { MovimentoEstoque, Produto } from '../types';
@@ -20,7 +21,7 @@ type Aba = 'inicio' | 'vendas' | 'estoque' | 'financeiro' | 'cadastros' | 'api';
 const ROTA_ABA: Record<string, Aba> = { inicio: 'inicio', vendas: 'vendas', estoque: 'estoque', financeiro: 'financeiro', cadastros: 'cadastros', integracoes: 'api' };
 const SUBS: Partial<Record<Aba, { id: string; nome: string }[]>> = {
   vendas: [{ id: 'pedidos', nome: 'Pedidos e orçamentos' }, { id: 'trocas', nome: 'Trocas e devoluções' }, { id: 'consignacao', nome: 'Consignação' }],
-  estoque: [{ id: 'produtos', nome: 'Produtos' }, { id: 'movimentos', nome: 'Movimentações' }, { id: 'importar', nome: 'Importar' }],
+  estoque: [{ id: 'produtos', nome: 'Produtos' }, { id: 'auditoria', nome: 'Auditoria' }],
 };
 const campo = 'w-full rounded-lg border border-line px-3 h-10 text-sm bg-white';
 const rotulo = 'block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1';
@@ -68,10 +69,10 @@ export default function Erp() {
 
   return (
     <div className="p-5 w-full">
-      <div className="flex items-center gap-2 mb-1"><IconEstoque className="w-6 h-6" /><h1 className="text-xl font-extrabold text-ink">Fluxa ERP</h1></div>
+      <div className="flex items-center gap-2 mb-1"><IconEstoque className="w-6 h-6" /><h1 className="text-xl font-extrabold text-ink">{aba === 'estoque' ? (SUBS.estoque?.find((x) => x.id === (vista === 'importar' ? 'produtos' : vista))?.nome ?? 'Estoque') : 'Fluxa ERP'}</h1></div>
       <p className="text-sm text-ink-soft mb-4">Vendas, estoque, financeiro e cadastros num só lugar.</p>
 
-      {aba === 'estoque' && <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+      {aba === 'estoque' && vista !== 'auditoria' && <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
         <Card t="Produtos ativos" v={String(resumo.itens)} />
         <Card t="Unidades em estoque" v={resumo.unidades.toLocaleString('pt-BR')} />
         <Card t="Valor em estoque (custo)" v={formatarMoeda(resumo.valorCusto)} />
@@ -94,6 +95,7 @@ export default function Erp() {
           alertaBaixo={soBaixos}
           setAlertaBaixo={setSoBaixos}
           onVariacoes={() => setGerarVar(true)}
+          onImportar={() => setSub('importar')}
           onMovimentar={(produto, tipo) => setMov({ produto, tipo })}
           onSalvar={async (d, ex) => { setErro(''); await salvarProduto(empresaId, d, ex); }}
           onExcluir={async (p) => { await excluirProduto(empresaId, p.id); }}
@@ -109,28 +111,9 @@ export default function Erp() {
       {aba === 'cadastros' && empresaId && <ErpCadastros empresaId={empresaId} />}
       {aba === 'api' && empresaId && <ErpApi empresaId={empresaId} />}
 
-      {vista === 'movimentos' && (
-        <div className="overflow-x-auto rounded-xl border border-line bg-white">
-          <table className="w-full text-sm">
-            <thead className="text-xs uppercase text-ink-soft bg-surface"><tr><th className="text-left p-3">Quando</th><th className="text-left p-3">Produto</th><th className="text-left p-3">Tipo</th><th className="text-right p-3">Qtd</th><th className="text-right p-3">Saldo</th><th className="text-left p-3">Motivo</th></tr></thead>
-            <tbody>
-              {movimentos.map((m) => (
-                <tr key={m.id} className="border-t border-line">
-                  <td className="p-3 whitespace-nowrap">{new Date(m.criadoEm).toLocaleString('pt-BR')}</td>
-                  <td className="p-3">{m.produtoNome} <span className="font-mono text-xs text-ink-soft">{m.sku}</span></td>
-                  <td className="p-3 capitalize">{m.tipo === 'saida' ? 'saída' : m.tipo}</td>
-                  <td className={`p-3 text-right font-bold ${m.quantidade < 0 ? 'text-red-600' : 'text-teal-500'}`}>{m.quantidade > 0 ? '+' : ''}{m.quantidade}</td>
-                  <td className="p-3 text-right">{m.saldoApos}</td>
-                  <td className="p-3 text-ink-soft">{m.motivo ?? '—'}{m.usuario ? ` · ${m.usuario}` : ''}</td>
-                </tr>
-              ))}
-              {movimentos.length === 0 && <tr><td colSpan={6} className="p-6 text-center text-ink-soft">Nenhuma movimentação ainda.</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {vista === 'auditoria' && empresaId && <ErpAuditoria empresaId={empresaId} produtos={produtos} movimentos={movimentos} usuario={perfil?.nome} />}
 
-      {vista === 'importar' && empresaId && <Importar empresaId={empresaId} />}
+      {vista === 'importar' && empresaId && <Importar empresaId={empresaId} onVoltar={() => setSub('produtos')} />}
 
       {gerarVar && empresaId && <FormVariacoes empresaId={empresaId} onFechar={() => setGerarVar(false)} />}
       {mov && empresaId && <FormMov dados={mov} onFechar={() => setMov(null)} onConfirmar={async (valor, motivo) => { try { await movimentarEstoque(empresaId, mov.produto, mov.tipo, valor, motivo, perfil?.nome); setMov(null); setErro(''); } catch (e) { setErro(e instanceof Error ? e.message : 'Erro.'); setMov(null); } }} />}
@@ -177,7 +160,7 @@ function FormMov({ dados, onFechar, onConfirmar }: { dados: { produto: Produto; 
   );
 }
 
-function Importar({ empresaId }: { empresaId: string }) {
+function Importar({ empresaId, onVoltar }: { empresaId: string; onVoltar: () => void }) {
   const ref = useRef<HTMLInputElement>(null);
   const [leitura, setLeitura] = useState<ResultadoLeitura | null>(null);
   const [msg, setMsg] = useState('');
@@ -194,6 +177,7 @@ function Importar({ empresaId }: { empresaId: string }) {
   }
   return (
     <div className="rounded-xl border border-line bg-white p-5">
+      <button onClick={onVoltar} className="text-sm font-bold text-ink-soft mb-2">← Voltar para Produtos</button>
       <h2 className="font-extrabold text-ink mb-1">Importar produtos por planilha</h2>
       <p className="text-sm text-ink-soft mb-3">Envie sua planilha de produtos (CSV ou Excel). O Fluxa reconhece as colunas Código, Descrição, Preço, Preço de custo, Estoque e Categoria. Importar de novo o mesmo código atualiza o produto em vez de duplicar.</p>
       <div className="flex gap-2 flex-wrap">
