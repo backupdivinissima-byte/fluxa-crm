@@ -44,10 +44,10 @@ const itens = [
   { to: '/chat', label: 'Chat', icon: <IconChat /> },
   // Produtos e estoque (Fluxa ERP): só admin.
   { to: '/erp/inicio', label: 'Início', icon: <IconErpInicio />, apenasAdmin: true },
-  { to: '/erp/vendas', label: 'Vendas', icon: <IconErpVendas />, apenasAdmin: true },
-  { to: '/erp/estoque', label: 'Estoque', icon: <IconEstoque />, apenasAdmin: true },
-  { to: '/erp/financeiro', label: 'Financeiro', icon: <IconErpFinanceiro />, apenasAdmin: true },
   { to: '/erp/cadastros', label: 'Cadastros', icon: <IconErpCadastros />, apenasAdmin: true },
+  { to: '/erp/estoque', label: 'Estoque', icon: <IconEstoque />, apenasAdmin: true },
+  { to: '/erp/vendas', label: 'Vendas', icon: <IconErpVendas />, apenasAdmin: true },
+  { to: '/erp/financeiro', label: 'Financeiro', icon: <IconErpFinanceiro />, apenasAdmin: true },
   { to: '/erp/integracoes', label: 'Integrações', icon: <IconErpIntegracoes />, apenasAdmin: true },
   // Encontrar e qualificar novos clientes (Fluxa Prospect): só admin.
   { to: '/prospect', label: 'Prospecção', icon: <IconClientes />, apenasAdmin: true },
