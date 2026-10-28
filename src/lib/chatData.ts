@@ -619,3 +619,9 @@ export async function carregarMidiaPartes(empresaId: string, conversaId: string,
   if (pedacos.length === 0) throw new Error('Vídeo ainda não terminou de chegar. Tente de novo em instantes.');
   return URL.createObjectURL(new Blob(pedacos, { type: mime }));
 }
+
+/** A equipe desistiu do contato: o robô para de reenviar e o aviso de entrega some. */
+export async function desistirDoContato(empresaId: string, conversaId: string) {
+  await chatPronto;
+  await updateDoc(doc(db, 'empresas', empresaId, 'conversas', conversaId), { roboDesistiu: true, alertaEntrega: false, alertaMotivo: null });
+}

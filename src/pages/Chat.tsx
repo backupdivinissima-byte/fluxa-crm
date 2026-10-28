@@ -9,6 +9,7 @@ import {
   acharClientePorTelefone,
   assumirConversa,
   definirTagsConversa,
+  desistirDoContato,
   excluirTag,
   ouvirTags,
   registrarLigacao,
@@ -904,6 +905,18 @@ export default function Chat() {
           <button onClick={() => setFiltro(filtro === 'alerta' ? 'todas' : 'alerta')} className="rounded-lg bg-red-600 text-white text-xs font-bold px-3 py-1.5 hover:bg-red-700">
             {filtro === 'alerta' ? 'Ver todas' : 'Ver quais'}
           </button>
+          {souAdmin && (
+            <button
+              onClick={() => {
+                if (!empresaId || !window.confirm(`Desistir de ${comAlerta} contato(s)? O robô para de tentar reenviar e o aviso some.`)) return;
+                for (const c of visiveis.filter((x) => x.alertaEntrega === true)) void desistirDoContato(empresaId, c.id).catch(() => {});
+              }}
+              className="rounded-lg border border-red-400 bg-white text-red-700 text-xs font-bold px-3 py-1.5 hover:bg-red-100"
+              title="Diz ao robô que não precisa mais tentar com esses contatos"
+            >
+              Desistir de todos
+            </button>
+          )}
         </div>
       )}
 
@@ -1139,6 +1152,15 @@ export default function Chat() {
                     {aberta.vendedorNome ? ` · em atendimento por ${doisNomes(aberta.vendedorNome)}` : ' · livre'}
                   </div>
                 </div>
+                {souAdmin && aberta.alertaEntrega && (
+                  <button
+                    onClick={() => empresaId && window.confirm('Desistir deste contato? O robô para de tentar reenviar.') && void desistirDoContato(empresaId, aberta.id)}
+                    className="rounded-xl border border-red-300 bg-red-50 text-red-700 text-xs font-bold px-3 py-2 hover:bg-red-100"
+                    title="Diz ao robô que não precisa mais fazer tentativas com este contato"
+                  >
+                    🚫 Desistir do contato
+                  </button>
+                )}
                 {aberta.canal === 'whatsapp' && (() => {
                   let num = (aberta.telefone || clienteCrm?.telefone || (aberta.contatoJid?.endsWith('@lid') ? '' : aberta.contato) || '').replace(/\D/g, '');
                   if (num && num.length <= 11) num = normalizarTelefone(num);

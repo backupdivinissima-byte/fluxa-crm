@@ -30,6 +30,22 @@ export function criarRobo({ refConexao, base, getSock, estaAberto, reconectar, r
   let ultimoEstado = '';
   let ultimaPublicacao = 0;
 
+  // Contatos de que a equipe desistiu: o robô não tenta mais reenviar nem avisa.
+  const desistidos = new Set();
+  if (base) {
+    try {
+      base.collection('conversas').where('roboDesistiu', '==', true).onSnapshot(
+        (snap) => {
+          desistidos.clear();
+          snap.docs.forEach((d) => desistidos.add(d.id));
+        },
+        (err) => console.warn('[robô] não consegui ler os contatos desistidos:', err.message)
+      );
+    } catch (err) {
+      console.warn('[robô] desistências desligadas:', err.message);
+    }
+  }
+
   const marcar = (lista) => lista.push(Date.now());
   const quantos = (lista, ms) => lista.filter((t) => t > Date.now() - ms).length;
   const podar = () => {
@@ -64,6 +80,7 @@ export function criarRobo({ refConexao, base, getSock, estaAberto, reconectar, r
       const id = [...envios.keys()].find((k) => String(chave).startsWith(k));
       if (!id) return;
       const e = envios.get(id);
+      if (desistidos.has(e.conversaId)) return; // a equipe desistiu deste contato
       e.retries = (e.retries ?? 0) + 1;
       marcar(eventos.pedidosReenvio);
       alertar(e, 'O WhatsApp pediu reenvio: o cliente pode não ter recebido. O robô está reenviando.');
@@ -122,7 +139,7 @@ export function criarRobo({ refConexao, base, getSock, estaAberto, reconectar, r
   // ---- Alerta de entrega (aparece na hora para a equipe, na conversa e no topo do Chat) ----
   const ultimoProblema = new Map(); // conversaId -> quando foi o último problema
   function alertar(e, motivo) {
-    if (!base || !e?.conversaId) return;
+    if (!base || !e?.conversaId || desistidos.has(e.conversaId)) return;
     ultimoProblema.set(e.conversaId, Date.now());
     base.collection('conversas').doc(e.conversaId).set({ alertaEntrega: true, alertaMotivo: motivo, alertaEm: agora() }, { merge: true }).catch(() => {});
   }
@@ -162,7 +179,7 @@ export function criarRobo({ refConexao, base, getSock, estaAberto, reconectar, r
    */
   async function recuperar(id, motivo) {
     const e = envios.get(id);
-    if (!e || e.recuperada || !e.msgId) return;
+    if (!e || e.recuperada || !e.msgId || desistidos.has(e.conversaId)) return;
     e.recuperada = true;
     const ref = base.collection('conversas').doc(e.conversaId).collection('mensagens').doc(e.msgId);
     if (quantos(eventos.recuperadas, HORA) >= 120) {

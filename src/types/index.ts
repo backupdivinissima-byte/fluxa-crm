@@ -371,6 +371,7 @@ export interface ConversaChat {
   naoLidas?: number;
   alertaEntrega?: boolean; // o robô detectou mensagem que pode não ter chegado ao cliente
   alertaMotivo?: string;
+  roboDesistiu?: boolean; // a equipe mandou o robô parar de tentar reenviar para este contato
   alertaEm?: string;
   vendedorLogin?: string; // quem pegou o atendimento (sem valor = livre para todos)
   vendedorNome?: string;
