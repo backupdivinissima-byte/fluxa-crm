@@ -3,8 +3,9 @@ import JsBarcode from 'jsbarcode';
 
 export interface DadosEtiqueta { sku: string; nome: string; gtin?: string }
 
-const TAMANHOS: Record<string, { l: number; a: number; nome: string }> = {
-  '29x12': { l: 29, a: 12, nome: '29 × 12 mm (padrão)' },
+const TAMANHOS: Record<string, { l: number; a: number; nome: string; col?: number }> = {
+  '29x12x3': { l: 29, a: 12, col: 3, nome: '29 × 12 mm — 3 por linha (Zebra TLP 2844)' },
+  '29x12': { l: 29, a: 12, nome: '29 × 12 mm — 1 por linha' },
   '50x25': { l: 50, a: 25, nome: '50 × 25 mm' },
   '40x25': { l: 40, a: 25, nome: '40 × 25 mm' },
   '60x30': { l: 60, a: 30, nome: '60 × 30 mm' },
@@ -25,17 +26,28 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 
 /** Imprime etiquetas no formato: descrição em cima, código de barras e código embaixo. */
 export function imprimirEtiquetas(d: DadosEtiqueta, copias: number, tamanho: string) {
-  const t = TAMANHOS[tamanho] ?? TAMANHOS['29x12'];
+  const t = TAMANHOS[tamanho] ?? TAMANHOS['29x12x3'];
   const codigo = (d.gtin?.trim() || d.sku).trim();
   const barras = svgBarras(codigo);
   const nome = esc(d.nome.toUpperCase());
   const um = `<div class="et"><div class="nm">${nome}</div><div class="br">${barras}</div><div class="cd"><span>${esc(d.sku)}</span>${d.gtin?.trim() ? `<span>${esc(d.gtin.trim())}</span>` : ''}</div></div>`;
+  const n = Math.max(1, copias);
+  const col = t.col ?? 1;
+  const GL = 3, GV = 3, M = 1.5; // espaço entre etiquetas (mm) e margem lateral do rolo
+  const largura = col * t.l + (col - 1) * GL + 2 * M;
+  const altura = t.a + (col > 1 ? GV : 0);
+  const linhas: string[] = [];
+  for (let i = 0; i < n; i += col) {
+    const itens = Array.from({ length: Math.min(col, n - i) }, () => um).join('');
+    linhas.push(`<div class="ln">${itens}</div>`);
+  }
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>Etiqueta ${esc(d.sku)}</title><style>
-@page{size:${t.l}mm ${t.a}mm;margin:0}*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;color:#000}
-.et{width:${t.l}mm;height:${t.a}mm;padding:${t.a * 0.07}mm ${t.l * 0.05}mm;page-break-after:always;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden}
+@page{size:${largura}mm ${altura}mm;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;color:#000}
+.ln{width:${largura}mm;height:${altura}mm;padding:0 ${M}mm;display:flex;gap:${GL}mm;align-items:flex-start;page-break-after:always;break-after:page;overflow:hidden}
+.et{width:${t.l}mm;height:${t.a}mm;padding:${t.a * 0.07}mm ${t.l * 0.05}mm;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden}
 .nm{font-size:${t.a * 0.2}mm;font-weight:700;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .br{flex:1;margin:${t.a * 0.04}mm 0}.cd{display:flex;justify-content:space-between;font-size:${t.a * 0.18}mm;font-weight:700;letter-spacing:.3mm}
-</style></head><body>${Array.from({ length: Math.max(1, copias) }, () => um).join('')}</body></html>`;
+</style></head><body>${linhas.join('')}</body></html>`;
   const f = document.createElement('iframe');
   f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
   document.body.appendChild(f);
@@ -48,7 +60,7 @@ export function imprimirEtiquetas(d: DadosEtiqueta, copias: number, tamanho: str
 /** Janela "Produto salvo — imprimir etiqueta". */
 export default function EtiquetaDialogo({ dados, titulo, onFechar }: { dados: DadosEtiqueta; titulo?: string; onFechar: () => void }) {
   const [copias, setCopias] = useState('1');
-  const [tamanho, setTamanho] = useState(() => { try { return localStorage.getItem('fluxa_etq_tam') || '29x12'; } catch { return '29x12'; } });
+  const [tamanho, setTamanho] = useState(() => { try { return localStorage.getItem('fluxa_etq_tam') || '29x12x3'; } catch { return '29x12x3'; } });
   const campo = 'w-full rounded-lg border border-line px-3 h-10 text-sm bg-white';
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onFechar}>
@@ -68,6 +80,7 @@ export default function EtiquetaDialogo({ dados, titulo, onFechar }: { dados: Da
               {Object.entries(TAMANHOS).map(([k, v]) => <option key={k} value={k}>{v.nome}</option>)}
             </select></div>
         </div>
+        {(TAMANHOS[tamanho]?.col ?? 1) > 1 && <p className="text-[11px] text-ink-soft mb-3">Na tela de impressão, escolha a <b>Zebra TLP 2844</b>, margens “Nenhuma” e escala 100%. A quantidade é de etiquetas: elas saem de 3 em 3 por linha.</p>}
         <div className="flex gap-2 justify-end">
           <button onClick={onFechar} className="rounded-xl border border-line text-sm font-bold px-4 h-10">Fechar</button>
           <button onClick={() => imprimirEtiquetas(dados, parseInt(copias, 10) || 1, tamanho)} className="rounded-xl bg-emerald-600 text-white text-sm font-bold px-5 h-10">🏷️ Imprimir etiqueta</button>
