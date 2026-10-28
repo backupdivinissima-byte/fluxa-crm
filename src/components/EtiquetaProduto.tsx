@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import JsBarcode from 'jsbarcode';
 
-export interface DadosEtiqueta { sku: string; nome: string; gtin?: string; preco?: number }
+export interface DadosEtiqueta { sku: string; nome: string; gtin?: string; preco?: number; precoPromocional?: number }
 const moeda = (n?: number) => (n === undefined ? '' : `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 
 const TAMANHOS: Record<string, { l: number; a: number; nome: string; col?: number }> = {
@@ -26,12 +26,14 @@ function svgBarras(valor: string): string {
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
 
 /** Imprime etiquetas no formato: descrição em cima, código de barras e código embaixo. */
-export function imprimirEtiquetas(d: DadosEtiqueta, copias: number, tamanho: string) {
+export function imprimirEtiquetas(d: DadosEtiqueta, copias: number, tamanho: string, promo = false) {
+  const valor = promo ? d.precoPromocional : d.preco;
+  const precoTxt = valor === undefined ? '' : `${promo ? 'PROMO ' : ''}${moeda(valor)}`;
   const t = TAMANHOS[tamanho] ?? TAMANHOS['29x12x3'];
   const codigo = d.sku.trim();
   const barras = svgBarras(codigo);
   const nome = esc(d.nome.toUpperCase());
-  const um = `<div class="et"><div class="nm">${nome}</div><div class="br">${barras}</div><div class="cd"><span>${esc(d.sku)}</span>${d.preco !== undefined ? `<span>${esc(moeda(d.preco))}</span>` : ''}</div></div>`;
+  const um = `<div class="et"><div class="nm">${nome}</div><div class="br">${barras}</div><div class="cd"><span>${esc(d.sku)}</span>${precoTxt ? `<span>${esc(precoTxt)}</span>` : ''}</div></div>`;
   const n = Math.max(1, copias);
   const col = t.col ?? 1;
   const GL = 3, GV = 3, M = 1.5; // espaço entre etiquetas (mm) e margem lateral do rolo
@@ -61,6 +63,8 @@ export function imprimirEtiquetas(d: DadosEtiqueta, copias: number, tamanho: str
 /** Janela "Produto salvo — imprimir etiqueta". */
 export default function EtiquetaDialogo({ dados, titulo, onFechar }: { dados: DadosEtiqueta; titulo?: string; onFechar: () => void }) {
   const [copias, setCopias] = useState('1');
+  const temPromo = !!dados.precoPromocional && dados.precoPromocional > 0;
+  const [promo, setPromo] = useState(false);
   const [tamanho, setTamanho] = useState(() => { try { return localStorage.getItem('fluxa_etq_tam') || '29x12x3'; } catch { return '29x12x3'; } });
   const campo = 'w-full rounded-lg border border-line px-3 h-10 text-sm bg-white';
   return (
@@ -71,8 +75,13 @@ export default function EtiquetaDialogo({ dados, titulo, onFechar }: { dados: Da
         <div className="border border-line rounded-lg p-2 mb-3 bg-slate-50">
           <div className="text-[11px] font-bold">{dados.nome.toUpperCase()}</div>
           <div className="h-8 my-1 bg-[repeating-linear-gradient(90deg,#000_0_2px,#fff_2px_4px,#000_4px_5px,#fff_5px_8px)]" />
-          <div className="text-[11px] font-bold flex justify-between"><span>{dados.sku}</span><span>{moeda(dados.preco)}</span></div>
+          <div className="text-[11px] font-bold flex justify-between"><span>{dados.sku}</span><span>{promo && temPromo ? `PROMO ${moeda(dados.precoPromocional)}` : moeda(dados.preco)}</span></div>
         </div>
+        <div className="flex gap-2 mb-3">
+          <button onClick={() => setPromo(false)} className={`flex-1 h-9 rounded-lg text-sm font-bold border ${!promo ? 'bg-emerald-600 text-white border-emerald-600' : 'border-line text-ink-soft'}`}>Etiqueta normal</button>
+          <button disabled={!temPromo} onClick={() => setPromo(true)} title={temPromo ? '' : 'Cadastre o preço promocional no produto'} className={`flex-1 h-9 rounded-lg text-sm font-bold border disabled:opacity-40 ${promo ? 'bg-orange-500 text-white border-orange-500' : 'border-line text-ink-soft'}`}>🔥 Etiqueta promoção</button>
+        </div>
+        {!temPromo && <p className="text-[11px] text-ink-soft -mt-1 mb-3">Para gerar a etiqueta de promoção, preencha o “Preço promocional” no cadastro do produto.</p>}
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div><label className="block text-xs font-bold text-ink-soft uppercase mb-1">Quantidade</label>
             <input className={campo} type="number" min={1} value={copias} onChange={(e) => setCopias(e.target.value)} /></div>
@@ -84,7 +93,7 @@ export default function EtiquetaDialogo({ dados, titulo, onFechar }: { dados: Da
         {(TAMANHOS[tamanho]?.col ?? 1) > 1 && <p className="text-[11px] text-ink-soft mb-3">Na tela de impressão, escolha a <b>Zebra TLP 2844</b>, margens “Nenhuma” e escala 100%. A quantidade é de etiquetas: elas saem de 3 em 3 por linha.</p>}
         <div className="flex gap-2 justify-end">
           <button onClick={onFechar} className="rounded-xl border border-line text-sm font-bold px-4 h-10">Fechar</button>
-          <button onClick={() => imprimirEtiquetas(dados, parseInt(copias, 10) || 1, tamanho)} className="rounded-xl bg-emerald-600 text-white text-sm font-bold px-5 h-10">🏷️ Imprimir etiqueta</button>
+          <button onClick={() => imprimirEtiquetas(dados, parseInt(copias, 10) || 1, tamanho, promo && temPromo)} className="rounded-xl bg-emerald-600 text-white text-sm font-bold px-5 h-10">🏷️ Imprimir etiqueta</button>
         </div>
       </div>
     </div>
