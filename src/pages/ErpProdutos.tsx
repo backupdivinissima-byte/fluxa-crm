@@ -69,7 +69,7 @@ export default function ErpProdutos({ empresaId, produtos, onSalvar, onExcluir, 
   if (edicao) {
     return <>
       <FormProduto empresaId={empresaId} dados={edicao} onFechar={() => setEdicao(null)} onMovimentar={onMovimentar}
-        onSalvar={async (d, ex) => { await onSalvar(d, ex); setEdicao(null); setEtiqueta({ d: { sku: d.sku.trim().toUpperCase(), nome: d.nome, gtin: d.gtin }, titulo: 'Produto salvo! Imprimir etiqueta?' }); }}
+        onSalvar={async (d, ex) => { await onSalvar(d, ex); setEdicao(null); setEtiqueta({ d: { sku: d.sku.trim().toUpperCase(), nome: d.nome, gtin: d.gtin, preco: d.preco }, titulo: 'Produto salvo! Imprimir etiqueta?' }); }}
         onEtiqueta={(d) => setEtiqueta({ d })}
         onExcluir={edicao.id ? async () => { await onExcluir(edicao as Produto); setEdicao(null); } : undefined} />
       {etiqueta && <EtiquetaDialogo dados={etiqueta.d} titulo={etiqueta.titulo} onFechar={() => setEtiqueta(null)} />}
@@ -129,7 +129,7 @@ export default function ErpProdutos({ empresaId, produtos, onSalvar, onExcluir, 
                     <button className="text-xs font-bold text-teal-500 mr-2" onClick={() => onMovimentar(p, 'entrada')}>Entrada</button>
                     <button className="text-xs font-bold text-ink-soft mr-2" onClick={() => onMovimentar(p, 'saida')}>Saída</button>
                     <button className="text-xs font-bold text-ink-soft mr-2" onClick={() => onMovimentar(p, 'ajuste')}>Ajuste</button>
-                    <button className="text-xs font-bold text-ink-soft" title="Imprimir etiqueta" onClick={() => setEtiqueta({ d: { sku: p.sku, nome: p.nome, gtin: p.gtin } })}>🏷️</button>
+                    <button className="text-xs font-bold text-ink-soft" title="Imprimir etiqueta" onClick={() => setEtiqueta({ d: { sku: p.sku, nome: p.nome, gtin: p.gtin, preco: p.preco } })}>🏷️</button>
                   </td>
                 </tr>
               );
@@ -207,7 +207,7 @@ function FormProduto({ empresaId, dados, onFechar, onSalvar, onExcluir, onMovime
         <button onClick={onFechar} className="text-sm font-bold text-ink-soft">← Voltar</button>
         <h2 className="text-lg font-extrabold text-ink">{existente ? `Produto: ${existente.nome}` : 'Novo produto'}</h2>
         <div className="ml-auto flex gap-2">
-          {existente && <button onClick={() => onEtiqueta({ sku: existente.sku, nome: existente.nome, gtin: existente.gtin })} className="rounded-xl border border-line text-sm font-bold px-4 h-10">🏷️ Etiqueta</button>}
+          {existente && <button onClick={() => onEtiqueta({ sku: existente.sku, nome: existente.nome, gtin: existente.gtin, preco: existente.preco })} className="rounded-xl border border-line text-sm font-bold px-4 h-10">🏷️ Etiqueta</button>}
           {onExcluir && <button onClick={() => { if (confirm('Excluir este produto?')) void onExcluir(); }} className="rounded-xl border border-red-300 text-red-600 text-sm font-bold px-4 h-10">Excluir</button>}
           <button onClick={onFechar} className="rounded-xl border border-line text-sm font-bold px-4 h-10">Cancelar</button>
           <button disabled={!ok || salvando} onClick={() => void salvar()} className="rounded-xl bg-emerald-600 text-white text-sm font-bold px-5 h-10 disabled:opacity-40">{salvando ? 'Salvando…' : 'Salvar'}</button>

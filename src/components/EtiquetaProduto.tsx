@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import JsBarcode from 'jsbarcode';
 
-export interface DadosEtiqueta { sku: string; nome: string; gtin?: string }
+export interface DadosEtiqueta { sku: string; nome: string; gtin?: string; preco?: number }
+const moeda = (n?: number) => (n === undefined ? '' : `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 
 const TAMANHOS: Record<string, { l: number; a: number; nome: string; col?: number }> = {
   '29x12x3': { l: 29, a: 12, col: 3, nome: '29 × 12 mm — 3 por linha (Zebra TLP 2844)' },
@@ -27,10 +28,10 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 /** Imprime etiquetas no formato: descrição em cima, código de barras e código embaixo. */
 export function imprimirEtiquetas(d: DadosEtiqueta, copias: number, tamanho: string) {
   const t = TAMANHOS[tamanho] ?? TAMANHOS['29x12x3'];
-  const codigo = (d.gtin?.trim() || d.sku).trim();
+  const codigo = d.sku.trim();
   const barras = svgBarras(codigo);
   const nome = esc(d.nome.toUpperCase());
-  const um = `<div class="et"><div class="nm">${nome}</div><div class="br">${barras}</div><div class="cd"><span>${esc(d.sku)}</span>${d.gtin?.trim() ? `<span>${esc(d.gtin.trim())}</span>` : ''}</div></div>`;
+  const um = `<div class="et"><div class="nm">${nome}</div><div class="br">${barras}</div><div class="cd"><span>${esc(d.sku)}</span>${d.preco !== undefined ? `<span>${esc(moeda(d.preco))}</span>` : ''}</div></div>`;
   const n = Math.max(1, copias);
   const col = t.col ?? 1;
   const GL = 3, GV = 3, M = 1.5; // espaço entre etiquetas (mm) e margem lateral do rolo
@@ -70,7 +71,7 @@ export default function EtiquetaDialogo({ dados, titulo, onFechar }: { dados: Da
         <div className="border border-line rounded-lg p-2 mb-3 bg-slate-50">
           <div className="text-[11px] font-bold">{dados.nome.toUpperCase()}</div>
           <div className="h-8 my-1 bg-[repeating-linear-gradient(90deg,#000_0_2px,#fff_2px_4px,#000_4px_5px,#fff_5px_8px)]" />
-          <div className="text-[11px] font-bold flex justify-between"><span>{dados.sku}</span><span>{dados.gtin ?? ''}</span></div>
+          <div className="text-[11px] font-bold flex justify-between"><span>{dados.sku}</span><span>{moeda(dados.preco)}</span></div>
         </div>
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div><label className="block text-xs font-bold text-ink-soft uppercase mb-1">Quantidade</label>
