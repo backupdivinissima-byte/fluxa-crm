@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ouvirClientes, ouvirEmpresa } from '../lib/crmData';
-import { corrigirNonoDigito, ouvirTodasConversas } from '../lib/chatData';
+import { corrigirNonoDigito, houveContatoNoChat, ouvirTodasConversas } from '../lib/chatData';
 import { criarAgendamentos, isoLocal, lembreteDe, ouvirAgenda, type Agendamento } from '../lib/agendaData';
 import { DIAS_INATIVIDADE_PADRAO, diasEmAtendimento, faixaPorDias } from '../lib/crmLogic';
 import type { Cliente, ConversaChat } from '../types';
@@ -25,6 +25,7 @@ export default function AcompanhamentoCarteira() {
   const [agora, setAgora] = useState(() => Date.now());
   const [obs, setObs] = useState('');
   const [salvando, setSalvando] = useState(false);
+  const [semChat, setSemChat] = useState(false);
   const [recolhido, setRecolhido] = useState(false);
   const [, forcar] = useState(0);
   const chaveAdiar = `fluxa_acomp_${empresaId}_${login}`;
@@ -84,7 +85,8 @@ export default function AcompanhamentoCarteira() {
       if (faixaPorDias(diasEmAtendimento(c), diasInat) === 'inativo') continue; // inativo = rodízio
       if (comPendente.has(c.id) || adiados[c.id] === hoje) continue;
       const compra = c.dtUltCompra ? new Date(c.dtUltCompra).getTime() : 0;
-      const ult = Math.max(ultConversa.get(ult11(c.telefone)) ?? 0, ultAgenda.get(c.id) ?? 0, Number.isNaN(compra) ? 0 : compra);
+      // Só conta contato de verdade: conversa no Chat ou compra. Anotar no histórico não vale.
+      const ult = Math.max(ultConversa.get(ult11(c.telefone)) ?? 0, Number.isNaN(compra) ? 0 : compra);
       const dias = ult ? Math.floor((agora - ult) / 86400000) : 9999;
       if (dias >= DIAS_SEM_CONTATO) r.push({ c, dias, ult });
     }
@@ -129,6 +131,12 @@ export default function AcompanhamentoCarteira() {
     try {
       const agoraD = new Date();
       const hoje = isoLocal(agoraD);
+      const inicioHoje = new Date(agoraD.getFullYear(), agoraD.getMonth(), agoraD.getDate()).toISOString();
+      if (!(await houveContatoNoChat(empresaId, c.telefone, inicioHoje).catch(() => false))) {
+        setSemChat(true);
+        return;
+      }
+      setSemChat(false);
       const hora = `${String(agoraD.getHours()).padStart(2, '0')}:${String(agoraD.getMinutes()).padStart(2, '0')}`;
       await criarAgendamentos(empresaId, [
         {
@@ -170,6 +178,7 @@ export default function AcompanhamentoCarteira() {
           </div>
           <label className="text-xs font-bold text-ink-soft block pt-1">O que foi conversado? (obrigatório para registrar)</label>
           <textarea value={obs} onChange={(e) => setObs(e.target.value)} rows={3} className="w-full rounded-lg border border-line px-3 py-2 text-sm" />
+          {semChat && <div className="text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded-lg p-2">⛔ Para concluir este contato é preciso ter conversado com o cliente no Chat: não achei nenhuma mensagem sua para ele. Clique em Chat, envie a mensagem e depois conclua.</div>}
           <div className="flex gap-2">
             <button
               onClick={() => { setRecolhido(true); navigate(`/chat?tel=${encodeURIComponent(corrigirNonoDigito(c.telefone!))}&nome=${encodeURIComponent(nome)}`); }}

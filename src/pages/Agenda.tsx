@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ouvirClientes, ouvirEmpresa, ouvirVendedores } from '../lib/crmData';
-import { corrigirNonoDigito, ouvirTodasConversas } from '../lib/chatData';
+import { corrigirNonoDigito, houveContatoNoChat, ouvirTodasConversas } from '../lib/chatData';
 import {
   atualizarAgendamento,
   criarAgendamentos,
@@ -186,6 +186,11 @@ export default function Agenda() {
   async function concluir() {
     if (!empresaId || !concluindo) return;
     if (!resultado.trim()) return;
+    const ok = await houveContatoNoChat(empresaId, concluindo.telefone, concluindo.criadoEm).catch(() => false);
+    if (!ok) {
+      setAviso({ ok: false, texto: '⛔ Para concluir este contato é preciso ter conversado com o cliente no Chat: não achei nenhuma mensagem sua para ele. Clique em Chat, envie a mensagem e depois conclua.' });
+      return;
+    }
     await atualizarAgendamento(empresaId, concluindo.id, { status: 'feito', resultado: resultado.trim(), feitoEm: new Date().toISOString() });
     setConcluindo(null);
     setResultado('');

@@ -625,3 +625,21 @@ export async function desistirDoContato(empresaId: string, conversaId: string) {
   await chatPronto;
   await updateDoc(doc(db, 'empresas', empresaId, 'conversas', conversaId), { roboDesistiu: true, alertaEntrega: false, alertaMotivo: null });
 }
+
+/** A equipe (um vendedor, não o robô) mandou mensagem a este telefone no Chat desde o momento dado?
+ * É o que vale como "contato feito": só anotar no histórico do cliente não conta. */
+export async function houveContatoNoChat(empresaId: string, telefone: string | undefined, desdeISO: string): Promise<boolean> {
+  const k = chaveTelefone(telefone);
+  if (k.length < 10) return false;
+  await chatPronto;
+  const snap = await getDocs(query(conversasCol(empresaId), orderBy('ultimaEm', 'desc'), limit(1000)));
+  const conversas = snap.docs.filter((d) => chaveTelefone((d.data() as ConversaChat).telefone ?? (d.data() as ConversaChat).contato) === k);
+  for (const c of conversas) {
+    const ms = await getDocs(query(collection(db, 'empresas', empresaId, 'conversas', c.id, 'mensagens'), orderBy('em', 'desc'), limit(60)));
+    if (ms.docs.some((m) => {
+      const d = m.data() as MensagemChat;
+      return d.de === 'equipe' && d.autor !== 'Robô' && d.em >= desdeISO;
+    })) return true;
+  }
+  return false;
+}

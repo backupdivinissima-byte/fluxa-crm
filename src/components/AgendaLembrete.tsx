@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { corrigirNonoDigito } from '../lib/chatData';
+import { corrigirNonoDigito, houveContatoNoChat } from '../lib/chatData';
 import { ouvirEmpresa } from '../lib/crmData';
 import { descartarLead } from '../lib/prospectData';
 import { atualizarAgendamento, ouvirAgenda, type Agendamento } from '../lib/agendaData';
@@ -18,6 +18,7 @@ export default function AgendaLembrete() {
   const [minutos, setMinutos] = useState(10);
   const [resultado, setResultado] = useState('');
   const [concluindo, setConcluindo] = useState(false);
+  const [semChat, setSemChat] = useState(false);
   const tocado = useRef<string>('');
   // Lembrete recolhido (ao abrir o chat) — vira uma barrinha no canto até o vendedor concluir ou voltar a ele.
   const [recolhidos, setRecolhidos] = useState<Set<string>>(new Set());
@@ -95,6 +96,12 @@ export default function AgendaLembrete() {
   }
   async function concluir() {
     if (!devido || !empresaId || !resultado.trim()) return;
+    const ok = await houveContatoNoChat(empresaId, devido.telefone, devido.criadoEm).catch(() => false);
+    if (!ok) {
+      setSemChat(true);
+      return;
+    }
+    setSemChat(false);
     await atualizarAgendamento(empresaId, devido.id, { status: 'feito', resultado: resultado.trim(), feitoEm: new Date().toISOString() });
     setResultado('');
     setConcluindo(false);
@@ -114,6 +121,7 @@ export default function AgendaLembrete() {
             <>
               <label className="text-xs font-bold text-ink-soft block">O que foi conversado?</label>
               <textarea value={resultado} onChange={(e) => setResultado(e.target.value)} rows={3} className="w-full rounded-lg border border-line px-3 py-2 text-sm" />
+              {semChat && <div className="text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded-lg p-2">⛔ Para concluir este contato é preciso ter conversado com o cliente no Chat: não achei nenhuma mensagem sua para ele. Clique em Chat, envie a mensagem e depois conclua.</div>}
               <div className="flex gap-2">
                 <button disabled={!resultado.trim()} onClick={() => void concluir()} className="flex-1 rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold py-2 disabled:opacity-50">Salvar e concluir</button>
                 <button onClick={() => setConcluindo(false)} className="flex-1 rounded-xl border border-line text-sm font-bold py-2">Voltar</button>
