@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ouvirProdutos, ouvirMovimentos, salvarProduto, excluirProduto, movimentarEstoque, importarProdutos } from '../lib/erpData';
 import { lerProdutosDaPlanilha, modeloCsv, type ResultadoLeitura } from '../lib/erpImportar';
@@ -35,8 +35,9 @@ export default function Erp() {
   const navigate = useNavigate();
   const aba: Aba = ROTA_ABA[abaUrl ?? ''] ?? 'inicio';
   const setAba = (a: Aba) => navigate(`/erp/${a === 'api' ? 'integracoes' : a}`);
+  const [params] = useSearchParams();
   const [sub, setSub] = useState('');
-  useEffect(() => { setSub(''); }, [aba]);
+  useEffect(() => { setSub(aba === 'estoque' ? (params.get('v') ?? '') : ''); }, [aba, params]);
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [movimentos, setMovimentos] = useState<MovimentoEstoque[]>([]);
   const [soBaixos, setSoBaixos] = useState(false);
@@ -65,15 +66,16 @@ export default function Erp() {
 
   const vista = SUBS[aba] ? (sub || SUBS[aba]?.[0].id) : aba;
 
-  const NOMES_ABA: Record<Aba, string> = { inicio: 'Início', vendas: 'Vendas', estoque: 'Estoque', financeiro: 'Financeiro', cadastros: 'Cadastros', api: 'Integrações' };
-  const subAtual = SUBS[aba]?.find((x) => x.id === (vista === 'importar' ? 'produtos' : vista))?.nome;
-  const tituloPagina = `Fluxa ERP — ${NOMES_ABA[aba]}${subAtual ? ` — ${subAtual}` : ''}`;
-
   if (papel !== 'admin') return <div className="p-6 text-sm text-ink-soft">Somente administradores acessam o Estoque.</div>;
 
   return (
     <div className="p-5 w-full">
-      <h1 className="text-base font-extrabold text-ink flex items-center gap-2 mb-4"><IconEstoque className="w-5 h-5" /> {tituloPagina}</h1>
+      <div className="flex items-center gap-2 mb-1"><IconEstoque className="w-6 h-6" /><h1 className="text-xl font-extrabold text-ink">Fluxa ERP</h1></div>
+      <p className="text-sm text-ink-soft mb-4">Vendas, estoque, financeiro e cadastros num só lugar.</p>
+
+      <div>
+      <section className="min-w-0">
+      {aba === 'estoque' && <h2 className="text-lg font-extrabold text-ink mb-3">{vista === 'auditoria' ? 'Auditoria' : 'Produtos'}</h2>}
 
       {aba === 'estoque' && vista !== 'auditoria' && <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
         <Card t="Produtos ativos" v={String(resumo.itens)} />
@@ -82,7 +84,7 @@ export default function Erp() {
         <Card t="Estoque baixo" v={String(resumo.baixos)} alerta={resumo.baixos > 0} onClick={() => { setSub('produtos'); setSoBaixos(true); }} />
       </div>}
 
-      {SUBS[aba] && (
+      {SUBS[aba] && aba !== 'estoque' && (
         <div className="flex gap-1 mb-4 flex-wrap">
           {SUBS[aba]?.map((x) => (
             <button key={x.id} onClick={() => setSub(x.id)} className={`px-3 h-8 rounded-full text-xs font-bold ${(sub || SUBS[aba]?.[0].id) === x.id ? 'bg-teal-500 text-white' : 'bg-slate-100 text-ink-soft'}`}>{x.nome}</button>
@@ -117,6 +119,9 @@ export default function Erp() {
       {vista === 'auditoria' && empresaId && <ErpAuditoria empresaId={empresaId} produtos={produtos} movimentos={movimentos} usuario={perfil?.nome} />}
 
       {vista === 'importar' && empresaId && <Importar empresaId={empresaId} onVoltar={() => setSub('produtos')} />}
+
+      </section>
+      </div>
 
       {gerarVar && empresaId && <FormVariacoes empresaId={empresaId} onFechar={() => setGerarVar(false)} />}
       {mov && empresaId && <FormMov dados={mov} onFechar={() => setMov(null)} onConfirmar={async (valor, motivo) => { try { await movimentarEstoque(empresaId, mov.produto, mov.tipo, valor, motivo, perfil?.nome); setMov(null); setErro(''); } catch (e) { setErro(e instanceof Error ? e.message : 'Erro.'); setMov(null); } }} />}

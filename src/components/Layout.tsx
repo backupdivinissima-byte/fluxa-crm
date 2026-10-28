@@ -45,7 +45,7 @@ const itens = [
   // Produtos e estoque (Fluxa ERP): só admin.
   { to: '/erp/inicio', label: 'Início', icon: <IconErpInicio />, apenasAdmin: true },
   { to: '/erp/cadastros', label: 'Cadastros', icon: <IconErpCadastros />, apenasAdmin: true },
-  { to: '/erp/estoque', label: 'Estoque', icon: <IconEstoque />, apenasAdmin: true },
+  { to: '/erp/estoque', label: 'Estoque', icon: <IconEstoque />, apenasAdmin: true, menu: [{ label: 'Produtos', to: '/erp/estoque' }, { label: 'Auditoria', to: '/erp/estoque?v=auditoria' }] as { label: string; to: string }[] },
   { to: '/erp/vendas', label: 'Vendas', icon: <IconErpVendas />, apenasAdmin: true },
   { to: '/erp/financeiro', label: 'Financeiro', icon: <IconErpFinanceiro />, apenasAdmin: true },
   { to: '/erp/integracoes', label: 'Integrações', icon: <IconErpIntegracoes />, apenasAdmin: true },
@@ -123,6 +123,7 @@ export default function Layout() {
     if (primeira && primeira.to !== location.pathname) return <Navigate to={primeira.to} replace />;
   }
 
+  const [menuAberto, setMenuAberto] = useState<string | null>(null);
   const nomeUsuario = papel === 'admin' ? perfil?.nome : sessaoVendedor?.vendedor.nome;
 
   return (
@@ -160,20 +161,51 @@ export default function Layout() {
               .filter((item) => !item.apenasAdmin || papel === 'admin' || item.to === '/prospect')
               .filter((item) => !('apenasDono' in item) || (!!perfil?.email && DONOS_PLATAFORMA.includes(perfil.email.toLowerCase())))
               .filter((item) => visiveis.includes(moduloDaRota(item.to, modulos)))
-              .map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.fim}
-                  className={({ isActive }) =>
-                    `flex items-center gap-2 px-3 h-9 rounded-lg text-sm font-semibold whitespace-nowrap transition-colors ${
-                      isActive ? 'bg-teal-500/10 text-teal-500' : 'text-ink-soft hover:bg-surface'
-                    }`
-                  }
-                >
-                  {item.icon} {papel !== 'admin' && 'labelVendedor' in item ? item.labelVendedor : item.label}
-                </NavLink>
-              ))}
+              .map((item) => {
+                const menu = 'menu' in item ? (item.menu as { label: string; to: string }[]) : undefined;
+                if (!menu) {
+                  return (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      end={item.fim}
+                      className={({ isActive }) =>
+                        `flex items-center gap-2 px-3 h-9 rounded-lg text-sm font-semibold whitespace-nowrap transition-colors ${
+                          isActive ? 'bg-teal-500/10 text-teal-500' : 'text-ink-soft hover:bg-surface'
+                        }`
+                      }
+                    >
+                      {item.icon} {papel !== 'admin' && 'labelVendedor' in item ? item.labelVendedor : item.label}
+                    </NavLink>
+                  );
+                }
+                const ativo = location.pathname.startsWith(item.to);
+                const aberto = menuAberto === item.to;
+                return (
+                  <div key={item.to} className="relative">
+                    {aberto && <div className="fixed inset-0 z-40" onClick={() => setMenuAberto(null)} />}
+                    <button
+                      onClick={() => setMenuAberto(aberto ? null : item.to)}
+                      className={`flex items-center gap-2 px-3 h-9 rounded-lg text-sm font-semibold whitespace-nowrap transition-colors ${ativo ? 'bg-teal-500/10 text-teal-500' : 'text-ink-soft hover:bg-surface'}`}
+                    >
+                      {item.icon} {item.label} <span className="text-[10px]">▾</span>
+                    </button>
+                    {aberto && (
+                      <div className="absolute left-0 top-10 z-50 min-w-[180px] rounded-lg border border-line bg-white shadow-xl py-1">
+                        {menu.map((m) => (
+                          <button
+                            key={m.to}
+                            onClick={() => { setMenuAberto(null); navigate(m.to); }}
+                            className="block w-full text-left px-4 py-2.5 text-sm font-semibold text-ink-soft hover:bg-surface hover:text-teal-500 border-b border-line last:border-0"
+                          >
+                            {m.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
           </nav>
 
           <div className="ml-auto flex items-center gap-4 pl-4 shrink-0">
