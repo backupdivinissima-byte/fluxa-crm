@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { movimentarEstoque } from '../lib/erpData';
 import { parseValorBR } from '../lib/crmLogic';
 import type { MovimentoEstoque, Produto } from '../types';
@@ -6,43 +6,75 @@ import type { MovimentoEstoque, Produto } from '../types';
 const campo = 'w-full rounded-lg border border-line px-3 h-10 text-sm bg-white';
 const rotulo = 'block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1';
 
-/** Auditoria de estoque: contagem física x saldo do sistema, com ajuste em lote e histórico de movimentações. */
+/** Auditoria de estoque: bipa o código (ou digita), informa a quantidade, e compara com o saldo do sistema. */
 export default function ErpAuditoria({ empresaId, produtos, movimentos, usuario }: { empresaId: string; produtos: Produto[]; movimentos: MovimentoEstoque[]; usuario?: string }) {
-  const [busca, setBusca] = useState('');
-  const [categoria, setCategoria] = useState('');
+  const chave = `fluxa_auditoria_${empresaId}`;
+  const [contagem, setContagem] = useState<Record<string, number>>(() => { try { return JSON.parse(localStorage.getItem(chave) ?? '{}') as Record<string, number>; } catch { return {}; } });
+  useEffect(() => { try { localStorage.setItem(chave, JSON.stringify(contagem)); } catch { /* sem armazenamento */ } }, [contagem, chave]);
+  const [codigo, setCodigo] = useState('');
+  const [atual, setAtual] = useState<Produto | null>(null);
+  const [qtd, setQtd] = useState('1');
+  const [auto, setAuto] = useState(false);
+  const [aviso, setAviso] = useState('');
+  const [naoContados, setNaoContados] = useState(false);
   const [soDif, setSoDif] = useState(false);
-  const [contagem, setContagem] = useState<Record<string, string>>({});
   const [aplicando, setAplicando] = useState(false);
   const [msg, setMsg] = useState('');
   const [verHist, setVerHist] = useState(false);
+  const refCodigo = useRef<HTMLInputElement>(null);
+  const refQtd = useRef<HTMLInputElement>(null);
 
-  const categorias = useMemo(() => Array.from(new Set(produtos.map((p) => p.categoria).filter(Boolean) as string[])).sort(), [produtos]);
-  const contado = (p: Produto) => { const t = contagem[p.id]; if (t === undefined || t.trim() === '') return undefined; const n = parseValorBR(t); return Number.isNaN(n) ? undefined : n; };
-  const lista = useMemo(() => {
-    const q = busca.trim().toLowerCase();
-    return produtos.filter((p) => {
-      if (!p.ativo) return false;
-      if (q && !(p.nome.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q))) return false;
-      if (categoria && p.categoria !== categoria) return false;
-      if (soDif) { const c = contado(p); if (c === undefined || c === p.estoque) return false; }
-      return true;
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [produtos, busca, categoria, soDif, contagem]);
+  const porId = useMemo(() => new Map(produtos.map((p) => [p.id, p])), [produtos]);
+  const ativos = useMemo(() => produtos.filter((p) => p.ativo), [produtos]);
 
-  const divergentes = produtos.filter((p) => { const c = contado(p); return c !== undefined && c !== p.estoque; });
-  const contados = produtos.filter((p) => contado(p) !== undefined).length;
-  const sobra = divergentes.reduce((s, p) => s + Math.max(0, (contado(p) as number) - p.estoque), 0);
-  const falta = divergentes.reduce((s, p) => s + Math.max(0, p.estoque - (contado(p) as number)), 0);
+  function achar(c: string): Produto | undefined {
+    const t = c.trim().toLowerCase();
+    if (!t) return undefined;
+    return ativos.find((p) => p.sku.toLowerCase() === t || (p.gtin ?? '').trim() === c.trim()) ?? produtos.find((p) => p.sku.toLowerCase() === t);
+  }
+  function somar(p: Produto, n: number) {
+    setContagem((a) => ({ ...a, [p.id]: Math.max(0, (a[p.id] ?? 0) + n) }));
+  }
+  function aoBipar() {
+    const p = achar(codigo);
+    if (!p) { if (codigo.trim()) setAviso(`Código "${codigo.trim()}" não encontrado.`); setCodigo(''); return; }
+    setAviso('');
+    setCodigo('');
+    if (auto) { somar(p, 1); setAtual(p); return; }
+    setAtual(p); setQtd('1');
+    setTimeout(() => { refQtd.current?.focus(); refQtd.current?.select(); }, 0);
+  }
+  function confirmarQtd() {
+    if (!atual) return;
+    const n = parseValorBR(qtd);
+    if (Number.isNaN(n) || n <= 0) return;
+    somar(atual, n);
+    setQtd('1');
+    refCodigo.current?.focus();
+  }
+
+  const linhas = useMemo(() => {
+    const ids = Object.keys(contagem);
+    const lista = ids.map((id) => porId.get(id)).filter(Boolean) as Produto[];
+    return soDif ? lista.filter((p) => contagem[p.id] !== p.estoque) : lista;
+  }, [contagem, porId, soDif]);
+  const divergentes = useMemo(() => {
+    const cont = Object.keys(contagem).map((id) => porId.get(id)).filter((p): p is Produto => !!p && contagem[p.id] !== p.estoque).map((p) => ({ p, novo: contagem[p.id] }));
+    if (naoContados) ativos.forEach((p) => { if (contagem[p.id] === undefined && p.estoque !== 0) cont.push({ p, novo: 0 }); });
+    return cont;
+  }, [contagem, porId, ativos, naoContados]);
+  const sobra = divergentes.reduce((t, d) => t + Math.max(0, d.novo - d.p.estoque), 0);
+  const falta = divergentes.reduce((t, d) => t + Math.max(0, d.p.estoque - d.novo), 0);
+  const naoBipados = ativos.filter((p) => contagem[p.id] === undefined).length;
 
   async function aplicar() {
     if (!divergentes.length) return;
     if (!confirm(`Ajustar o estoque de ${divergentes.length} produto(s) para a quantidade contada?`)) return;
     setAplicando(true); setMsg('');
     try {
-      for (const p of divergentes) await movimentarEstoque(empresaId, p, 'ajuste', contado(p) as number, 'Auditoria de estoque', usuario);
+      for (const d of divergentes) await movimentarEstoque(empresaId, d.p, 'ajuste', d.novo, 'Auditoria de estoque', usuario);
       setMsg(`${divergentes.length} produto(s) ajustado(s).`);
-      setContagem({});
+      setContagem({}); setAtual(null);
     } catch (e) { setMsg(e instanceof Error ? e.message : 'Erro ao ajustar.'); }
     setAplicando(false);
   }
@@ -50,45 +82,70 @@ export default function ErpAuditoria({ empresaId, produtos, movimentos, usuario 
   return (
     <>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        <Resumo t="Produtos contados" v={`${contados} de ${produtos.filter((p) => p.ativo).length}`} />
+        <Resumo t="Produtos conferidos" v={`${Object.keys(contagem).length} de ${ativos.length}`} />
         <Resumo t="Com divergência" v={String(divergentes.length)} alerta={divergentes.length > 0} />
         <Resumo t="Sobra (un)" v={String(sobra)} />
         <Resumo t="Falta (un)" v={String(falta)} alerta={falta > 0} />
       </div>
 
-      <div className="flex gap-2 flex-wrap items-end mb-3 rounded-xl border border-line bg-white p-3">
-        <div className="flex-1 min-w-[220px]"><label className={rotulo}>Pesquisar</label><input className={campo} placeholder="Descrição ou código" value={busca} onChange={(e) => setBusca(e.target.value)} /></div>
-        <div><label className={rotulo}>Categoria</label>
-          <select className={campo} value={categoria} onChange={(e) => setCategoria(e.target.value)}><option value="">Todas</option>{categorias.map((c) => <option key={c}>{c}</option>)}</select></div>
-        <label className="flex items-center gap-2 text-sm font-bold h-10"><input type="checkbox" checked={soDif} onChange={(e) => setSoDif(e.target.checked)} /> Só divergências</label>
-        <button disabled={aplicando || divergentes.length === 0} onClick={() => void aplicar()} className="rounded-xl bg-emerald-600 text-white text-sm font-bold px-4 h-10 disabled:opacity-40">{aplicando ? 'Ajustando…' : `Ajustar estoque (${divergentes.length})`}</button>
+      <div className="rounded-xl border border-line bg-white p-4 mb-3">
+        <div className="flex gap-3 flex-wrap items-end">
+          <div className="flex-1 min-w-[240px]">
+            <label className={rotulo}>Bipar ou digitar o código</label>
+            <input ref={refCodigo} autoFocus className={`${campo} text-base font-mono`} placeholder="Bipe o código de barras e tecle Enter" value={codigo}
+              onChange={(e) => setCodigo(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); aoBipar(); } }} />
+          </div>
+          {!auto && atual && (
+            <div className="w-32">
+              <label className={rotulo}>Quantidade</label>
+              <input ref={refQtd} inputMode="decimal" className={`${campo} text-base font-bold text-center`} value={qtd} onChange={(e) => setQtd(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); confirmarQtd(); } }} />
+            </div>
+          )}
+          {!auto && atual && <button onClick={confirmarQtd} className="rounded-xl bg-emerald-600 text-white text-sm font-bold px-4 h-10">Adicionar</button>}
+        </div>
+        {atual && (
+          <p className="mt-3 text-sm text-ink"><b>{atual.nome}</b> <span className="font-mono text-xs text-ink-soft">({atual.sku})</span> — contado até agora: <b>{contagem[atual.id] ?? 0}</b> · no sistema: {atual.estoque}</p>
+        )}
+        {aviso && <p className="mt-2 text-sm text-red-600 font-bold">{aviso}</p>}
+        <label className="flex items-center gap-2 text-sm text-ink-soft mt-3"><input type="checkbox" checked={auto} onChange={(e) => { setAuto(e.target.checked); refCodigo.current?.focus(); }} /> Somar 1 automaticamente a cada bipe (sem perguntar quantidade)</label>
+      </div>
+
+      <div className="flex gap-3 flex-wrap items-center mb-3">
+        <label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={soDif} onChange={(e) => setSoDif(e.target.checked)} /> Só divergências</label>
+        <label className="flex items-center gap-2 text-sm text-ink-soft"><input type="checkbox" checked={naoContados} onChange={(e) => setNaoContados(e.target.checked)} /> Produtos não bipados ficam zerados ({naoBipados})</label>
+        <div className="ml-auto flex gap-2">
+          <button disabled={Object.keys(contagem).length === 0} onClick={() => { if (confirm('Limpar toda a contagem?')) { setContagem({}); setAtual(null); } }} className="rounded-xl border border-line text-sm font-bold px-4 h-10 disabled:opacity-40">Limpar contagem</button>
+          <button disabled={aplicando || divergentes.length === 0} onClick={() => void aplicar()} className="rounded-xl bg-emerald-600 text-white text-sm font-bold px-4 h-10 disabled:opacity-40">{aplicando ? 'Ajustando…' : `Ajustar estoque (${divergentes.length})`}</button>
+        </div>
       </div>
       {msg && <p className={`text-sm mb-3 ${msg.includes('ajustado') ? 'text-emerald-700' : 'text-red-600'}`}>{msg}</p>}
 
       <div className="overflow-x-auto rounded-xl border border-line bg-white">
         <table className="w-full text-sm">
           <thead className="text-xs uppercase text-ink-soft bg-surface"><tr>
-            <th className="text-left p-3">Código</th><th className="text-left p-3">Descrição</th><th className="text-right p-3">No sistema</th><th className="text-right p-3 w-32">Contado</th><th className="text-right p-3">Diferença</th>
+            <th className="text-left p-3">Código</th><th className="text-left p-3">Descrição</th><th className="text-right p-3">No sistema</th><th className="text-right p-3 w-32">Contado</th><th className="text-right p-3">Diferença</th><th className="p-3" />
           </tr></thead>
           <tbody>
-            {lista.map((p) => {
-              const c = contado(p);
-              const dif = c === undefined ? undefined : c - p.estoque;
+            {linhas.map((p) => {
+              const c = contagem[p.id];
+              const dif = c - p.estoque;
               return (
                 <tr key={p.id} className="border-t border-line">
                   <td className="p-3 font-mono text-xs">{p.sku}</td>
                   <td className="p-3 font-semibold text-ink">{p.nome}</td>
                   <td className="p-3 text-right">{p.estoque} {p.unidade}</td>
-                  <td className="p-2 text-right"><input inputMode="decimal" className="w-24 rounded-lg border border-line px-2 h-9 text-sm text-right" value={contagem[p.id] ?? ''} onChange={(e) => setContagem((a) => ({ ...a, [p.id]: e.target.value }))} placeholder="—" /></td>
-                  <td className={`p-3 text-right font-bold ${dif === undefined || dif === 0 ? 'text-ink-soft' : dif > 0 ? 'text-emerald-700' : 'text-red-600'}`}>{dif === undefined ? '—' : dif > 0 ? `+${dif}` : dif}</td>
+                  <td className="p-2 text-right"><input inputMode="decimal" className="w-24 rounded-lg border border-line px-2 h-9 text-sm text-right" value={c} onChange={(e) => { const n = parseValorBR(e.target.value); setContagem((a) => ({ ...a, [p.id]: Number.isNaN(n) ? 0 : Math.max(0, n) })); }} /></td>
+                  <td className={`p-3 text-right font-bold ${dif === 0 ? 'text-ink-soft' : dif > 0 ? 'text-emerald-700' : 'text-red-600'}`}>{dif > 0 ? `+${dif}` : dif}</td>
+                  <td className="p-3 text-right"><button className="text-xs font-bold text-red-600" onClick={() => setContagem((a) => { const n = { ...a }; delete n[p.id]; return n; })}>Remover</button></td>
                 </tr>
               );
             })}
-            {lista.length === 0 && <tr><td colSpan={5} className="p-6 text-center text-ink-soft">{soDif ? 'Nenhuma divergência até agora.' : 'Nenhum produto encontrado.'}</td></tr>}
+            {linhas.length === 0 && <tr><td colSpan={6} className="p-6 text-center text-ink-soft">{soDif ? 'Nenhuma divergência até agora.' : 'Nada conferido ainda. Bipe o primeiro código acima.'}</td></tr>}
           </tbody>
         </table>
       </div>
-      <p className="text-xs text-ink-soft mt-2">Digite a quantidade contada de cada produto. Só os produtos preenchidos e diferentes do sistema serão ajustados; o ajuste fica registrado no histórico.</p>
+      <p className="text-xs text-ink-soft mt-2">A contagem fica guardada neste computador até você ajustar ou limpar. Ao ajustar, o saldo do sistema passa a ser a quantidade contada e fica registrado no histórico.</p>
 
       <button onClick={() => setVerHist((v) => !v)} className="mt-5 text-sm font-bold text-teal-600">{verHist ? '▾' : '▸'} Histórico de movimentações ({movimentos.length})</button>
       {verHist && (
