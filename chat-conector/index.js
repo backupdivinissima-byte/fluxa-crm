@@ -488,7 +488,8 @@ async function processarFotos() {
       try {
         if (!sock || !aberto) { fotoFila.length = 0; fotoNaFila.clear(); break; }
         let url = null;
-        try { url = await sock.profilePictureUrl(jid, 'preview'); } catch { url = null; } // sem foto ou privacidade
+        let erroPrev = '';
+        try { url = await sock.profilePictureUrl(jid, 'preview'); } catch (e) { erroPrev = e?.message ?? String(e); } // sem foto ou privacidade
         let foto = '';
         if (url) {
           const r = await fetch(url);
@@ -498,7 +499,7 @@ async function processarFotos() {
           }
         }
         let grande = '';
-        if (foto) {
+        if (url || !erroPrev) {
           try {
             const ug = await sock.profilePictureUrl(jid, 'image');
             const rg = ug ? await fetch(ug) : null;
@@ -510,11 +511,13 @@ async function processarFotos() {
               console.log(`  (foto grande de ${conversaId}: sem resposta ${rg?.status ?? 'sem url'})`);
             }
           } catch (e) { console.log(`  (foto grande de ${conversaId} falhou: ${e?.message ?? e})`); }
+        } else {
+          console.log(`  (foto de ${conversaId}: sem foto/privada — ${erroPrev})`);
         }
         // a versão grande fica fora da conversa (a lista de conversas continua leve) e é lida só ao clicar na foto
         if (grande) await base.collection('chatConexoes').doc(`foto_${conversaId}`).set({ grande, em: new Date().toISOString() });
         await base.collection('conversas').doc(conversaId).set(
-          foto ? { foto, fotoEm: new Date().toISOString(), fotoGrande: !!grande } : { fotoEm: new Date().toISOString() },
+          foto || grande ? { ...(foto ? { foto } : {}), fotoEm: new Date().toISOString(), fotoGrande: !!grande } : { fotoEm: new Date().toISOString() },
           { merge: true }
         );
       } catch (e) {
@@ -535,6 +538,7 @@ async function preencherFotos() {
       const dados = d.data();
       if (dados.canal === 'whatsapp') pedirFoto(d.id, dados.contatoJid, dados);
     }
+    console.log(`[fotos] ${fotoFila.length} contato(s) na fila para buscar foto.`);
   } catch (e) {
     console.log('  (preencher fotos:', e?.message ?? e, ')');
   }
