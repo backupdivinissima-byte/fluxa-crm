@@ -2,7 +2,7 @@ import { IconChat } from '../components/NavIcons';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { mapaPosses, ouvirAgenda, transferirPosse, type Agendamento } from '../lib/agendaData';
 import { ouvirClientes, ouvirEmpresa, ouvirVendedores, atualizarCampoCliente, salvarCliente } from '../lib/crmData';
@@ -1195,7 +1195,19 @@ export default function Chat() {
             <>
               <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-line">
                 <div className="flex items-center gap-3 min-w-0">
-                <Avatar c={aberta} tam={46} aoClicar={aberta.foto ? () => { const id = aberta.id; setFotoGrande({ url: aberta.foto as string, contato: true }); if (empresaId && aberta.fotoGrande) void getDoc(doc(db, 'empresas', empresaId, 'chatConexoes', `foto_${id}`)).then((sn) => { const g = sn.data()?.grande as string | undefined; if (g) setFotoGrande((f) => (f?.contato ? { url: g, contato: true } : f)); }).catch(() => {}); } : undefined} />
+                <Avatar c={aberta} tam={46} aoClicar={aberta.foto ? () => {
+                  const id = aberta.id;
+                  setFotoGrande({ url: aberta.foto as string, contato: true });
+                  if (!empresaId) return;
+                  const refFoto = doc(db, 'empresas', empresaId, 'chatConexoes', `foto_${id}`);
+                  // pede ao conector a versão grande agora (se ainda não existir) e abre assim que chegar
+                  if (!aberta.fotoGrande) void setDoc(doc(db, 'empresas', empresaId, 'chatConexoes', 'pedirFoto'), { conversaId: id, em: new Date().toISOString() }).catch(() => {});
+                  const parar = onSnapshot(refFoto, (sn) => {
+                    const g = sn.data()?.grande as string | undefined;
+                    if (g) { setFotoGrande((f) => (f?.contato ? { url: g, contato: true } : f)); parar(); }
+                  }, () => {});
+                  setTimeout(parar, 60000);
+                } : undefined} />
                 <div>
                   <div className="font-bold text-sm text-ink">
                     {nomeAgenda || (clienteCrm ? clienteCrm.razao ?? clienteCrm.nome : aberta.telefone || aberta.contato)}

@@ -457,10 +457,11 @@ function precisaFoto(dados) {
   return dados.foto ? idade > FOTO_VALIDADE_MS : idade > FOTO_RETENTAR_MS;
 }
 
-function pedirFoto(conversaId, jid, dados) {
-  if (!sock || !jid || fotoNaFila.has(conversaId) || !precisaFoto(dados)) return;
+function pedirFoto(conversaId, jid, dados, urgente = false) {
+  if (!sock || !jid || (!urgente && (fotoNaFila.has(conversaId) || !precisaFoto(dados)))) return;
+  if (urgente) { const i = fotoFila.findIndex((x) => x.conversaId === conversaId); if (i >= 0) fotoFila.splice(i, 1); }
   fotoNaFila.add(conversaId);
-  fotoFila.push({ conversaId, jid });
+  if (urgente) fotoFila.unshift({ conversaId, jid }); else fotoFila.push({ conversaId, jid });
   void processarFotos();
 }
 
@@ -813,6 +814,16 @@ async function iniciar() {
         if (!global.__cofreSemeado) { global.__cofreSemeado = true; void semearCofre(); }
         robo?.conectou();
         setTimeout(() => void preencherFotos(), 30000);
+        // Pedido do Chat: alguém clicou numa foto que ainda não tem a versão grande → busca na hora, na frente da fila.
+        if (!global.__pedirFotoOuvindo) {
+          global.__pedirFotoOuvindo = true;
+          base.collection('chatConexoes').doc('pedirFoto').onSnapshot(async (sn) => {
+            const id = sn.data()?.conversaId;
+            if (!id || !aberto) return;
+            const c = await base.collection('conversas').doc(id).get();
+            if (c.exists) pedirFoto(id, c.data().contatoJid, c.data(), true);
+          }, () => {});
+        }
         if (!global.__fotosTimer) global.__fotosTimer = setInterval(() => { if (aberto) void preencherFotos(); }, 6 * 3600 * 1000);
       }
       if (connection === 'close') {
