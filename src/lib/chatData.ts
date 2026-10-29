@@ -662,3 +662,14 @@ export async function houveContatoNoChat(empresaId: string, telefone: string | u
   }
   return false;
 }
+
+/** Pede ao conector a foto de perfil em alta qualidade (se ainda não existir) e entrega assim que ela estiver disponível. */
+export function ouvirFotoGrande(empresaId: string, conversaId: string, pedir: boolean, cb: (grande: string) => void): Unsubscribe {
+  if (pedir) {
+    void chatPronto.then(() => setDoc(doc(db, 'empresas', empresaId, 'chatConexoes', 'pedirFoto'), { conversaId, em: new Date().toISOString() })).catch(() => {});
+  }
+  return aposChatPronto(() => onSnapshot(doc(db, 'empresas', empresaId, 'chatConexoes', `foto_${conversaId}`), (sn) => {
+    const g = sn.data()?.grande as string | undefined;
+    if (g) cb(g);
+  }, () => {}));
+}
