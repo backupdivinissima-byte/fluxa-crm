@@ -441,6 +441,74 @@ function origemPeloTexto(texto) {
   return null;
 }
 
+
+// ---------- foto de perfil do contato (como no WhatsApp Web) ----------
+const FOTO_VALIDADE_MS = 3 * 86400000; // renova a foto a cada 3 dias
+const FOTO_RETENTAR_MS = 1 * 86400000; // contato sem foto/privado: tenta de novo em 1 dia
+const fotoFila = [];
+const fotoNaFila = new Set();
+let fotoRodando = false;
+
+function precisaFoto(dados) {
+  if (!dados) return true;
+  const quando = dados.fotoEm ? new Date(dados.fotoEm).getTime() : 0;
+  const idade = Date.now() - quando;
+  return dados.foto ? idade > FOTO_VALIDADE_MS : idade > FOTO_RETENTAR_MS;
+}
+
+function pedirFoto(conversaId, jid, dados) {
+  if (!sock || !jid || fotoNaFila.has(conversaId) || !precisaFoto(dados)) return;
+  fotoNaFila.add(conversaId);
+  fotoFila.push({ conversaId, jid });
+  void processarFotos();
+}
+
+async function processarFotos() {
+  if (fotoRodando) return;
+  fotoRodando = true;
+  try {
+    while (fotoFila.length > 0) {
+      const { conversaId, jid } = fotoFila.shift();
+      fotoNaFila.delete(conversaId);
+      try {
+        if (!sock || !aberto) { fotoFila.length = 0; fotoNaFila.clear(); break; }
+        let url = null;
+        try { url = await sock.profilePictureUrl(jid, 'preview'); } catch { url = null; } // sem foto ou privacidade
+        let foto = '';
+        if (url) {
+          const r = await fetch(url);
+          if (r.ok) {
+            const buf = Buffer.from(await r.arrayBuffer());
+            if (buf.length > 0 && buf.length < 120000) foto = `data:image/jpeg;base64,${buf.toString('base64')}`;
+          }
+        }
+        await base.collection('conversas').doc(conversaId).set(
+          foto ? { foto, fotoEm: new Date().toISOString() } : { fotoEm: new Date().toISOString() },
+          { merge: true }
+        );
+      } catch (e) {
+        console.log(`  (foto de ${conversaId}: ${e?.message ?? e})`);
+      }
+      await new Promise((r) => setTimeout(r, 1500)); // sem pressa: evita sobrecarregar o WhatsApp
+    }
+  } finally {
+    fotoRodando = false;
+  }
+}
+
+/** Passa pelas conversas recentes e busca a foto das que ainda não têm (ou estão velhas). */
+async function preencherFotos() {
+  try {
+    const snap = await base.collection('conversas').orderBy('ultimaEm', 'desc').limit(300).get();
+    for (const d of snap.docs) {
+      const dados = d.data();
+      if (dados.canal === 'whatsapp') pedirFoto(d.id, dados.contatoJid, dados);
+    }
+  } catch (e) {
+    console.log('  (preencher fotos:', e?.message ?? e, ')');
+  }
+}
+
 async function guardarMensagem(msg) {
   await aprenderDaMensagem(msg);
   const jid = jidDe(msg);
@@ -488,6 +556,7 @@ async function guardarMensagem(msg) {
     },
     { merge: true }
   );
+  pedirFoto(`whatsapp_${numero}`, jid, conversaAntes.data());
   if (!conversaAntes.exists) await restaurarDoCofre(numero);
   const snap = await conversaRef.get();
   if (!snap.data()?.nome) await conversaRef.set({ nome: msg.pushName || numero }, { merge: true });
@@ -729,6 +798,8 @@ async function iniciar() {
         console.log('WhatsApp conectado.');
         if (!global.__cofreSemeado) { global.__cofreSemeado = true; void semearCofre(); }
         robo?.conectou();
+        setTimeout(() => void preencherFotos(), 30000);
+        if (!global.__fotosTimer) global.__fotosTimer = setInterval(() => { if (aberto) void preencherFotos(); }, 6 * 3600 * 1000);
       }
       if (connection === 'close') {
         aberto = false;

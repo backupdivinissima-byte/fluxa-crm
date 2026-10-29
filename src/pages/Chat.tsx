@@ -56,6 +56,17 @@ const ORIGENS = {
 } as const;
 const origemDe = (c: ConversaChat): keyof typeof ORIGENS => c.origem ?? c.canal;
 
+/** Foto do contato (como no WhatsApp Web); sem foto, a inicial do nome. */
+function Avatar({ c, tam = 40, aoClicar }: { c: { foto?: string; nome?: string; telefone?: string; contato?: string }; tam?: number; aoClicar?: () => void }) {
+  const ini = ((c.nome || c.telefone || c.contato || '?').trim().replace(/[^\p{L}\p{N}]/gu, '')[0] ?? '?').toUpperCase();
+  const estilo = { width: tam, height: tam, minWidth: tam };
+  return c.foto ? (
+    <img src={c.foto} alt="" style={estilo} onClick={aoClicar} className={`rounded-full object-cover shrink-0 border border-line ${aoClicar ? 'cursor-pointer' : ''}`} />
+  ) : (
+    <span style={{ ...estilo, fontSize: tam * 0.42 }} className="rounded-full shrink-0 bg-slate-200 text-slate-500 font-bold flex items-center justify-center select-none">{ini}</span>
+  );
+}
+
 function Etiqueta({ nome, cor }: { nome: string; cor: string }) {
   return (
     <span className="inline-block rounded-full px-2 py-0.5 text-[10px] font-bold text-white" style={{ background: cor }}>
@@ -1133,8 +1144,10 @@ export default function Chat() {
               <li key={c.id}>
                 <button
                   onClick={() => setAbertaId(c.id)}
-                  className={`w-full text-left px-4 py-3 hover:bg-surface ${abertaId === c.id ? 'bg-surface' : ''}`}
+                  className={`w-full text-left px-4 py-3 hover:bg-surface flex items-start gap-3 ${abertaId === c.id ? 'bg-surface' : ''}`}
                 >
+                  <Avatar c={c} />
+                  <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-bold text-sm text-ink truncate">
                       {c.nome || c.telefone || c.contato}
@@ -1166,6 +1179,7 @@ export default function Chat() {
                       return t ? <Etiqueta key={id} nome={t.nome} cor={t.cor} /> : null;
                     })}
                   </div>
+                  </div>
                 </button>
               </li>
             ))}
@@ -1178,6 +1192,8 @@ export default function Chat() {
           ) : (
             <>
               <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-line">
+                <div className="flex items-center gap-3 min-w-0">
+                <Avatar c={aberta} tam={46} aoClicar={aberta.foto ? () => setFotoGrande({ url: aberta.foto as string }) : undefined} />
                 <div>
                   <div className="font-bold text-sm text-ink">
                     {nomeAgenda || (clienteCrm ? clienteCrm.razao ?? clienteCrm.nome : aberta.telefone || aberta.contato)}
@@ -1189,6 +1205,7 @@ export default function Chat() {
                     {NOME_CANAL[aberta.canal]}
                     {aberta.vendedorNome ? ` · em atendimento por ${doisNomes(aberta.vendedorNome)}` : ' · livre'}
                   </div>
+                </div>
                 </div>
                 {souAdmin && aberta.alertaEntrega && (
                   <button
