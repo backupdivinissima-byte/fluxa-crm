@@ -2,6 +2,8 @@ import { IconChat } from '../components/NavIcons';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import { mapaPosses, ouvirAgenda, transferirPosse, type Agendamento } from '../lib/agendaData';
 import { ouvirClientes, ouvirEmpresa, ouvirVendedores, atualizarCampoCliente, salvarCliente } from '../lib/crmData';
 import { acaoDaColuna, tagAutomaticaCliente } from '../lib/crmLogic';
@@ -360,7 +362,7 @@ export default function Chat() {
   const [novaCor, setNovaCor] = useState(PALETA[5]);
   const [erro, setErro] = useState('');
   const fimRef = useRef<HTMLDivElement>(null);
-  const [fotoGrande, setFotoGrande] = useState<{ url: string; link?: string } | null>(null);
+  const [fotoGrande, setFotoGrande] = useState<{ url: string; link?: string; contato?: boolean } | null>(null);
   const [gravando, setGravando] = useState(false);
   const [segGravacao, setSegGravacao] = useState(0);
   const gravadorRef = useRef<MediaRecorder | null>(null);
@@ -1193,7 +1195,7 @@ export default function Chat() {
             <>
               <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-line">
                 <div className="flex items-center gap-3 min-w-0">
-                <Avatar c={aberta} tam={46} aoClicar={aberta.foto ? () => setFotoGrande({ url: aberta.foto as string }) : undefined} />
+                <Avatar c={aberta} tam={46} aoClicar={aberta.foto ? () => { const id = aberta.id; setFotoGrande({ url: aberta.foto as string, contato: true }); if (empresaId && aberta.fotoGrande) void getDoc(doc(db, 'empresas', empresaId, 'chatConexoes', `foto_${id}`)).then((sn) => { const g = sn.data()?.grande as string | undefined; if (g) setFotoGrande((f) => (f?.contato ? { url: g, contato: true } : f)); }).catch(() => {}); } : undefined} />
                 <div>
                   <div className="font-bold text-sm text-ink">
                     {nomeAgenda || (clienteCrm ? clienteCrm.razao ?? clienteCrm.nome : aberta.telefone || aberta.contato)}
@@ -1726,7 +1728,7 @@ export default function Chat() {
           <button className="absolute top-4 right-5 text-white text-3xl leading-none" onClick={() => setFotoGrande(null)} title="Fechar">
             ×
           </button>
-          <img src={fotoGrande.url} alt="Foto ampliada" className="max-h-[88vh] max-w-[94vw] rounded-lg object-contain" onClick={(e) => e.stopPropagation()} />
+          <img src={fotoGrande.url} alt="Foto ampliada" className={`rounded-lg object-contain ${fotoGrande.contato ? "w-[min(92vw,520px)]" : "max-h-[88vh] max-w-[94vw]"}`} onClick={(e) => e.stopPropagation()} />
           <button
             type="button"
             className="mt-3 rounded-lg bg-white/15 text-white text-xs font-bold px-3 py-1.5 hover:bg-white/25"

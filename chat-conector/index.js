@@ -453,6 +453,7 @@ function precisaFoto(dados) {
   if (!dados) return true;
   const quando = dados.fotoEm ? new Date(dados.fotoEm).getTime() : 0;
   const idade = Date.now() - quando;
+  if (dados.foto && !dados.fotoGrande) return true; // ainda sem a versão grande
   return dados.foto ? idade > FOTO_VALIDADE_MS : idade > FOTO_RETENTAR_MS;
 }
 
@@ -482,8 +483,21 @@ async function processarFotos() {
             if (buf.length > 0 && buf.length < 120000) foto = `data:image/jpeg;base64,${buf.toString('base64')}`;
           }
         }
+        let grande = '';
+        if (foto) {
+          try {
+            const ug = await sock.profilePictureUrl(jid, 'image');
+            const rg = ug ? await fetch(ug) : null;
+            if (rg?.ok) {
+              const bg = Buffer.from(await rg.arrayBuffer());
+              if (bg.length > 0 && bg.length < 700000) grande = `data:image/jpeg;base64,${bg.toString('base64')}`;
+            }
+          } catch { /* fica só a miniatura */ }
+        }
+        // a versão grande fica fora da conversa (a lista de conversas continua leve) e é lida só ao clicar na foto
+        if (grande) await base.collection('chatConexoes').doc(`foto_${conversaId}`).set({ grande, em: new Date().toISOString() });
         await base.collection('conversas').doc(conversaId).set(
-          foto ? { foto, fotoEm: new Date().toISOString() } : { fotoEm: new Date().toISOString() },
+          foto ? { foto, fotoEm: new Date().toISOString(), fotoGrande: !!grande } : { fotoEm: new Date().toISOString() },
           { merge: true }
         );
       } catch (e) {
