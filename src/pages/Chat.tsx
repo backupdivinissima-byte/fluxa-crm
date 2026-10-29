@@ -473,7 +473,7 @@ export default function Chat() {
   const fonesInternos = useMemo(() => new Map(internos.map((t) => [fim9(t.numero), t])), [internos]);
   // Grupos de WhatsApp contam como internos: sem dono, visíveis e respondíveis por todos.
   const internoDe = (c?: ConversaChat | null): TelefoneInterno | undefined =>
-    !c ? undefined : c.grupo ? { id: c.id, numero: c.contato, nome: c.nome, setor: 'Grupo' } : fonesInternos.get(fim9(c.telefone ?? c.contato));
+    !c ? undefined : c.grupo ? { id: c.id, numero: c.contato, nome: c.nome, setor: 'Grupo' } : fonesInternos.get(fim9(c.telefone ?? c.contato)) ?? (c.interno ? { id: c.id, numero: c.contato, nome: c.nome, setor: c.internoSetor } : undefined);
   const posseDaConversa = (c: ConversaChat) => (c.clienteId ? posses.get(c.clienteId) : undefined) ?? posseFone.get((c.telefone ?? c.contato ?? '').replace(/\D/g, '').slice(-9));
   const bloqueadaPorPosse = (c: ConversaChat) => {
     if (souAdmin) return false;
@@ -493,7 +493,7 @@ export default function Chat() {
   const lista = useMemo(
     () =>
       visiveis.filter((c) =>
-        (filtro === 'internos' ? !!internoDe(c) : !internoDe(c)) &&
+        (filtro === 'internos' ? !!internoDe(c) : filtro === 'todas' || !internoDe(c)) &&
         (filtroTag === null ||
           (filtroTag.startsWith('origem:') ? origemDe(c) === filtroTag.slice(7) : !!c.tags?.includes(filtroTag.slice(4)))) &&
         (filtro === 'novos'
@@ -660,7 +660,7 @@ export default function Chat() {
     : undefined;
   // Contato salvo no Fluxa Chat: o nome salvo manda (antes o nome sugerido da agenda/perfil do celular passava na frente e o nome "voltava").
   const nomeAgenda = aberta ? (aberta.salvo ? aberta.nome || aberta.nomeSugerido : aberta.nomeSugerido || aberta.nome) || '' : '';
-  const donaDoAtendimento = aberta?.vendedorLogin && aberta.vendedorLogin !== meuLogin ? aberta.vendedorNome : '';
+  const donaDoAtendimento = !internoDe(aberta) && aberta?.vendedorLogin && aberta.vendedorLogin !== meuLogin ? aberta.vendedorNome : '';
 
   async function assumir(c: ConversaChat) {
     if (internoDe(c)) return; // número interno: ninguém assume

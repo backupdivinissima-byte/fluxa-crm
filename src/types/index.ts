@@ -382,6 +382,8 @@ export interface ConversaChat {
   atendimentoEm?: string; // ISO — quando o vendedor pegou
   origem?: 'trafego' | 'instagram'; // veio da landing page (senão a origem é o próprio canal)
   contatoJid?: string; // id interno do WhatsApp (usado no envio)
+  interno?: boolean; // número cadastrado como interno (marcado pelo conector)
+  internoSetor?: string;
   grupo?: boolean; // grupo de WhatsApp: sem dono, todos da equipe veem e respondem
   tags?: string[]; // ids das tags cadastradas (chatTags)
   nomeSugerido?: string; // nome que chegou pronto (agenda do celular ou perfil)

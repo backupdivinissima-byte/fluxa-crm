@@ -658,6 +658,7 @@ async function guardarMensagem(msg) {
       contato: numero,
       ...(jid.endsWith('@lid') ? {} : { telefone: numero }),
       contatoJid: jid,
+      ...(telefonesInternos.has(numero.slice(-9)) ? { interno: true } : {}),
       ...(sugestao ? { nomeSugerido: sugestao } : {}),
       ...(!jaSalvo && sugestao ? { nome: sugestao } : {}),
       ...(agenda.has(numero) ? { salvoNaAgenda: true } : {}),
@@ -922,6 +923,21 @@ async function iniciar() {
             telefonesInternos.clear();
             for (const t of sn.data()?.lista ?? []) { const k = String(t.numero ?? '').replace(/\D/g, '').slice(-9); if (k.length === 9) telefonesInternos.add(k); }
             console.log(`[internos] ${telefonesInternos.size} telefone(s) interno(s) cadastrado(s).`);
+            // Marca as conversas desses números como internas (o Chat usa a marca para liberar para todos).
+            void (async () => {
+              for (const t of sn.data()?.lista ?? []) {
+                let d = String(t.numero ?? '').replace(/\D/g, '');
+                if (d.startsWith('55') && d.length > 11) d = d.slice(2);
+                const ids = new Set([`whatsapp_55${d}`, `whatsapp_${d}`]);
+                if (d.length === 11) ids.add(`whatsapp_55${d.slice(0, 2)}${d.slice(3)}`);
+                for (const id of ids) {
+                  try {
+                    const ref = base.collection('conversas').doc(id);
+                    if ((await ref.get()).exists) await ref.set({ interno: true, internoSetor: t.setor || t.nome || 'Interno' }, { merge: true });
+                  } catch { /* tenta no próximo */ }
+                }
+              }
+            })();
           }, () => {});
         }
         if (!global.__pedirFotoOuvindo) {
