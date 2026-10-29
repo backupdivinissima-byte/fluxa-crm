@@ -673,3 +673,20 @@ export function ouvirFotoGrande(empresaId: string, conversaId: string, pedir: bo
     if (g) cb(g);
   }, () => {}));
 }
+
+// ---------- telefones internos (diretoria, financeiro, setores): ninguém "assume" esses atendimentos ----------
+export interface TelefoneInterno { id: string; numero: string; nome: string; setor?: string }
+
+const refInternos = (empresaId: string) => doc(db, 'empresas', empresaId, 'chatConexoes', 'telefonesInternos');
+
+export function ouvirTelefonesInternos(empresaId: string, cb: (l: TelefoneInterno[]) => void): Unsubscribe {
+  return aposChatPronto(() => onSnapshot(refInternos(empresaId), (sn) => cb(((sn.data()?.lista ?? []) as TelefoneInterno[])), () => cb([])));
+}
+
+export async function salvarTelefonesInternos(empresaId: string, lista: TelefoneInterno[]) {
+  await chatPronto;
+  await setDoc(refInternos(empresaId), { lista, atualizadoEm: new Date().toISOString() });
+}
+
+/** Últimos 9 dígitos: compara o telefone com ou sem DDI/DDD/nono dígito. */
+export const fim9 = (t?: string) => (t ?? '').replace(/\D/g, '').slice(-9);

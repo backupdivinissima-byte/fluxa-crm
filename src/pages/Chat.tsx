@@ -2,6 +2,7 @@ import { IconChat } from '../components/NavIcons';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import CadastroTelefonesChat from '../components/CadastroTelefonesChat';
 import { mapaPosses, ouvirAgenda, transferirPosse, type Agendamento } from '../lib/agendaData';
 import { ouvirClientes, ouvirEmpresa, ouvirVendedores, atualizarCampoCliente, salvarCliente } from '../lib/crmData';
 import { acaoDaColuna, tagAutomaticaCliente } from '../lib/crmLogic';
@@ -31,6 +32,9 @@ import {
   enviarAnexoChat,
   transferirConversa,
   ouvirFotoGrande,
+  ouvirTelefonesInternos,
+  fim9,
+  type TelefoneInterno,
   criarContatoChat,
   validarTelefoneWhatsApp,
   liberarConversa,
@@ -319,11 +323,13 @@ export default function Chat() {
   const [conversas, setConversas] = useState<ConversaChat[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [agendaTodos, setAgendaTodos] = useState<Agendamento[]>([]);
+  const [internos, setInternos] = useState<TelefoneInterno[]>([]);
+  const [abaChat, setAbaChat] = useState<'conversas' | 'telefones'>('conversas');
   const [leadsProspect, setLeadsProspect] = useState<Lead[]>([]);
   const [colunas, setColunas] = useState<ColunaCrm[]>([]);
   const [conexao, setConexao] = useState<ConexaoChat>({ status: 'desconectado' });
   const [filtroTag, setFiltroTag] = useState<string | null>(null); // 'origem:instagram' ou 'tag:<id>'
-  const [filtro, setFiltro] = useState<'todas' | 'novos' | 'minhas' | 'aguardando' | 'atendimento' | 'semresposta' | 'alerta'>('todas');
+  const [filtro, setFiltro] = useState<'todas' | 'novos' | 'minhas' | 'aguardando' | 'atendimento' | 'semresposta' | 'alerta' | 'internos'>('todas');
   const [abertaId, setAbertaId] = useState<string | null>(null);
   const [conversaFora, setConversaFora] = useState<ConversaChat | null>(null); // conversa aberta que não está entre as 300 da lista
   const [respondendo, setRespondendo] = useState<MensagemChat | null>(null);
@@ -373,6 +379,7 @@ export default function Chat() {
     const u1 = ouvirConversas(empresaId, setConversas);
     const u2 = ouvirClientes(empresaId, setClientes);
     const uAg = ouvirAgenda(empresaId, undefined, setAgendaTodos);
+    const uInt = ouvirTelefonesInternos(empresaId, setInternos);
     const uV = ouvirVendedores(empresaId, setVendedoresCrm);
     const u4 = ouvirEmpresa(empresaId, (e) => setColunas(e?.crmColunas && e.crmColunas.length > 0 ? e.crmColunas : CRM_COLUNAS_PADRAO));
     const u5 = ouvirConexaoWhatsapp(empresaId, setConexao);
@@ -381,6 +388,7 @@ export default function Chat() {
     return () => {
       uL();
       uAg();
+      uInt();
       u1();
       u2();
       uV();
@@ -461,6 +469,9 @@ export default function Chat() {
     }
     return m;
   }, [agendaTodos, posses]);
+  // Telefones internos (diretoria, financeiro…): ninguém assume; todos veem e respondem.
+  const fonesInternos = useMemo(() => new Map(internos.map((t) => [fim9(t.numero), t])), [internos]);
+  const internoDe = (c?: ConversaChat | null): TelefoneInterno | undefined => (c ? fonesInternos.get(fim9(c.telefone ?? c.contato)) : undefined);
   const posseDaConversa = (c: ConversaChat) => (c.clienteId ? posses.get(c.clienteId) : undefined) ?? posseFone.get((c.telefone ?? c.contato ?? '').replace(/\D/g, '').slice(-9));
   const bloqueadaPorPosse = (c: ConversaChat) => {
     if (souAdmin) return false;
@@ -468,18 +479,19 @@ export default function Chat() {
     return !!p && p.login !== meuLogin && (p.nome ?? '').trim().toLowerCase() !== (meuNome ?? '').trim().toLowerCase();
   };
   const visiveis = useMemo(
-    () => (souAdmin ? conversas : conversas.filter((c) => (!c.vendedorLogin || c.vendedorLogin === meuLogin) && !bloqueadaPorPosse(c))),
+    () => (souAdmin ? conversas : conversas.filter((c) => !!internoDe(c) || ((!c.vendedorLogin || c.vendedorLogin === meuLogin) && !bloqueadaPorPosse(c)))),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [conversas, souAdmin, meuLogin, posses, posseFone]
+    [conversas, souAdmin, meuLogin, posses, posseFone, fonesInternos]
   );
   // Novos = primeiro contato: ninguém assumiu e o telefone ainda não existe no CRM.
   // Novo contato = cliente que chamou pela PRIMEIRA vez (passivo, conversa criada por ele): ninguém atende, nunca foi
   // respondido, não está salvo e não tem cadastro no CRM.
   const ehNovo = (c: ConversaChat) =>
-    (c.primeiroContato === true || c.origem === 'trafego') && !c.vendedorLogin && !c.clienteId && !c.salvo && !c.teveResposta && !acharClientePorTelefone(clientes, c.telefone);
+    !internoDe(c) && (c.primeiroContato === true || c.origem === 'trafego') && !c.vendedorLogin && !c.clienteId && !c.salvo && !c.teveResposta && !acharClientePorTelefone(clientes, c.telefone);
   const lista = useMemo(
     () =>
       visiveis.filter((c) =>
+        (filtro === 'internos' ? !!internoDe(c) : !internoDe(c)) &&
         (filtroTag === null ||
           (filtroTag.startsWith('origem:') ? origemDe(c) === filtroTag.slice(7) : !!c.tags?.includes(filtroTag.slice(4)))) &&
         (filtro === 'novos'
@@ -497,7 +509,7 @@ export default function Chat() {
                     : true)
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [visiveis, filtro, filtroTag, meuLogin, clientes]
+    [visiveis, filtro, filtroTag, meuLogin, clientes, fonesInternos]
   );
 
   // Campainha: toca quando chega mensagem de um NOVO contato (conversa nova ou
@@ -520,10 +532,12 @@ export default function Chat() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visiveis, clientes]);
 
-  const aguardando = visiveis.filter((c) => !c.vendedorLogin && c.ultimaDe === 'cliente').length;
-  const emAtendimento = visiveis.filter((c) => !!c.vendedorLogin).length;
-  const semResposta = visiveis.filter((c) => c.ultimaDe === 'cliente').length;
-  const novos = visiveis.filter(ehNovo).length;
+  const clientesVis = visiveis.filter((c) => !internoDe(c));
+  const internosVis = visiveis.filter((c) => !!internoDe(c));
+  const aguardando = clientesVis.filter((c) => !c.vendedorLogin && c.ultimaDe === 'cliente').length;
+  const emAtendimento = clientesVis.filter((c) => !!c.vendedorLogin).length;
+  const semResposta = clientesVis.filter((c) => c.ultimaDe === 'cliente').length;
+  const novos = clientesVis.filter(ehNovo).length;
   // Mensagem que falhou e foi reenviada depois (pelo robô ou pela equipe) e chegou: o aviso vermelho deixa de valer.
   const reenviadaDepois = (m: MensagemChat) =>
     mensagens.some((n) => n.id !== m.id && n.de === 'equipe' && n.texto === m.texto && n.em > m.em && !n.erroEnvio && (n.entrega === 'entregue' || n.entrega === 'lida'));
@@ -647,6 +661,7 @@ export default function Chat() {
   const donaDoAtendimento = aberta?.vendedorLogin && aberta.vendedorLogin !== meuLogin ? aberta.vendedorNome : '';
 
   async function assumir(c: ConversaChat) {
+    if (internoDe(c)) return; // número interno: ninguém assume
     const pos = souAdmin ? undefined : posseDaConversa(c);
     if (pos && bloqueadaPorPosse(c)) {
       setErro(`Este cliente está em atendimento com ${pos.nome} até ${pos.ate.toLocaleDateString('pt-BR')}. Só depois desse prazo ele volta ao rodízio.`);
@@ -852,6 +867,20 @@ export default function Chat() {
 
   if (!empresaId) return null;
 
+  if (souAdmin && abaChat === 'telefones') {
+    return (
+      <div className="py-6 pr-6 pl-2 w-full space-y-3">
+        <h1 className="text-base font-extrabold text-ink mb-1">Fluxa Chat</h1>
+        <div className="flex gap-1 border-b border-line">
+        {([['conversas', '💬 Conversas'], ['telefones', '📞 Cadastro de telefones']] as const).map(([k, rot]) => (
+          <button key={k} onClick={() => setAbaChat(k)} className={`px-4 h-10 text-sm font-bold border-b-2 -mb-px ${abaChat === k ? 'border-teal-500 text-teal-600' : 'border-transparent text-ink-soft'}`}>{rot}</button>
+        ))}
+      </div>
+        <CadastroTelefonesChat empresaId={empresaId} />
+      </div>
+    );
+  }
+
   return (
     <div className={`${souAdmin ? 'py-6' : 'py-3'} pr-6 pl-2 w-full space-y-3`}>
       {encaminhando && (
@@ -970,6 +999,11 @@ export default function Chat() {
         </div>
       )}
 
+      {souAdmin && <div className="flex gap-1 border-b border-line">
+        {([['conversas', '💬 Conversas'], ['telefones', '📞 Cadastro de telefones']] as const).map(([k, rot]) => (
+          <button key={k} onClick={() => setAbaChat(k)} className={`px-4 h-10 text-sm font-bold border-b-2 -mb-px ${abaChat === k ? 'border-teal-500 text-teal-600' : 'border-transparent text-ink-soft'}`}>{rot}</button>
+        ))}
+      </div>}
       <div className="grid grid-cols-1 gap-3 items-stretch">
         <div className="space-y-2">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -977,6 +1011,7 @@ export default function Chat() {
         <Cartao ativo={filtro === 'atendimento'} onClick={() => setFiltro(filtro === 'atendimento' ? 'todas' : 'atendimento')} titulo="Em atendimento" valor={emAtendimento} dica="Conversas com um vendedor responsável" cor="verde" />
         <Cartao ativo={filtro === 'semresposta'} onClick={() => setFiltro(filtro === 'semresposta' ? 'todas' : 'semresposta')} titulo="Abertas sem resposta" valor={semResposta} dica="A última mensagem foi do cliente" cor="laranja" />
         <Cartao ativo={filtro === 'novos'} onClick={() => setFiltro(filtro === 'novos' ? 'todas' : 'novos')} titulo="Clientes novos" valor={novos} dica="Contatos sem cadastro no CRM" cor="azul" />
+        {internos.length > 0 && <Cartao ativo={filtro === 'internos'} onClick={() => setFiltro(filtro === 'internos' ? 'todas' : 'internos')} titulo="Telefones internos" valor={internosVis.length} dica="Diretoria e setores: ninguém assume, todos respondem" />}
       </div>
 
       {souAdmin && (
@@ -1166,6 +1201,7 @@ export default function Chat() {
                   </div>
                   <div className="flex flex-wrap gap-1 mt-1">
                     <Etiqueta nome={ORIGENS[origemDe(c)].nome} cor={ORIGENS[origemDe(c)].cor} />
+                    {internoDe(c) && <Etiqueta nome={`Interno · ${internoDe(c)?.setor || internoDe(c)?.nome}`} cor="#7C3AED" />}
                     {(() => {
                       const k = (c.telefone ?? '').replace(/\D/g, '').slice(-9);
                       const cli = (c.clienteId ? clientes.find((x) => x.id === c.clienteId) : undefined) ?? (k.length === 9 ? clientes.find((x) => (x.telefone ?? '').replace(/\D/g, '').slice(-9) === k) : undefined);
@@ -1210,7 +1246,7 @@ export default function Chat() {
                   {(aberta.telefone || clienteCrm?.telefone) && <div className="text-[11px] text-ink-soft">{aberta.telefone || clienteCrm?.telefone}</div>}
                   <div className="text-[11px] text-ink-soft">
                     {NOME_CANAL[aberta.canal]}
-                    {aberta.vendedorNome ? ` · em atendimento por ${doisNomes(aberta.vendedorNome)}` : ' · livre'}
+                    {internoDe(aberta) ? ` · 🏢 telefone interno (${internoDe(aberta)?.nome}) — todos podem responder` : aberta.vendedorNome ? ` · em atendimento por ${doisNomes(aberta.vendedorNome)}` : ' · livre'}
                   </div>
                 </div>
                 </div>
@@ -1250,7 +1286,7 @@ export default function Chat() {
                     </a>
                   );
                 })()}
-                {!aberta.vendedorLogin && !souAdmin && (
+                {!aberta.vendedorLogin && !souAdmin && !internoDe(aberta) && (
                   <button
                     onClick={() => void assumir(aberta)}
                     className="rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-xs font-bold px-3 py-2 hover:opacity-90"
@@ -1288,7 +1324,7 @@ export default function Chat() {
                   </button>
                 )}
               </div>
-              {(!aberta.salvo || editando) && (
+              {(!aberta.salvo || editando) && !internoDe(aberta) && (
                 <div className="flex flex-wrap items-center gap-2 px-4 py-2 border-b border-line bg-amber-50 text-xs">
                   <input
                     value={codigoCliente}
@@ -1440,7 +1476,7 @@ export default function Chat() {
                 <div ref={fimRef} />
               </div>
               <div className="border-t border-line p-3">
-                {!aberta.vendedorLogin && !souAdmin ? (
+                {!aberta.vendedorLogin && !souAdmin && !internoDe(aberta) ? (
                   <p className="text-xs text-ink-soft">Clique em "Assumir atendimento" para responder. O cliente entra no seu CRM em "Em Atendimento".</p>
                 ) : donaDoAtendimento && !souAdmin ? (
                   <p className="text-xs text-ink-soft">Este atendimento é de {donaDoAtendimento}.</p>

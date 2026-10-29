@@ -445,6 +445,7 @@ function origemPeloTexto(texto) {
 // ---------- foto de perfil do contato (como no WhatsApp Web) ----------
 const FOTO_VALIDADE_MS = 3 * 86400000; // renova a foto a cada 3 dias
 const FOTO_RETENTAR_MS = 1 * 86400000; // contato sem foto/privado: tenta de novo em 1 dia
+const telefonesInternos = new Set(); // últimos 9 dígitos dos números cadastrados como internos (diretoria, financeiro…)
 const fotoFila = [];
 const fotoNaFila = new Set();
 let fotoRodando = false;
@@ -675,6 +676,7 @@ async function botEnviar(conversaRef, jid, texto) {
   await conversaRef.set({ ultimaMensagem: texto, ultimaEm: em, ultimaDe: 'equipe', botEm: em }, { merge: true });
 }
 async function botBoasVindas({ conversaRef, antes, depois, jid, texto, primeiroContato }) {
+  if (telefonesInternos.has(soDigitos(jid).slice(-9))) return; // número interno: sem robô de boas-vindas
   if (!(await botEstaLigado()) || !jid || !sock || !aberto) return;
   const d = depois ?? {};
   if (d.teveResposta) return; // um humano já respondeu
@@ -835,6 +837,14 @@ async function iniciar() {
         robo?.conectou();
         setTimeout(() => void preencherFotos(), 30000);
         // Pedido do Chat: alguém clicou numa foto que ainda não tem a versão grande → busca na hora, na frente da fila.
+        if (!global.__internosOuvindo) {
+          global.__internosOuvindo = true;
+          base.collection('chatConexoes').doc('telefonesInternos').onSnapshot((sn) => {
+            telefonesInternos.clear();
+            for (const t of sn.data()?.lista ?? []) { const k = String(t.numero ?? '').replace(/\D/g, '').slice(-9); if (k.length === 9) telefonesInternos.add(k); }
+            console.log(`[internos] ${telefonesInternos.size} telefone(s) interno(s) cadastrado(s).`);
+          }, () => {});
+        }
         if (!global.__pedirFotoOuvindo) {
           global.__pedirFotoOuvindo = true;
           base.collection('chatConexoes').doc('pedirFoto').onSnapshot(async (sn) => {
