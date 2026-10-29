@@ -1008,7 +1008,7 @@ export default function Chat() {
         </div>
       )}
 
-      {aba === 'dash' && <div onClick={() => setAbaChat('conversas')} className="grid grid-cols-1 gap-3 items-stretch">
+      {aba === 'dash' && <div className="grid grid-cols-1 gap-3 items-stretch">
         <div className="space-y-2">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         <Cartao ativo={filtro === 'aguardando'} onClick={() => setFiltro(filtro === 'aguardando' ? 'todas' : 'aguardando')} titulo="Aguardando atendimento" valor={aguardando} dica="Clientes sem vendedor esperando resposta" />
@@ -1086,6 +1086,40 @@ export default function Chat() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {aba === 'dash' && (filtro !== 'todas' || filtroTag !== null) && (
+        <div className="bg-white border border-line rounded-2xl overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-line bg-surface">
+            <span className="text-sm font-extrabold text-ink">
+              {[
+                filtro === 'aguardando' ? 'Aguardando atendimento' : filtro === 'atendimento' ? 'Em atendimento' : filtro === 'semresposta' ? 'Abertas sem resposta' : filtro === 'novos' ? 'Clientes novos' : filtro === 'internos' ? 'Internos e grupos' : filtro === 'alerta' ? 'Com alerta de entrega' : filtro === 'minhas' ? 'Em atendimento' : '',
+                filtroTag === null ? '' : `Tag ${filtroTag.startsWith('origem:') ? ORIGENS[filtroTag.slice(7) as keyof typeof ORIGENS]?.nome ?? filtroTag.slice(7) : tags.find((t) => t.id === filtroTag.slice(4))?.nome ?? ''}`,
+              ].filter(Boolean).join(' + ')}{' '}
+              ({lista.length})
+            </span>
+            <button onClick={() => { setFiltro('todas'); setFiltroTag(null); }} className="text-xs font-bold text-teal-700 underline">Limpar</button>
+          </div>
+          <ul className="max-h-[480px] overflow-y-auto divide-y divide-line">
+            {lista.length === 0 && <li className="p-6 text-sm text-ink-soft text-center">Nenhum contato nesta lista.</li>}
+            {lista.map((c) => (
+              <li key={c.id}>
+                <button
+                  onClick={() => { setAbertaId(c.id); setAbaChat('conversas'); }}
+                  className="w-full text-left px-4 py-2 hover:bg-surface flex items-center gap-3"
+                  title="Abrir a conversa"
+                >
+                  <Avatar c={c} />
+                  <span className="flex-1 min-w-0 font-bold text-sm text-ink truncate">{c.nome || c.telefone || c.contato}</span>
+                  <span className="text-xs text-ink-soft shrink-0 w-14 text-right">{hora(c.ultimaEm)}</span>
+                  <span className="text-xs shrink-0 w-48 truncate text-right">
+                    {internoDe(c) ? <span className="font-bold text-purple-700">{c.grupo ? 'Grupo' : 'Interno'} · todos</span> : c.vendedorNome ? <span className="font-bold text-teal-700">{doisNomes(c.vendedorNome)}</span> : <span className="text-ink-soft">Sem vendedor</span>}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
