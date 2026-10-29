@@ -471,7 +471,9 @@ export default function Chat() {
   }, [agendaTodos, posses]);
   // Telefones internos (diretoria, financeiro…): ninguém assume; todos veem e respondem.
   const fonesInternos = useMemo(() => new Map(internos.map((t) => [fim9(t.numero), t])), [internos]);
-  const internoDe = (c?: ConversaChat | null): TelefoneInterno | undefined => (c ? fonesInternos.get(fim9(c.telefone ?? c.contato)) : undefined);
+  // Grupos de WhatsApp contam como internos: sem dono, visíveis e respondíveis por todos.
+  const internoDe = (c?: ConversaChat | null): TelefoneInterno | undefined =>
+    !c ? undefined : c.grupo ? { id: c.id, numero: c.contato, nome: c.nome, setor: 'Grupo' } : fonesInternos.get(fim9(c.telefone ?? c.contato));
   const posseDaConversa = (c: ConversaChat) => (c.clienteId ? posses.get(c.clienteId) : undefined) ?? posseFone.get((c.telefone ?? c.contato ?? '').replace(/\D/g, '').slice(-9));
   const bloqueadaPorPosse = (c: ConversaChat) => {
     if (souAdmin) return false;
@@ -1011,7 +1013,7 @@ export default function Chat() {
         <Cartao ativo={filtro === 'atendimento'} onClick={() => setFiltro(filtro === 'atendimento' ? 'todas' : 'atendimento')} titulo="Em atendimento" valor={emAtendimento} dica="Conversas com um vendedor responsável" cor="verde" />
         <Cartao ativo={filtro === 'semresposta'} onClick={() => setFiltro(filtro === 'semresposta' ? 'todas' : 'semresposta')} titulo="Abertas sem resposta" valor={semResposta} dica="A última mensagem foi do cliente" cor="laranja" />
         <Cartao ativo={filtro === 'novos'} onClick={() => setFiltro(filtro === 'novos' ? 'todas' : 'novos')} titulo="Clientes novos" valor={novos} dica="Contatos sem cadastro no CRM" cor="azul" />
-        {internos.length > 0 && <Cartao ativo={filtro === 'internos'} onClick={() => setFiltro(filtro === 'internos' ? 'todas' : 'internos')} titulo="Telefones internos" valor={internosVis.length} dica="Diretoria e setores: ninguém assume, todos respondem" />}
+        {(internos.length > 0 || internosVis.length > 0) && <Cartao ativo={filtro === 'internos'} onClick={() => setFiltro(filtro === 'internos' ? 'todas' : 'internos')} titulo="Internos e grupos" valor={internosVis.length} dica="Diretoria e setores: ninguém assume, todos respondem" />}
       </div>
 
       {souAdmin && (
@@ -1438,6 +1440,9 @@ export default function Chat() {
                         </a>
                       ) : (
                         m.midiaTipo === 'video' && !m.midiaPartes && <div className="text-[11px] italic mb-1">🎥 Vídeo (veja o original no celular)</div>
+                      )}
+                      {m.de === 'cliente' && m.participante && (
+                        <div className="text-[11px] font-bold text-purple-700 mb-0.5">{m.participante}</div>
                       )}
                       {m.de === 'equipe' && m.autor && m.autor !== 'Celular' && (
                         <div className="text-[11px] font-bold text-teal-700 mb-0.5">{m.autor}</div>

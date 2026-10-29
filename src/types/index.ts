@@ -382,6 +382,7 @@ export interface ConversaChat {
   atendimentoEm?: string; // ISO — quando o vendedor pegou
   origem?: 'trafego' | 'instagram'; // veio da landing page (senão a origem é o próprio canal)
   contatoJid?: string; // id interno do WhatsApp (usado no envio)
+  grupo?: boolean; // grupo de WhatsApp: sem dono, todos da equipe veem e respondem
   tags?: string[]; // ids das tags cadastradas (chatTags)
   nomeSugerido?: string; // nome que chegou pronto (agenda do celular ou perfil)
   salvo?: boolean; // a equipe confirmou o nome na agenda do Fluxa Chat
@@ -396,6 +397,7 @@ export interface MensagemChat {
   texto: string;
   em: string; // ISO
   autor?: string; // nome de quem da equipe enviou
+  participante?: string; // grupos: nome de quem escreveu
   midiaTipo?: 'imagem' | 'video' | 'audio' | 'documento';
   midiaLink?: string; // arquivo completo no Google Drive
   midiaUrl?: string; // data URL (imagem ou miniatura do vídeo)

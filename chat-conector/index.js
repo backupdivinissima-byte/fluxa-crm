@@ -545,8 +545,87 @@ async function preencherFotos() {
   }
 }
 
+// ---- Grupos de WhatsApp ---------------------------------------------------------------------
+// Cada grupo vira uma conversa (whatsapp_grupo_<id>) marcada com grupo:true. Sem robô de boas-vindas,
+// sem IA supervisora e sem dono: todos da equipe veem e respondem. Cada mensagem guarda quem escreveu.
+const nomesGrupos = new Map(); // jid -> { nome, em }
+async function nomeDoGrupo(jid) {
+  const c = nomesGrupos.get(jid);
+  if (c && Date.now() - c.em < 30 * 60 * 1000) return c.nome;
+  try {
+    const meta = await sock.groupMetadata(jid);
+    const nome = String(meta?.subject ?? '').trim();
+    if (nome) {
+      nomesGrupos.set(jid, { nome, em: Date.now() });
+      return nome;
+    }
+  } catch {
+    /* usa o último nome conhecido */
+  }
+  return c?.nome ?? '';
+}
+
+async function guardarMensagemGrupo(msg) {
+  const jid = msg.key.remoteJid;
+  if (msg.key.fromMe && enviadasPorNos.has(msg.key.id)) return;
+  if (robo?.ehTeste(msg.key.id)) return;
+  const texto = textoDe(msg);
+  if (texto === null) return;
+  const quando = new Date(Number(msg.messageTimestamp ?? Date.now() / 1000) * 1000).toISOString();
+  const deCliente = !msg.key.fromMe;
+  const chave = `grupo_${jid.split('@')[0]}`;
+  if (MODO_TESTE) {
+    console.log(`[GRUPO ${chave}] ${msg.pushName || ''}: ${texto}`);
+    return;
+  }
+  const conversaRef = base.collection('conversas').doc(`whatsapp_${chave}`);
+  if ((await conversaRef.collection('mensagens').doc(msg.key.id).get()).exists) return;
+  const antes = await conversaRef.get();
+  const nomeGrupo = (await nomeDoGrupo(jid)) || antes.data()?.nome || 'Grupo';
+  const k = msg.key;
+  const quem = [k.participantPn, k.participant].find((x) => typeof x === 'string' && x.endsWith('@s.whatsapp.net')) ?? (typeof k.participant === 'string' && k.participant.endsWith('@lid') ? (lidParaTel.get(soDigitos(k.participant)) ? `${lidParaTel.get(soDigitos(k.participant))}@s.whatsapp.net` : k.participant) : '');
+  const quemNumero = quem && quem.endsWith('@s.whatsapp.net') ? soDigitos(quem) : '';
+  const quemNome = deCliente ? msg.pushName || agenda.get(quemNumero) || quemNumero || 'Participante' : '';
+  const midia = await midiaDe(msg, chave);
+  const resumo = deCliente ? `${quemNome}: ${texto}` : texto;
+  await conversaRef.set(
+    {
+      canal: 'whatsapp',
+      grupo: true,
+      salvo: true,
+      contato: chave,
+      contatoJid: jid,
+      nome: nomeGrupo,
+      ultimaMensagem: resumo,
+      ultimaEm: quando,
+      ultimaDe: deCliente ? 'cliente' : 'equipe',
+      ...(deCliente ? { naoLidas: FieldValue.increment(1) } : { teveResposta: true }),
+    },
+    { merge: true }
+  );
+  pedirFoto(`whatsapp_${chave}`, jid, antes.data());
+  const msgRef = conversaRef.collection('mensagens').doc(msg.key.id);
+  const citada = extrairCitada(msg);
+  await msgRef.set({
+    de: deCliente ? 'cliente' : 'equipe',
+    texto,
+    em: quando,
+    ...(deCliente ? { participante: quemNome, ...(quemNumero ? { participanteNumero: quemNumero } : {}) } : { autor: 'Celular' }),
+    ...(midia ?? {}),
+    ...(citada ? { citada } : {}),
+  });
+  const bufPartes = partesPendentes.get(msg.key.id);
+  if (bufPartes) {
+    partesPendentes.delete(msg.key.id);
+    for (let i = 0; i * TAM_PARTE < bufPartes.length; i++) {
+      await msgRef.collection('partes').doc(String(i).padStart(4, '0')).set({ n: i, dados: bufPartes.subarray(i * TAM_PARTE, (i + 1) * TAM_PARTE) });
+    }
+  }
+}
+
 async function guardarMensagem(msg) {
   await aprenderDaMensagem(msg);
+  if (msg.key?.remoteJid?.endsWith('@g.us')) return guardarMensagemGrupo(msg);
   const jid = jidDe(msg);
   if (!jid) return; // ignora grupos, status e listas
   if (msg.key.fromMe && enviadasPorNos.has(msg.key.id)) return;
