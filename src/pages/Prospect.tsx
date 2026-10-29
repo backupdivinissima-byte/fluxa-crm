@@ -11,6 +11,8 @@ import {
   buscarLugares,
   definirEstadoRodizio,
   enviarAoRodizio,
+  posseVencida,
+  diasRestantesPosse,
   transferirParaAtendimento,
   consultarCnpj,
   googleConfigurado,
@@ -137,20 +139,29 @@ export default function Prospect() {
       setErro(e instanceof Error ? e.message : 'Não consegui mudar o rodízio.');
     }
   }
+  /** Tira o lead da tela do vendedor anterior (posse de 30 dias vencida) antes de entregar a outro. */
+  async function liberarPosse(l: Lead) {
+    if (!empresaId) return;
+    const itens = agenda.filter((a) => a.clienteId === l.clienteId && a.origem === 'rodizio' && a.status === 'pendente');
+    for (const a of itens) await removerAgendamento(empresaId, a.id);
+  }
   async function gerarRodizioProspect() {
     if (!empresaId) return;
     if (estadoRodizio !== 'ativo') return setErro(`O rodízio está ${estadoRodizio}. Ative para distribuir leads.`);
     const ativos = vendedores.filter((v) => v.ativo);
     if (ativos.length === 0) return setErro('Não há vendedor ativo para receber os leads.');
-    const fila = salvos.filter((l) => l.status === 'novo' && !l.rodizioLogin && !!l.whatsapp).sort((x, y) => y.nota - x.nota);
+    const fila = salvos.filter((l) => ((l.status === 'novo' && !l.rodizioLogin) || posseVencida(l)) && !!l.whatsapp).sort((x, y) => y.nota - x.nota);
     if (fila.length === 0) return setErro('Não há leads novos com WhatsApp para distribuir.');
     if (!window.confirm(`Distribuir ${fila.length} leads novos entre ${ativos.length} vendedor(es)? Cada lead explode na tela do vendedor.`)) return;
     const carga: Record<string, number> = {};
     for (const v of ativos) carga[v.login] = agenda.filter((a) => a.vendedorLogin === v.login && a.status === 'pendente').length;
     try {
       for (const l of fila) {
-        const v = [...ativos].sort((x, y) => carga[x.login] - carga[y.login])[0];
+        // lead com posse vencida vai para OUTRO vendedor (se houver) e sai da tela do anterior
+        const candidatos = ativos.filter((x) => x.login !== l.rodizioLogin);
+        const v = [...(candidatos.length ? candidatos : ativos)].sort((x, y) => carga[x.login] - carga[y.login])[0];
         carga[v.login]++;
+        if (posseVencida(l)) await liberarPosse(l);
         await enviarAoRodizio(empresaId, l, { login: v.login, nome: v.nome }, meuNome, clientes);
       }
       setMsg(`${fila.length} leads distribuídos no rodízio de prospect.`);
@@ -176,8 +187,10 @@ export default function Prospect() {
     const ativos = vendedores.filter((v) => v.ativo);
     if (ativos.length === 0) return setErro('Não há vendedor ativo para receber o lead.');
     const carga = (login: string) => agenda.filter((a) => a.vendedorLogin === login && a.status === 'pendente').length;
-    const v = [...ativos].sort((x, y) => carga(x.login) - carga(y.login))[0];
+    const candidatos = ativos.filter((x) => x.login !== l.rodizioLogin);
+    const v = [...(candidatos.length ? candidatos : ativos)].sort((x, y) => carga(x.login) - carga(y.login))[0];
     try {
+      if (posseVencida(l)) await liberarPosse(l);
       await enviarAoRodizio(empresaId, l, { login: v.login, nome: v.nome }, meuNome, clientes);
       if (l.status === 'descartado') await atualizarLead(empresaId, l.id, { status: 'novo' });
       setMsg(`${l.nome} foi para o rodízio: ${v.nome} recebe o lead na tela agora.`);
@@ -384,12 +397,12 @@ export default function Prospect() {
               {(l.status === 'contatado' || l.status === 'interessado') && !souAdmin && (
                 <button onClick={() => void transferir(l)} className="text-xs font-bold rounded-lg px-3 py-1.5 bg-orange-500 text-white" title="Leva o lead para o CRM, coluna Em atendimento, com a tag Prospect">Transferir para atendimento</button>
               )}
-              {souAdmin && l.status !== 'transferido' && !l.rodizioLogin && (
+              {souAdmin && l.status !== 'transferido' && (!l.rodizioLogin || posseVencida(l)) && (
                 <button onClick={() => void mandarRodizio(l)} className="text-xs font-bold rounded-lg px-3 py-1.5 bg-violet-600 text-white" title="Entrega o lead a um vendedor: explode na tela dele para iniciar o atendimento">Enviar ao rodízio</button>
               )}
               {l.rodizioLogin && l.status !== 'transferido' && (
                 <>
-                  <span className="text-[11px] font-bold text-violet-700">no rodízio</span>
+                  <span className="text-[11px] font-bold text-violet-700">{posseVencida(l) ? 'posse de 30 dias vencida — volta ao rodízio' : `no rodízio${diasRestantesPosse(l) !== null ? ` · ${diasRestantesPosse(l)} dia(s) com o vendedor` : ''}`}</span>
                   {souAdmin && <button onClick={() => void tirarDoRodizio(l)} className="text-xs font-bold border border-violet-300 text-violet-700 rounded-lg px-2 py-1">Tirar do rodízio</button>}
                 </>
               )}

@@ -34,6 +34,7 @@ export interface Lead {
   atualizadoEm?: string;
   clienteId?: string; // cliente criado no CRM ao transferir
   rodizioLogin?: string; // vendedor que recebeu o lead pelo rodízio do admin
+  rodizioEm?: string; // quando o vendedor recebeu (a posse dura 30 dias; depois o lead volta à fila)
 }
 
 const CHAVE_GOOGLE = (import.meta.env.VITE_GOOGLE_PLACES_KEY as string | undefined) ?? '';
@@ -223,7 +224,20 @@ export async function enviarAoRodizio(empresaId: string, lead: Lead, vendedor: {
       lembreteEm: agora.toISOString(),
     },
   ]);
-  await atualizarLead(empresaId, lead.id, { clienteId: id, rodizioLogin: vendedor.login });
+  await atualizarLead(empresaId, lead.id, { clienteId: id, rodizioLogin: vendedor.login, rodizioEm: agora.toISOString() });
+}
+
+/** Dias que o vendedor fica com o cliente/lead que assumiu no rodízio; depois volta à fila para outro vendedor. */
+export const DIAS_POSSE_RODIZIO = 30;
+
+/** O lead está com um vendedor há mais de 30 dias sem virar atendimento: volta ao rodízio. */
+export function posseVencida(l: Lead, agora = Date.now()): boolean {
+  if (!l.rodizioLogin || !l.rodizioEm || l.status === 'transferido' || l.status === 'descartado') return false;
+  return agora - new Date(l.rodizioEm).getTime() >= DIAS_POSSE_RODIZIO * 86400000;
+}
+export function diasRestantesPosse(l: Lead, agora = Date.now()): number | null {
+  if (!l.rodizioLogin || !l.rodizioEm) return null;
+  return Math.max(0, Math.ceil(DIAS_POSSE_RODIZIO - (agora - new Date(l.rodizioEm).getTime()) / 86400000));
 }
 
 export async function definirEstadoRodizio(empresaId: string, estado: 'ativo' | 'pausado' | 'desativado') {

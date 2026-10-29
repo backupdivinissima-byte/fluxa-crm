@@ -260,9 +260,11 @@ export default function Agenda() {
     const cv = cli ? conversaDe(cli) : conversas.find((x) => fim8(x.telefone ?? x.contato) === fim8(a.telefone));
     const diasConv = cv ? Math.floor((Date.now() - new Date(cv.ultimaEm).getTime()) / 86400000) : 0;
     const clicavel = a.status === 'pendente';
+    // Cliente do rodízio: clicar abre direto a conversa no WhatsApp.
+    const abreChat = a.origem === 'rodizio' && !!a.telefone;
     return (
       <div key={a.id} className="py-2">
-        <div className={`flex-1 min-w-0 ${clicavel ? 'cursor-pointer hover:bg-surface rounded-lg -m-1 p-1' : ''}`} onClick={() => clicavel && abrirParaReagendar(a)} title={clicavel ? 'Clique para anotar e reagendar' : undefined}>
+        <div className={`flex-1 min-w-0 ${clicavel || abreChat ? 'cursor-pointer hover:bg-surface rounded-lg -m-1 p-1' : ''}`} onClick={() => (abreChat ? abrirChat(a.telefone, a.clienteNome) : clicavel && abrirParaReagendar(a))} title={abreChat ? 'Clique para abrir a conversa no WhatsApp' : clicavel ? 'Clique para anotar e reagendar' : undefined}>
           <div className="flex items-start gap-2">
             <div className="font-extrabold text-ink text-sm whitespace-nowrap">{comData ? `${formatarDataCurta(a.data).slice(0, 5)} ${a.hora}` : a.hora}</div>
             <div className="min-w-0 flex-1">
@@ -282,6 +284,7 @@ export default function Agenda() {
         </div>
         <div className="flex flex-row flex-wrap justify-end gap-2 mt-2">
           {a.telefone && <button onClick={() => abrirChat(a.telefone, a.clienteNome)} className="text-sm font-bold border border-line rounded-lg px-3 py-1.5 hover:bg-surface">Chat</button>}
+          {abreChat && clicavel && <button onClick={() => abrirParaReagendar(a)} className="text-sm font-bold border border-line text-ink-soft rounded-lg px-3 py-1.5 hover:bg-surface">Reagendar</button>}
           {a.status === 'pendente' && <button onClick={() => { setConcluindo(a); setResultado(''); }} className="text-sm font-bold border border-emerald-300 text-emerald-700 rounded-lg px-3 py-1.5 hover:bg-emerald-50">Concluir</button>}
           {ehAdmin && (
             <button onClick={() => { if (empresaId && window.confirm('Excluir este agendamento?')) void removerAgendamento(empresaId, a.id); }} className="text-sm font-bold border border-line text-ink-soft rounded-lg px-3 py-1.5 hover:bg-surface">Excluir</button>
@@ -496,7 +499,7 @@ export default function Agenda() {
             <h3 className="font-extrabold text-ink">Rodízio de clientes inativos</h3>
             <p className="text-sm text-ink-soft mt-2">
               Inativos disponíveis (mais de {diasInatividade} dias sem compra, com telefone, sem agendamento pendente): <b>{plano.inativosDisponiveis}</b>.
-              São até {INATIVOS_POR_DIA} por vendedor por dia útil, começando pelos que compraram mais recentemente, até os mais antigos. Cliente já contatado no mês descansa até o mês seguinte; se continuar sem comprar, volta ao rodízio para OUTRO vendedor.
+              São até {INATIVOS_POR_DIA} por vendedor por dia útil, começando pelos que compraram mais recentemente, até os mais antigos. O vendedor que assume o cliente fica com ele por 30 dias; passado esse prazo, se continuar sem comprar, o cliente volta ao rodízio para OUTRO vendedor.
             </p>
             {plano.itens.length === 0 ? (
               <p className="text-sm mt-3 text-red-600 font-semibold">Nada para agendar (sem inativos disponíveis ou sem vendedores ativos).</p>

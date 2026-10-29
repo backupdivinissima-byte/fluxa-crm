@@ -21,6 +21,7 @@ export interface Agendamento {
   criadoPor?: string;
   lembreteEm: string; // ISO: quando o lembrete deve abrir
   leadId?: string; // lead do Prospect de origem
+  posseEm?: string; // quando o vendedor assumiu o cliente no rodízio (ou recebeu por transferência): a posse dura 30 dias
   prospect?: boolean; // lead do Fluxa Prospect entregue pelo rodízio
   adiado?: boolean; // só pode adiar uma vez
   resultado?: string; // o que foi conversado no contato
@@ -111,6 +112,8 @@ export function nomeDoDia(iso: string): string {
 
 // ---------- rodízio de inativos ----------
 export const INATIVOS_POR_DIA = 10;
+/** Dias que o vendedor fica com o cliente inativo que assumiu no rodízio. */
+export const DIAS_POSSE_RODIZIO_INATIVOS = 30;
 
 export interface PlanoRodizio {
   itens: Array<Omit<Agendamento, 'id'>>;
@@ -141,6 +144,10 @@ export function planejarRodizio(
   const vencidos = agenda.filter((a) => a.status === 'pendente' && a.data < hojeISO0);
   const idsVencidos = new Set(vencidos.map((a) => a.id));
   const bloqueados = new Set(agenda.filter((a) => a.status === 'pendente' && !idsVencidos.has(a.id)).map((a) => a.clienteId));
+  // Posse de 30 dias: o vendedor que assumiu o cliente no rodízio fica com ele por 30 dias (mesmo vencido ou já contatado).
+  // Passado esse prazo o cliente volta à fila e é entregue a OUTRO vendedor.
+  const limitePosse = new Date(agora.getTime() - DIAS_POSSE_RODIZIO_INATIVOS * 86400000).toISOString();
+  for (const a of agenda) if (a.origem === 'rodizio' && !a.prospect && (a.criadoEm ?? '') >= limitePosse) bloqueados.add(a.clienteId);
   // Contato já feito neste mês: o cliente descansa até o mês seguinte (se continuar sem comprar, volta ao rodízio).
   for (const a of agenda) if (a.status === 'feito' && a.data.startsWith(mesAtual)) bloqueados.add(a.clienteId);
   // Quem já tentou esse cliente (últimos 90 dias) — o rodízio entrega o cliente a OUTRO vendedor.
@@ -209,4 +216,42 @@ export function planejarRodizio(
     }
   }
   return { itens, inativosDisponiveis, porVendedor, dias, remover: [...removerIds], reatribuidos };
+}
+
+
+// ---------- posse de 30 dias no rodízio ----------
+export interface Posse { clienteId: string; login: string; nome: string; desde: string; ate: Date }
+
+/** Quem está com cada cliente do rodízio: o vendedor fica 30 dias e, nesse prazo, outro vendedor não acessa o cliente. */
+export function mapaPosses(agenda: Agendamento[], agora: Date = new Date()): Map<string, Posse> {
+  const ultimo = new Map<string, Agendamento>();
+  for (const a of agenda) {
+    if (a.origem !== 'rodizio') continue;
+    const atual = ultimo.get(a.clienteId);
+    if (!atual || (a.posseEm ?? a.criadoEm ?? '') > (atual.posseEm ?? atual.criadoEm ?? '')) ultimo.set(a.clienteId, a);
+  }
+  const m = new Map<string, Posse>();
+  for (const [clienteId, a] of ultimo) {
+    const desde = a.posseEm ?? a.criadoEm;
+    if (!desde) continue;
+    const ate = new Date(new Date(desde).getTime() + DIAS_POSSE_RODIZIO_INATIVOS * 86400000);
+    if (ate.getTime() > agora.getTime()) m.set(clienteId, { clienteId, login: a.vendedorLogin, nome: a.vendedorNome, desde, ate });
+  }
+  return m;
+}
+
+/** Passa a posse do cliente para outro vendedor (o prazo de 30 dias recomeça). */
+export async function transferirPosse(empresaId: string, agenda: Agendamento[], clienteId: string, para: { login: string; nome: string }) {
+  const agora = new Date().toISOString();
+  const doCliente = agenda.filter((a) => a.origem === 'rodizio' && a.clienteId === clienteId);
+  if (doCliente.length === 0) return;
+  const ultimo = [...doCliente].sort((x, y) => (y.posseEm ?? y.criadoEm ?? '').localeCompare(x.posseEm ?? x.criadoEm ?? ''))[0];
+  for (const a of doCliente) {
+    if (a.status === 'pendente' || a.id === ultimo.id) {
+      await updateDoc(doc(col(empresaId), a.id), { vendedorLogin: para.login, vendedorNome: para.nome, posseEm: agora });
+    }
+  }
+  if (ultimo.leadId) {
+    await updateDoc(doc(db, 'empresas', empresaId, 'prospectLeads', ultimo.leadId), { rodizioLogin: para.login, rodizioEm: agora }).catch(() => {});
+  }
 }

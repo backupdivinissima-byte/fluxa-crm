@@ -2,6 +2,7 @@ import { IconChat } from '../components/NavIcons';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { mapaPosses, ouvirAgenda, transferirPosse, type Agendamento } from '../lib/agendaData';
 import { ouvirClientes, ouvirEmpresa, ouvirVendedores, atualizarCampoCliente, salvarCliente } from '../lib/crmData';
 import { acaoDaColuna, tagAutomaticaCliente } from '../lib/crmLogic';
 import { ouvirLeads, type Lead } from '../lib/prospectData';
@@ -305,6 +306,7 @@ export default function Chat() {
 
   const [conversas, setConversas] = useState<ConversaChat[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [agendaTodos, setAgendaTodos] = useState<Agendamento[]>([]);
   const [leadsProspect, setLeadsProspect] = useState<Lead[]>([]);
   const [colunas, setColunas] = useState<ColunaCrm[]>([]);
   const [conexao, setConexao] = useState<ConexaoChat>({ status: 'desconectado' });
@@ -358,6 +360,7 @@ export default function Chat() {
     if (!empresaId) return;
     const u1 = ouvirConversas(empresaId, setConversas);
     const u2 = ouvirClientes(empresaId, setClientes);
+    const uAg = ouvirAgenda(empresaId, undefined, setAgendaTodos);
     const uV = ouvirVendedores(empresaId, setVendedoresCrm);
     const u4 = ouvirEmpresa(empresaId, (e) => setColunas(e?.crmColunas && e.crmColunas.length > 0 ? e.crmColunas : CRM_COLUNAS_PADRAO));
     const u5 = ouvirConexaoWhatsapp(empresaId, setConexao);
@@ -365,6 +368,7 @@ export default function Chat() {
     const uL = ouvirLeads(empresaId, setLeadsProspect);
     return () => {
       uL();
+      uAg();
       u1();
       u2();
       uV();
@@ -434,9 +438,27 @@ export default function Chat() {
   }, [mensagens]);
 
   // O vendedor só enxerga as conversas livres e as dele; o admin vê todas.
+  // Posse de 30 dias no rodízio: enquanto o prazo vale, o cliente é só do vendedor que assumiu.
+  const posses = useMemo(() => mapaPosses(agendaTodos), [agendaTodos]);
+  const posseFone = useMemo(() => {
+    const m = new Map<string, { login: string; nome: string; ate: Date }>();
+    for (const a of agendaTodos) {
+      const p = posses.get(a.clienteId);
+      const f = (a.telefone ?? '').replace(/\D/g, '').slice(-9);
+      if (p && f.length === 9) m.set(f, p);
+    }
+    return m;
+  }, [agendaTodos, posses]);
+  const posseDaConversa = (c: ConversaChat) => (c.clienteId ? posses.get(c.clienteId) : undefined) ?? posseFone.get((c.telefone ?? c.contato ?? '').replace(/\D/g, '').slice(-9));
+  const bloqueadaPorPosse = (c: ConversaChat) => {
+    if (souAdmin) return false;
+    const p = posseDaConversa(c);
+    return !!p && p.login !== meuLogin && (p.nome ?? '').trim().toLowerCase() !== (meuNome ?? '').trim().toLowerCase();
+  };
   const visiveis = useMemo(
-    () => (souAdmin ? conversas : conversas.filter((c) => !c.vendedorLogin || c.vendedorLogin === meuLogin)),
-    [conversas, souAdmin, meuLogin]
+    () => (souAdmin ? conversas : conversas.filter((c) => (!c.vendedorLogin || c.vendedorLogin === meuLogin) && !bloqueadaPorPosse(c))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [conversas, souAdmin, meuLogin, posses, posseFone]
   );
   // Novos = primeiro contato: ninguém assumiu e o telefone ainda não existe no CRM.
   // Novo contato = cliente que chamou pela PRIMEIRA vez (passivo, conversa criada por ele): ninguém atende, nunca foi
@@ -613,6 +635,11 @@ export default function Chat() {
   const donaDoAtendimento = aberta?.vendedorLogin && aberta.vendedorLogin !== meuLogin ? aberta.vendedorNome : '';
 
   async function assumir(c: ConversaChat) {
+    const pos = souAdmin ? undefined : posseDaConversa(c);
+    if (pos && bloqueadaPorPosse(c)) {
+      setErro(`Este cliente está em atendimento com ${pos.nome} até ${pos.ate.toLocaleDateString('pt-BR')}. Só depois desse prazo ele volta ao rodízio.`);
+      return;
+    }
     if (!empresaId) return;
     setErro('');
     try {
@@ -775,6 +802,8 @@ export default function Chat() {
     setErro('');
     try {
       await transferirConversa(empresaId, aberta, aberta.vendedorNome || meuNome, { login: v.login, nome: v.nome });
+      const idCli = aberta.clienteId ?? clienteCrm?.id;
+      if (idCli) await transferirPosse(empresaId, agendaTodos, idCli, { login: v.login, nome: v.nome }).catch(() => {});
       setTransferindo(false);
       if (!souAdmin) setAbertaId(null); // deixou de ser dele
     } catch (e) {

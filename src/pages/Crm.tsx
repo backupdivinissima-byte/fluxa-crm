@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { corrigirNonoDigito } from '../lib/chatData';
 import { useAuth } from '../contexts/AuthContext';
-import { ouvirAgenda, type Agendamento } from '../lib/agendaData';
+import { mapaPosses, ouvirAgenda, type Agendamento } from '../lib/agendaData';
 import { tocarCampainhaVenda } from '../lib/campainha';
 import {
   ouvirClientes,
@@ -54,6 +56,7 @@ const PALETA_CORES = ['#2980B9', '#8E6FBE', '#1791A8', '#E67E22', '#27AE60', '#C
  * combinado ao soltar o card lá). */
 export default function Crm() {
   const { empresa, perfil, sessaoVendedor, papel } = useAuth();
+  const navigate = useNavigate();
   const empresaId = empresa?.id;
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
@@ -101,6 +104,8 @@ export default function Crm() {
     for (const a of agendaRodizio) if (a.origem === 'rodizio' && a.status === 'pendente') m.set(a.clienteId, a);
     return m;
   }, [agendaRodizio]);
+  // Posse de 30 dias: enquanto vale, o cliente do rodízio só aparece para o vendedor que o assumiu.
+  const posses = useMemo(() => mapaPosses(agendaRodizio), [agendaRodizio]);
 
   useEffect(() => {
     if (!empresaId) return;
@@ -149,11 +154,15 @@ export default function Crm() {
       // A coluna de inativos é comum: todo vendedor enxerga todos os inativos
       // (quem o atender passa a ser o dono). As demais colunas são pessoais.
       const colunaInativos = colunas.find((col) => col.id === alvo)?.auto === 'inativos';
+      if (!ehAdmin) {
+        const pos = posses.get(c.id);
+        if (pos && pos.login !== loginAtual && (pos.nome ?? '').trim().toLowerCase() !== (nomeAtual ?? '').trim().toLowerCase()) continue;
+      }
       if (!colunaInativos && !cartaoVisivelPara(c, ehAdmin ? 'admin' : 'vendedor', loginAtual, nomeAtual, vinculoVigente)) continue;
       if (alvo) mapa.get(alvo)?.push(c);
     }
     return mapa;
-  }, [clientes, colunas, diasInatividade, ehAdmin, loginAtual, nomeAtual]);
+  }, [clientes, colunas, diasInatividade, ehAdmin, loginAtual, nomeAtual, posses]);
 
   useEffect(() => {
     const fechamentos = new Set(colunas.filter((c) => c.fechamento).map((c) => c.id));
@@ -706,7 +715,12 @@ export default function Crm() {
                       key={c.id}
                       draggable
                       onDragStart={(e) => e.dataTransfer.setData('text/plain', c.id)}
-                      onClick={() => setDetalheCliente(c)}
+                      onClick={() => {
+                        // Cliente no rodízio: clicar abre direto a conversa no WhatsApp.
+                        const rod = rodizioPorCliente.get(c.id);
+                        if (rod && c.telefone && !ehAdmin) navigate(`/chat?tel=${encodeURIComponent(corrigirNonoDigito(c.telefone))}&nome=${encodeURIComponent(c.razao || c.nome || '')}`);
+                        else setDetalheCliente(c);
+                      }}
                       className="bg-white rounded-lg border border-line p-2 text-[11px] cursor-pointer hover:shadow-sm active:cursor-grabbing"
                     >
                       <div className="font-bold text-ink truncate">{c.razao ?? c.nome}</div>
