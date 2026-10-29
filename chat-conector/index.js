@@ -465,6 +465,19 @@ function pedirFoto(conversaId, jid, dados, urgente = false) {
   void processarFotos();
 }
 
+function dimJpeg(b) {
+  try {
+    let i = 2;
+    while (i < b.length) {
+      if (b[i] !== 0xff) { i++; continue; }
+      const m = b[i + 1];
+      if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) return `${b.readUInt16BE(i + 7)}x${b.readUInt16BE(i + 5)}`;
+      i += 2 + b.readUInt16BE(i + 2);
+    }
+  } catch { /* ignora */ }
+  return '?';
+}
+
 async function processarFotos() {
   if (fotoRodando) return;
   fotoRodando = true;
@@ -491,9 +504,12 @@ async function processarFotos() {
             const rg = ug ? await fetch(ug) : null;
             if (rg?.ok) {
               const bg = Buffer.from(await rg.arrayBuffer());
+              console.log(`  (foto grande de ${conversaId}: ${dimJpeg(bg)}, ${bg.length} bytes)`);
               if (bg.length > 0 && bg.length < 700000) grande = `data:image/jpeg;base64,${bg.toString('base64')}`;
+            } else {
+              console.log(`  (foto grande de ${conversaId}: sem resposta ${rg?.status ?? 'sem url'})`);
             }
-          } catch { /* fica só a miniatura */ }
+          } catch (e) { console.log(`  (foto grande de ${conversaId} falhou: ${e?.message ?? e})`); }
         }
         // a versão grande fica fora da conversa (a lista de conversas continua leve) e é lida só ao clicar na foto
         if (grande) await base.collection('chatConexoes').doc(`foto_${conversaId}`).set({ grande, em: new Date().toISOString() });
