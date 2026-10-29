@@ -324,7 +324,7 @@ export default function Chat() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [agendaTodos, setAgendaTodos] = useState<Agendamento[]>([]);
   const [internos, setInternos] = useState<TelefoneInterno[]>([]);
-  const [abaChat, setAbaChat] = useState<'conversas' | 'telefones'>('conversas');
+  const [abaChat, setAbaChat] = useState<'dash' | 'conversas' | 'telefones'>('dash');
   const [leadsProspect, setLeadsProspect] = useState<Lead[]>([]);
   const [colunas, setColunas] = useState<ColunaCrm[]>([]);
   const [conexao, setConexao] = useState<ConexaoChat>({ status: 'desconectado' });
@@ -869,15 +869,21 @@ export default function Chat() {
 
   if (!empresaId) return null;
 
-  if (souAdmin && abaChat === 'telefones') {
+  // Administrador: Dash, Conversas e Cadastro de telefones. Vendedor: só as conversas.
+  const aba = souAdmin ? abaChat : 'conversas';
+  const barraAbas = (
+    <div className="flex gap-1 border-b border-line">
+      {([['dash', '📊 Dash'], ['conversas', '💬 Conversas'], ['telefones', '📞 Cadastro de telefones']] as const).map(([k, rot]) => (
+        <button key={k} onClick={() => setAbaChat(k)} className={`px-4 h-10 text-sm font-bold border-b-2 -mb-px ${abaChat === k ? 'border-teal-500 text-teal-600' : 'border-transparent text-ink-soft'}`}>{rot}</button>
+      ))}
+    </div>
+  );
+
+  if (aba === 'telefones') {
     return (
       <div className="py-6 pr-6 pl-2 w-full space-y-3">
         <h1 className="text-base font-extrabold text-ink mb-1">Fluxa Chat</h1>
-        <div className="flex gap-1 border-b border-line">
-        {([['conversas', '💬 Conversas'], ['telefones', '📞 Cadastro de telefones']] as const).map(([k, rot]) => (
-          <button key={k} onClick={() => setAbaChat(k)} className={`px-4 h-10 text-sm font-bold border-b-2 -mb-px ${abaChat === k ? 'border-teal-500 text-teal-600' : 'border-transparent text-ink-soft'}`}>{rot}</button>
-        ))}
-      </div>
+        {barraAbas}
         <CadastroTelefonesChat empresaId={empresaId} />
       </div>
     );
@@ -977,13 +983,14 @@ export default function Chat() {
         </div>
       </div>
       )}
+      {souAdmin && barraAbas}
 
-      {comAlerta > 0 && (
+      {aba === 'dash' && comAlerta > 0 && (
         <div className="rounded-xl border-2 border-red-400 bg-red-50 px-4 py-3 flex items-center justify-between gap-3 flex-wrap" role="alert">
           <div className="text-sm font-bold text-red-700">
             ⚠ {comAlerta} conversa{comAlerta > 1 ? 's' : ''} com mensagem que pode NÃO ter chegado ao cliente. O robô já está tentando reenviar.
           </div>
-          <button onClick={() => setFiltro(filtro === 'alerta' ? 'todas' : 'alerta')} className="rounded-lg bg-red-600 text-white text-xs font-bold px-3 py-1.5 hover:bg-red-700">
+          <button onClick={() => { setFiltro(filtro === 'alerta' ? 'todas' : 'alerta'); setAbaChat('conversas'); }} className="rounded-lg bg-red-600 text-white text-xs font-bold px-3 py-1.5 hover:bg-red-700">
             {filtro === 'alerta' ? 'Ver todas' : 'Ver quais'}
           </button>
           {souAdmin && (
@@ -1001,12 +1008,7 @@ export default function Chat() {
         </div>
       )}
 
-      {souAdmin && <div className="flex gap-1 border-b border-line">
-        {([['conversas', '💬 Conversas'], ['telefones', '📞 Cadastro de telefones']] as const).map(([k, rot]) => (
-          <button key={k} onClick={() => setAbaChat(k)} className={`px-4 h-10 text-sm font-bold border-b-2 -mb-px ${abaChat === k ? 'border-teal-500 text-teal-600' : 'border-transparent text-ink-soft'}`}>{rot}</button>
-        ))}
-      </div>}
-      <div className="grid grid-cols-1 gap-3 items-stretch">
+      {aba === 'dash' && <div onClick={() => setAbaChat('conversas')} className="grid grid-cols-1 gap-3 items-stretch">
         <div className="space-y-2">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         <Cartao ativo={filtro === 'aguardando'} onClick={() => setFiltro(filtro === 'aguardando' ? 'todas' : 'aguardando')} titulo="Aguardando atendimento" valor={aguardando} dica="Clientes sem vendedor esperando resposta" />
@@ -1027,9 +1029,9 @@ export default function Chat() {
       </div>
       )}
         </div>
-      </div>
+      </div>}
 
-      {souAdmin && (
+      {aba === 'dash' && (
         <div className="bg-white border border-line rounded-2xl p-4">
           <button onClick={() => setGerenciarTags((v) => !v)} className="text-sm font-extrabold text-ink">
             {gerenciarTags ? '▾' : '▸'} Cadastrar tags
@@ -1087,7 +1089,7 @@ export default function Chat() {
         </div>
       )}
 
-      {souAdmin && (conexao.status !== 'conectado' || forcarQr) && (
+      {aba === 'dash' && souAdmin && (conexao.status !== 'conectado' || forcarQr) && (
         <div className="bg-white border border-line rounded-2xl p-6">
           <h2 className="text-sm font-extrabold text-ink mb-1">Conectar o WhatsApp</h2>
           <p className="text-sm text-ink-soft mb-3 max-w-3xl">
@@ -1142,7 +1144,7 @@ export default function Chat() {
       {erro && <p className="text-xs text-red-500">{erro}</p>}
 
 
-      <div ref={gradeRef} style={{ ["--ph" as string]: `${alturaPainel}px` }} className="grid grid-cols-1 lg:grid-cols-[minmax(320px,440px)_minmax(0,1fr)] xl:grid-cols-[minmax(320px,420px)_minmax(0,1fr)_minmax(280px,340px)] gap-4 items-stretch">
+      <div ref={gradeRef} style={{ ["--ph" as string]: `${alturaPainel}px` }} className={aba === 'conversas' ? 'grid grid-cols-1 lg:grid-cols-[minmax(320px,440px)_minmax(0,1fr)] xl:grid-cols-[minmax(320px,420px)_minmax(0,1fr)_minmax(280px,340px)] gap-4 items-stretch' : 'hidden'}>
         <div className="bg-white border border-line rounded-2xl overflow-hidden flex flex-col lg:h-[var(--ph)] lg:min-h-[320px]">
           <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-line">
             <span className="text-xs font-bold text-ink flex items-center gap-1.5"><IconeWhatsApp />Conversas</span>
@@ -1155,13 +1157,13 @@ export default function Chat() {
             </button>
           </div>
           <div className="flex border-b border-line text-xs font-bold">
-            {(['todas', 'novos', 'minhas'] as const).map((f) => (
+            {(['todas', 'novos', 'minhas', ...(internosVis.length > 0 ? (['internos'] as const) : [])] as const).map((f) => (
               <button
                 key={f}
                 onClick={() => setFiltro(f)}
                 className={`flex-1 py-2.5 ${filtro === f ? 'text-teal-500 border-b-2 border-teal-500' : 'text-ink-soft'}`}
               >
-                {f === 'todas' ? `Todas (${visiveis.length})` : f === 'novos' ? `Novo Contato (${novos})` : `Minhas (${minhasN})`}
+                {f === 'todas' ? `Todas (${visiveis.length})` : f === 'novos' ? `Novo Contato (${novos})` : f === 'internos' ? `Internos (${internosVis.length})` : `Minhas (${minhasN})`}
               </button>
             ))}
           </div>
