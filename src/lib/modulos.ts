@@ -7,18 +7,19 @@ export const MODULOS_SEPARADOS: Modulo[] = ['erp', 'prospect'];
 
 /** Módulos que a empresa contratou. Empresas antigas (sem o campo) seguem
  * com tudo liberado, exceto as cadastradas só no Marketing. */
-/** Empresas com o Prospect liberado direto pela plataforma (além do que a tela Módulos grava). */
-const PROSPECT_LIBERADO_PARA = ['Kb5nOo3SK0dAi3SsHk20Y0Oa1aE3']; // Carla Fidelis
+/** Módulos liberados direto pela plataforma para empresas antigas (além do que a tela Módulos grava). */
+const LIBERADOS_PARA: Record<string, Modulo[]> = {
+  Kb5nOo3SK0dAi3SsHk20Y0Oa1aE3: ['chat', 'erp', 'prospect'], // Carla Fidelis
+};
 
 export function modulosDaEmpresa(e: Empresa | null | undefined): Modulo[] {
-  const base = modulosBase(e);
-  return e?.id && PROSPECT_LIBERADO_PARA.includes(e.id) && !base.includes('prospect') ? [...base, 'prospect'] : base;
+  return modulosBase(e);
 }
 
 export function modulosBase(e: Empresa | null | undefined): Modulo[] {
-  if (e?.modulos && e.modulos.length > 0) return e.modulos;
-  if (e?.produto === 'marketing') return ['marketing'];
-  return ['crm', 'marketing'];
+  const base: Modulo[] = e?.modulos && e.modulos.length > 0 ? e.modulos : e?.produto === 'marketing' ? ['marketing'] : ['crm', 'marketing'];
+  const extras = (e?.id && LIBERADOS_PARA[e.id]) || [];
+  return [...base, ...extras.filter((m) => !base.includes(m))];
 }
 
 /** Módulo a que cada rota pertence. O Chat só é um módulo à parte (aba própria, vendável sozinho)
