@@ -489,7 +489,7 @@ export default function Chat() {
     !c ? undefined : c.grupo ? { id: c.id, numero: c.contato, nome: c.nome, setor: 'Grupo' } : fonesInternos.get(fim9(c.telefone ?? c.contato)) ?? (c.interno ? { id: c.id, numero: c.contato, nome: c.nome, setor: c.internoSetor } : undefined);
   const posseDaConversa = (c: ConversaChat) => (c.clienteId ? posses.get(c.clienteId) : undefined) ?? posseFone.get((c.telefone ?? c.contato ?? '').replace(/\D/g, '').slice(-9));
   const bloqueadaPorPosse = (c: ConversaChat) => {
-    if (souAdmin) return false;
+    if (souAdmin || (!!meuLogin && c.vendedorLogin === meuLogin)) return false; // o dono da conversa nunca é bloqueado
     const p = posseDaConversa(c);
     return c.salvoPor !== meuLogin && !!p && p.login !== meuLogin && (p.nome ?? '').trim().toLowerCase() !== (meuNome ?? '').trim().toLowerCase();
   };
@@ -875,6 +875,8 @@ export default function Chat() {
     try {
       const cit = respondendo ? { id: respondendo.id, texto: respondendo.texto && !respondendo.texto.startsWith('[') ? respondendo.texto : respondendo.midiaTipo === 'imagem' ? '📷 Foto' : respondendo.midiaTipo === 'audio' ? '🎤 Áudio' : respondendo.midiaTipo === 'video' ? '🎥 Vídeo' : respondendo.midiaTipo ? '📄 Arquivo' : respondendo.texto, de: respondendo.de, autor: respondendo.autor } : undefined;
       setRespondendo(null);
+      // Quem conversa com um contato sem dono passa a ser o dono: a conversa fica em "Minhas" e não some.
+      if (!souAdmin && !aberta.vendedorLogin && !internoDe(aberta)) await assumir(aberta);
       await enviarMensagemChat(empresaId, aberta, t, meuNome, agendarPara, cit);
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Não foi possível enviar.');
