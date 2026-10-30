@@ -216,6 +216,8 @@ export interface LeituraPlanilha {
   erros: string[];
   /** Período do relatório (cabeçalho "DD/MM/AAAA à DD/MM/AAAA"), em ISO. */
   periodo?: { ini: string; fim: string };
+  /** Relatório "GERAL" (todas as vendas, sem filtro de vendedor): ausência de um cliente/vendedor significa que não houve venda. */
+  geral?: boolean;
 }
 
 /** Lê o período do cabeçalho do relatório. */
@@ -937,7 +939,9 @@ export async function lerPlanilha(arquivo: File): Promise<LeituraPlanilha> {
         if (clientes.length === 0) {
           erros.push('Não encontrei nenhum cliente com venda válida nesse relatório.');
         }
-        return { clientes, vendedores: [], clientesIgnorados: 0, vendedoresIgnorados: 0, erros, periodo: lerPeriodoDoTexto(textoCompleto) };
+        const cab = textoCompleto.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
+        const filtroCab = /MOVIMENTA\S*\s+(.{0,80}?)\s*\d{2}\/\d{2}\/\d{4}/i.exec(cab)?.[1] ?? '';
+        return { clientes, vendedores: [], clientesIgnorados: 0, vendedoresIgnorados: 0, erros, periodo: lerPeriodoDoTexto(textoCompleto), geral: /\bGERAL\b/i.test(filtroCab) };
       }
       if (maiorTabela) {
         // HTML de outro formato de relatório (não bate com a assinatura do
@@ -1290,6 +1294,9 @@ export async function salvarPorArquivo(
           if (mesesDoArquivo.has(k)) {
             // Só apaga se o arquivo traz todos os vendedores que venderam a este cliente neste mês.
             const noArquivo = vendedoresNoMes.get(k);
+            const mesK = k.replace(/^mes-/, '');
+            // Relatório GERAL (sem filtro) que cobre o mês: quem não aparece não vendeu (cancelada/corrigida) — apaga.
+            if (porArquivo.some((a) => a.leitura.geral && periodoCobreMes(a.leitura.periodo, mesK))) return true;
             return !(o.porVendedor && o.porVendedor.length > 0 && noArquivo && o.porVendedor.some((x) => !noArquivo.has(chaveVend(x))));
           }
           return !/^mes-/.test(k) && !!o.dtUltCompra && mesesDoArquivo.has(`mes-${o.dtUltCompra.slice(0, 7)}`);
