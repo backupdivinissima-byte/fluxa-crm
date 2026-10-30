@@ -34,6 +34,10 @@ export default function Diagnostico({ compacto = false }: { compacto?: boolean }
     setMsg(`Restaurados ${n} clientes · R$ ${f(v)}. Recarregue a página (F5).`);
   }
   useEffect(() => {
+    if (compacto && empresa?.id) void restaurar();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empresa?.id]);
+  useEffect(() => {
     if (!empresa?.id) return;
     (async () => {
       const snap = await getDocs(collection(db, 'empresas', empresa.id, 'clientes'));
