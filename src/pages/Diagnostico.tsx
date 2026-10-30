@@ -5,6 +5,9 @@ import { db } from '../lib/firebase';
 import { totalGeralReal } from '../lib/crmLogic';
 import type { Cliente } from '../types';
 import REF from '../tmp/refMov.json';
+import FIX from '../tmp/fixNov.json';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { recalcularAgregadosDeOrigens } from '../lib/importarPlanilha';
 
 const f = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -12,6 +15,24 @@ const f = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, m
 export default function Diagnostico({ compacto = false }: { compacto?: boolean }) {
   const { empresa } = useAuth();
   const [txt, setTxt] = useState('Carregando…');
+  const [msg, setMsg] = useState('');
+  async function restaurar() {
+    if (!empresa?.id) return;
+    setMsg('Restaurando…');
+    let n = 0, v = 0;
+    for (const [cod, e] of Object.entries(FIX as Record<string, Record<string, unknown>>)) {
+      const ref = doc(db, 'empresas', empresa.id, 'clientes', cod);
+      const sn = await getDoc(ref);
+      if (!sn.exists()) continue;
+      const origens = ((sn.data() as Cliente).origensImportacao ?? {}) as Record<string, any>;
+      if (origens['mes-2025-11']) continue;
+      origens['mes-2025-11'] = e;
+      const ag = recalcularAgregadosDeOrigens(origens);
+      await setDoc(ref, JSON.parse(JSON.stringify({ origensImportacao: origens, totalGeral: ag.totalGeral, dtUltCompra: ag.dtUltCompra, cod_vendedor: ag.cod_vendedor, vend_nome: ag.vend_nome })), { merge: true });
+      n++; v += Number(e.totalGeral);
+    }
+    setMsg(`Restaurados ${n} clientes · R$ ${f(v)}. Recarregue a página (F5).`);
+  }
   useEffect(() => {
     if (!empresa?.id) return;
     (async () => {
@@ -95,7 +116,10 @@ export default function Diagnostico({ compacto = false }: { compacto?: boolean }
     })().catch((e) => setTxt(`Erro: ${e?.message ?? e}`));
   }, [empresa?.id]);
   return compacto ? (
+    <div>
+      <button onClick={() => void restaurar()} className="mb-2 rounded-lg bg-amber-500 text-white text-xs font-bold px-3 py-1.5">Restaurar novembro/2025 dos clientes que faltam</button> <span className="text-xs font-bold">{msg}</span>
     <pre id="diag" className="rounded-xl border-2 border-amber-400 bg-amber-50 p-3 text-[10px] leading-[1.25] whitespace-pre-wrap font-mono [column-count:3] [column-gap:16px]">{'DIAGNÓSTICO TEMPORÁRIO\n' + txt}</pre>
+    </div>
   ) : (
     <pre id="diag" className="p-6 text-xs whitespace-pre-wrap font-mono">{txt}</pre>
   );

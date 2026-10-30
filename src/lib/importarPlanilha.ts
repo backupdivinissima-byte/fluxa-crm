@@ -1075,7 +1075,7 @@ function chaveOrigemPorMes(mesISO: string): string {
  * `chaveOrigemPorMes`, quando cada reexportação do mês corrente virava uma
  * origem nova em vez de substituir a existente e inflava o total). Origens
  * sem data conhecida (raro) entram todas, sem dedup possível. */
-function recalcularAgregadosDeOrigens(origens: Record<string, OrigemContribuicao>): OrigemContribuicao {
+export function recalcularAgregadosDeOrigens(origens: Record<string, OrigemContribuicao>): OrigemContribuicao {
   let totalGeral: number | undefined;
   let produtos: Record<string, number> | undefined;
   let dtUltCompra: string | undefined;
@@ -1261,6 +1261,17 @@ export async function salvarPorArquivo(
 
   // Reimportar um mês SUBSTITUI o mês inteiro: cliente que tinha venda naquele mês e NÃO está mais no arquivo
   // (venda cancelada, corrigida ou trocada de cliente no ERP) perde a contribuição antiga daquele mês.
+  // Vendedores que o arquivo traz em cada mês: se o relatório não inclui um vendedor (ex.: foi exportado sem as vendas dele),
+  // a ausência de um cliente DESSE vendedor não significa venda cancelada — o mês dele fica como está.
+  const chaveVend = (x: { cod?: string; nome?: string }) => `${x.cod ?? ''}|${x.nome ?? ''}`;
+  const vendedoresNoMes = new Map<string, Set<string>>();
+  for (const origens of origensPorCod.values()) {
+    for (const [k, o] of Object.entries(origens)) {
+      const set = vendedoresNoMes.get(k) ?? new Set<string>();
+      for (const x of o.porVendedor ?? []) set.add(chaveVend(x));
+      vendedoresNoMes.set(k, set);
+    }
+  }
   const mesesDoArquivo = new Set<string>();
   for (const origens of origensPorCod.values()) for (const k of Object.keys(origens)) {
     const mes = /^mes-(\d{4}-\d{2})$/.exec(k)?.[1];
@@ -1274,7 +1285,16 @@ export async function salvarPorArquivo(
       if (codsNoArquivo.has(d.id)) continue;
       const origensCli = (d.data() as Cliente).origensImportacao;
       if (!origensCli) continue;
-      const apagar = Object.entries(origensCli).filter(([k, o]) => mesesDoArquivo.has(k) || (!/^mes-/.test(k) && !!o.dtUltCompra && mesesDoArquivo.has(`mes-${o.dtUltCompra.slice(0, 7)}`))).map(([k]) => k);
+      const apagar = Object.entries(origensCli)
+        .filter(([k, o]) => {
+          if (mesesDoArquivo.has(k)) {
+            // Só apaga se o arquivo traz todos os vendedores que venderam a este cliente neste mês.
+            const noArquivo = vendedoresNoMes.get(k);
+            return !(o.porVendedor && o.porVendedor.length > 0 && noArquivo && o.porVendedor.some((x) => !noArquivo.has(chaveVend(x))));
+          }
+          return !/^mes-/.test(k) && !!o.dtUltCompra && mesesDoArquivo.has(`mes-${o.dtUltCompra.slice(0, 7)}`);
+        })
+        .map(([k]) => k);
       if (apagar.length === 0) continue;
       const restantes = Object.fromEntries(Object.entries(origensCli).filter(([k]) => !apagar.includes(k)));
       const ag = recalcularAgregadosDeOrigens(restantes);
