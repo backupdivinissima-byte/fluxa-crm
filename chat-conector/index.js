@@ -971,8 +971,17 @@ async function iniciar() {
     // transmite áudio); só registra a chamada na conversa.
     sock.ev.on('call', async (chamadas) => {
       for (const c of chamadas) {
-        if (c.status !== 'offer') continue;
-        const numero = soDigitos(c.from);
+        console.log(`[chamada] ${c.id} status=${c.status} de=${c.from} chat=${c.chatId} pn=${c.callerPn ?? '-'} video=${!!c.isVideo} grupo=${!!c.isGroup}`);
+        if (c.status !== 'offer') continue; // só a chamada recebendo (uma notificação por chamada)
+        if (c.isGroup || String(c.chatId ?? c.from ?? '').endsWith('@g.us')) continue;
+        // Descobre o telefone: o WhatsApp novo identifica por @lid; usa o número real quando ele vem junto ou já é conhecido.
+        const pn = [c.callerPn, c.from, c.chatId].find((x) => typeof x === 'string' && x.endsWith('@s.whatsapp.net'));
+        const lid = [c.from, c.chatId, c.callerPn].find((x) => typeof x === 'string' && x.endsWith('@lid'));
+        if (lid && pn) void aprenderLid(lid, pn);
+        const tel = pn ? soDigitos(pn) : lid ? lidParaTel.get(soDigitos(lid)) : undefined;
+        const jid = tel ? `${tel}@s.whatsapp.net` : lid;
+        if (!jid) continue;
+        const numero = soDigitos(jid);
         const texto = c.isVideo ? '📞 Videochamada recebida (atenda pelo celular)' : '📞 Chamada de voz recebida (atenda pelo celular)';
         if (MODO_TESTE) {
           console.log(`[CHAMADA] ${numero}: ${texto}`);
@@ -981,8 +990,23 @@ async function iniciar() {
         try {
           const quando = agora();
           const ref = base.collection('conversas').doc(`whatsapp_${numero}`);
-          await ref.set({ canal: 'whatsapp', contato: numero, telefone: numero, ultimaMensagem: texto, ultimaEm: quando, ultimaDe: 'cliente' }, { merge: true });
-          await ref.collection('mensagens').doc(`call-${c.id}`).set({ de: 'cliente', texto, em: quando });
+          const antes = await ref.get();
+          await ref.set(
+            {
+              canal: 'whatsapp',
+              contato: numero,
+              ...(jid.endsWith('@lid') ? {} : { telefone: numero }),
+              contatoJid: jid,
+              ultimaMensagem: texto,
+              ultimaEm: quando,
+              ultimaDe: 'cliente',
+              naoLidas: FieldValue.increment(1),
+              ...(antes.exists ? {} : { nome: agenda.get(numero) || numero }),
+              ...(telefonesInternos.has(numero.slice(-9)) ? { interno: true } : {}),
+            },
+            { merge: true }
+          );
+          await ref.collection('mensagens').doc(`call-${c.id}`).set({ de: 'cliente', texto, em: quando, ligacao: c.isVideo ? 'video' : 'voz' });
           const dono = (await ref.get()).data() ?? {};
           await base.collection('chatLigacoes').doc(`call-${c.id}`).set({
             tipo: 'recebida',

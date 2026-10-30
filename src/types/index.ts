@@ -399,6 +399,7 @@ export interface MensagemChat {
   texto: string;
   em: string; // ISO
   autor?: string; // nome de quem da equipe enviou
+  ligacao?: 'voz' | 'video'; // aviso de ligação recebida pelo WhatsApp
   participante?: string; // grupos: nome de quem escreveu
   midiaTipo?: 'imagem' | 'video' | 'audio' | 'documento';
   midiaLink?: string; // arquivo completo no Google Drive
