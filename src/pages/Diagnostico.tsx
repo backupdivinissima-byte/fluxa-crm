@@ -95,6 +95,21 @@ export default function Diagnostico({ compacto = false }: { compacto?: boolean }
         if (Object.keys(c.origensImportacao ?? {}).length && Math.abs(soma - real) > 0.01) { d2 += soma - real; if (ex2.length < 8) ex2.push(`${c.cod} ${c.nome}: soma das origens ${f(soma)} vs real ${f(real)}`); }
       }
       L.push('', `== Clientes em que "totalGeralReal" descarta valor das origens: diferença acumulada ${f(d2)}`, ...ex2);
+      // Vendedor x mês (jun a out/2026) e por ano, para achar onde mora cada diferença
+      const vm = new Map<string, Map<string, number>>();
+      for (const c of cl) for (const [k, o] of Object.entries(c.origensImportacao ?? {})) {
+        const m = /^mes-(\d{4}-\d{2})$/.exec(k);
+        if (!m || !o.porVendedor) continue;
+        const chaveMes = m[1] >= '2026-06' ? m[1] : m[1].slice(0, 4);
+        for (const x of o.porVendedor) {
+          const n = (x.nome ?? x.cod ?? '—').slice(0, 14);
+          const mp = vm.get(n) ?? new Map<string, number>();
+          mp.set(chaveMes, (mp.get(chaveMes) ?? 0) + x.valor);
+          vm.set(n, mp);
+        }
+      }
+      L.push('', '== VENDEDOR x PERÍODO (anos fechados e jun–out/2026)');
+      for (const [n, mp] of [...vm.entries()].sort()) L.push(`  ${n}: ` + [...mp.entries()].sort().map(([k, v]) => `${k} ${f(v)}`).join(' | '));
       // Conferência cliente a cliente contra o relatório Movimentações (01/2024 a 05/2026)
       const ref = REF as Record<string, Record<string, number>>;
       const porCod = new Map<string, Cliente>();
