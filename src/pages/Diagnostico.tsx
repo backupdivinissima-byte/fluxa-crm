@@ -1,0 +1,76 @@
+import { useEffect, useState } from 'react';
+import { collection, getDocs } from 'firebase/firestore';
+import { useAuth } from '../contexts/AuthContext';
+import { db } from '../lib/firebase';
+import { totalGeralReal } from '../lib/crmLogic';
+import type { Cliente } from '../types';
+
+const f = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/** Página técnica (administrador): confere de onde vem cada real do "Vendas total", direto do banco, sem filtros. */
+export default function Diagnostico() {
+  const { empresa } = useAuth();
+  const [txt, setTxt] = useState('Carregando…');
+  useEffect(() => {
+    if (!empresa?.id) return;
+    (async () => {
+      const snap = await getDocs(collection(db, 'empresas', empresa.id, 'clientes'));
+      const cl = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Cliente);
+      const L: string[] = [];
+      L.push(`Clientes no banco (sem filtro): ${cl.length}`);
+      const semDt = cl.filter((c) => !c.dtUltCompra);
+      L.push(`Clientes SEM dtUltCompra (somem da lista ordenada do app): ${semDt.length} · soma ${f(semDt.reduce((s, c) => s + (totalGeralReal(c) ?? 0), 0))}`);
+      L.push(`Total real (todos): ${f(cl.reduce((s, c) => s + (totalGeralReal(c) ?? 0), 0))}`);
+      L.push(`Total real (só com dtUltCompra = o que o app mostra): ${f(cl.filter((c) => !!c.dtUltCompra).reduce((s, c) => s + (totalGeralReal(c) ?? 0), 0))}`);
+      L.push(`Soma do campo totalGeral cru: ${f(cl.reduce((s, c) => s + (c.totalGeral ?? 0), 0))}`);
+      // por mês (origem mes-AAAA-MM), bruto e líquido
+      const mes = new Map<string, { t: number; l: number; p: number; n: number }>();
+      const outras = new Map<string, number>();
+      let totalSemMes = 0;
+      const vend = new Map<string, number>();
+      let somaMesesVend = 0;
+      let mesesSemVend = 0;
+      for (const c of cl) {
+        for (const [k, o] of Object.entries(c.origensImportacao ?? {})) {
+          const m = /^mes-(\d{4}-\d{2})$/.exec(k);
+          if (m) {
+            const a = mes.get(m[1]) ?? { t: 0, l: 0, p: 0, n: 0 };
+            a.t += o.totalGeral ?? 0; a.l += o.liquido ?? 0; a.p += o.pedidos ?? 0; a.n += 1;
+            mes.set(m[1], a);
+            if (o.porVendedor) for (const x of o.porVendedor) { const n = `${x.cod ?? ''} ${x.nome ?? ''}`.trim(); vend.set(n, (vend.get(n) ?? 0) + x.valor); somaMesesVend += x.valor; }
+            else mesesSemVend += o.totalGeral ?? 0;
+          } else {
+            outras.set(k, (outras.get(k) ?? 0) + (o.totalGeral ?? 0));
+            totalSemMes += o.totalGeral ?? 0;
+          }
+        }
+      }
+      L.push('', `== Origens que NÃO são "mes-AAAA-MM" (arquivo/sem data): ${outras.size} · soma ${f(totalSemMes)}`);
+      [...outras.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15).forEach(([k, v]) => L.push(`  ${k}: ${f(v)}`));
+      L.push('', '== Por mês (bruto = Vlr. Total | líquido | pedidos | clientes)');
+      let totMes = 0, totLiq = 0;
+      [...mes.entries()].sort().forEach(([k, a]) => { totMes += a.t; totLiq += a.l; L.push(`${k}  ${f(a.t)} | ${f(a.l)} | ${a.p} | ${a.n}`); });
+      L.push(`TOTAL meses: bruto ${f(totMes)} | líquido ${f(totLiq)}`);
+      L.push('', `== Por vendedor (somando porVendedor dos meses) — soma ${f(somaMesesVend)}; meses SEM detalhe de vendedor: ${f(mesesSemVend)}`);
+      [...vend.entries()].sort((a, b) => b[1] - a[1]).forEach(([k, v]) => L.push(`  ${k}: ${f(v)}`));
+      // meses em que totalGeral do mês difere da soma de seus vendedores
+      let dif = 0; const exemplos: string[] = [];
+      for (const c of cl) for (const [k, o] of Object.entries(c.origensImportacao ?? {})) {
+        if (!o.porVendedor) continue;
+        const s = o.porVendedor.reduce((q, x) => q + x.valor, 0);
+        if (Math.abs(s - (o.totalGeral ?? 0)) > 0.01) { dif += (o.totalGeral ?? 0) - s; if (exemplos.length < 8) exemplos.push(`${c.cod} ${c.nome} ${k}: total ${f(o.totalGeral ?? 0)} vs vendedores ${f(s)}`); }
+      }
+      L.push('', `== Meses cujo total difere da soma dos vendedores: diferença acumulada ${f(dif)}`, ...exemplos);
+      // clientes cujo totalGeralReal difere da soma dos meses (regra do "maior por mês" etc.)
+      let d2 = 0; const ex2: string[] = [];
+      for (const c of cl) {
+        const soma = Object.values(c.origensImportacao ?? {}).reduce((s, o) => s + (o.totalGeral ?? 0), 0);
+        const real = totalGeralReal(c) ?? 0;
+        if (Object.keys(c.origensImportacao ?? {}).length && Math.abs(soma - real) > 0.01) { d2 += soma - real; if (ex2.length < 8) ex2.push(`${c.cod} ${c.nome}: soma das origens ${f(soma)} vs real ${f(real)}`); }
+      }
+      L.push('', `== Clientes em que "totalGeralReal" descarta valor das origens: diferença acumulada ${f(d2)}`, ...ex2);
+      setTxt(L.join('\n'));
+    })().catch((e) => setTxt(`Erro: ${e?.message ?? e}`));
+  }, [empresa?.id]);
+  return <pre id="diag" className="p-6 text-xs whitespace-pre-wrap font-mono">{txt}</pre>;
+}

@@ -1,3 +1,4 @@
+import Diagnostico from './pages/Diagnostico';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
@@ -62,6 +63,7 @@ function AppRoutes() {
         }
       >
         <Route path="/dashboard" element={<PainelOuDashboard />} />
+        <Route path="/diagnostico" element={<Diagnostico />} />
         <Route path="/crm" element={<Crm />} />
         <Route path="/agenda" element={<Agenda />} />
         <Route path="/clientes" element={<Clientes />} />
