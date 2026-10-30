@@ -3,7 +3,7 @@ import type { Empresa } from '../types';
 export type Modulo = 'crm' | 'marketing' | 'chat' | 'erp' | 'prospect';
 
 /** Módulos individuais: nunca entram no "vincular tudo" (não misturam abas nem dados com os outros). */
-export const MODULOS_SEPARADOS: Modulo[] = ['erp', 'prospect'];
+export const MODULOS_SEPARADOS: Modulo[] = ['chat', 'erp', 'prospect'];
 
 /** Módulos que a empresa contratou. Empresas antigas (sem o campo) seguem
  * com tudo liberado, exceto as cadastradas só no Marketing. */

@@ -148,7 +148,7 @@ export default function Modulos() {
               </div>
             </div>
           )}
-          {modulosBase(empresaAtual as Empresa).filter((m) => m !== 'erp' && m !== 'prospect').length > 1 && (
+          {modulosBase(empresaAtual as Empresa).filter((m) => m !== 'erp' && m !== 'prospect' && m !== 'chat').length > 1 && (
             <label className="flex items-center gap-2 text-sm font-semibold text-ink mt-3 cursor-pointer">
               <input type="checkbox" checked={empresaAtual?.modulosVinculados === true} onChange={(e) => void definirVinculoModulos(e.target.checked)} />
               Associar módulos (abas de todos juntas na mesma tela)
