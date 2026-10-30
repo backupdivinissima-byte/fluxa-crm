@@ -18,23 +18,25 @@ const TODOS: { id: Modulo; nome: string }[] = [
 
 /** Tela do dono da plataforma: liga e desliga o CRM, o Marketing e o Chat de cada empresa. */
 export default function Modulos() {
-  const { perfil } = useAuth();
+  const { perfil, empresa: empresaAtual } = useAuth();
   const dono = !!perfil?.email && DONOS_PLATAFORMA.includes(perfil.email.toLowerCase());
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
   const [salvando, setSalvando] = useState<string | null>(null);
   const [aviso, setAviso] = useState('');
+  // Por padrão cada empresa vê só os próprios módulos; a lista de todas as empresas é só do dono da plataforma, sob pedido.
+  const [verTodas, setVerTodas] = useState(false);
 
   useEffect(() => {
-    if (!dono) return;
+    if (!dono || !verTodas) return;
     getDocs(collection(db, 'empresas'))
       .then((s) => setEmpresas(s.docs.map((d) => ({ ...(d.data() as Empresa), id: d.id })).sort((a, b) => (a.nome ?? '').localeCompare(b.nome ?? ''))))
       .catch((e) => setErro(e instanceof Error ? e.message : 'Não foi possível carregar as empresas.'))
       .finally(() => setCarregando(false));
-  }, [dono]);
+  }, [dono, verTodas]);
 
-  if (!dono) return <div className="p-6 text-sm text-ink-soft">Esta tela é só do administrador da plataforma.</div>;
+
 
   async function alternar(e: Empresa, m: Modulo) {
     const atuais = modulosBase(e);
@@ -66,9 +68,29 @@ export default function Modulos() {
           Empresas antigas sem o Chat marcado continuam com o Chat dentro do CRM.
         </p>
       </div>
+      {dono && (
+        <button onClick={() => setVerTodas((v) => !v)} className="text-xs font-bold text-blue-600 hover:underline">
+          {verTodas ? '← Voltar aos módulos desta empresa' : 'Administração da plataforma: ver todas as empresas'}
+        </button>
+      )}
       {erro && <div className="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-bold p-3">{erro}</div>}
       {aviso && <div className="rounded-xl bg-teal-50 border border-teal-200 text-teal-700 text-sm font-bold p-3">{aviso}</div>}
-      {carregando ? (
+      {!verTodas ? (
+        <div className="bg-white border border-line rounded-2xl p-4">
+          <div className="text-sm font-extrabold text-ink mb-2">{empresaAtual?.nome}</div>
+          <div className="flex flex-wrap gap-2">
+            {TODOS.map((m) => {
+              const ativo = modulosBase(empresaAtual as Empresa).includes(m.id);
+              return (
+                <span key={m.id} className={`rounded-full px-3 py-1 text-xs font-bold border ${ativo ? 'bg-teal-50 border-teal-300 text-teal-700' : 'bg-surface border-line text-ink-soft line-through'}`}>
+                  {m.nome}
+                </span>
+              );
+            })}
+          </div>
+          <p className="text-xs text-ink-soft mt-3">Para escolher quais usuários acessam cada módulo, use a aba Usuários.</p>
+        </div>
+      ) : carregando ? (
         <div className="text-sm text-ink-soft">Carregando empresas…</div>
       ) : (
         <div className="bg-white border border-line rounded-2xl divide-y divide-line">
