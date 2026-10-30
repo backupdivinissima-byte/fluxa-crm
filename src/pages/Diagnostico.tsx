@@ -136,6 +136,7 @@ export default function Diagnostico({ compacto = false, semRestaurar = false }: 
   }, [empresa?.id]);
   return compacto ? (
     <div>
+    <span className="hidden">{msg}</span>
     <pre id="diag" className="rounded-xl border-2 border-amber-400 bg-amber-50 p-3 text-[10px] leading-[1.25] whitespace-pre-wrap font-mono [column-count:3] [column-gap:16px]">{'DIAGNÓSTICO TEMPORÁRIO\n' + txt}</pre>
     </div>
   ) : (
