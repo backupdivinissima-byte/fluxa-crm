@@ -25,6 +25,7 @@ export interface Empresa {
   // Com mais de um módulo: true = abas de todos juntas; false = módulos
   // separados (um de cada vez); sem valor = ainda não respondeu à pergunta.
   modulosVinculados?: boolean;
+  associarModulos?: boolean; // resposta de "Deseja associar módulos?" (true = abas juntas; só vale quando respondido)
   perguntarAssociar?: boolean; // contratou mais de um módulo: perguntar "deseja associar módulos?" até responder
   // Cadastro próprio de cada módulo contratado (o mesmo e-mail e CNPJ podem estar em módulos diferentes).
   cadastrosModulos?: Record<string, { nomeEmpresa: string; documento?: string; documentoTipo?: 'cnpj' | 'cpf'; whatsapp?: string; criadoEm: string }>;

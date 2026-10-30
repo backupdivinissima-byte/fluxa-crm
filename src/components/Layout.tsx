@@ -91,7 +91,7 @@ export default function Layout() {
   const vinculaveis = modulos.filter((m) => !MODULOS_SEPARADOS.includes(m));
   const varios = modulos.length > 1;
   // Cada módulo é separado (CRM, Marketing, Chat, ERP, Prospect): nunca juntamos as abas num grupo só.
-  const vinculados = papel === 'admin' && empresa?.modulosVinculados === true && vinculaveis.length > 1;
+  const vinculados = papel === 'admin' && empresa?.associarModulos === true && vinculaveis.length > 1;
   const [moduloEscolhido, setModuloEscolhido] = useState<Modulo | null>(() => {
     try {
       return sessionStorage.getItem(CHAVE_MODULO_ATUAL) as Modulo | null;
@@ -110,7 +110,7 @@ export default function Layout() {
   const acessiveisUsuario: Modulo[] = modulos.filter(acessoUsuario).length > 0 ? modulos.filter(acessoUsuario) : modulos;
   const moduloUsuario: Modulo = acessiveisUsuario.includes(moduloAtual) ? moduloAtual : acessiveisUsuario[0];
   const visiveis: Modulo[] = papel === 'admin' ? visiveisAdmin : [moduloUsuario];
-  const perguntarVinculo = papel === 'admin' && empresa?.perguntarAssociar === true && empresa.modulosVinculados === undefined && vinculaveis.length > 1;
+  const perguntarVinculo = papel === 'admin' && empresa?.perguntarAssociar === true && empresa.associarModulos === undefined && vinculaveis.length > 1;
 
   // Estilo RD Station: as abas são só as do módulo aberto; no fim da barra ficam os outros módulos a que a pessoa tem acesso.
   const acessiveis: Modulo[] = papel === 'admin' ? modulos : acessiveisUsuario;
