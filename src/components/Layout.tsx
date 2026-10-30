@@ -105,17 +105,17 @@ export default function Layout() {
   const moduloAtual: Modulo = !rotaNeutra && modulos.includes(moduloDaTela) ? moduloDaTela : moduloEscolhido && modulos.includes(moduloEscolhido) ? moduloEscolhido : modulos[0];
   const visiveisAdmin: Modulo[] = !varios ? modulos : MODULOS_SEPARADOS.includes(moduloAtual) ? [moduloAtual] : vinculados ? vinculaveis : [moduloAtual];
   // Vendedor não troca de módulo: vê o que o gerencial liberou (abas filtradas abaixo).
-  // Usuário com Marketing/ERP liberado pelo gerencial troca entre o módulo base (CRM/Chat/Prospect) e esses módulos.
-  const extrasUsuario: Modulo[] = papel === 'admin' ? [] : (['marketing', 'erp'] as Modulo[]).filter((m) => modulos.includes(m) && acessosVend.includes(m as 'marketing' | 'erp'));
-  const baseUsuario = modulos.filter((m) => m !== 'marketing' && m !== 'erp');
-  const visiveis: Modulo[] =
-    papel === 'admin' ? visiveisAdmin : extrasUsuario.length === 0 ? baseUsuario : extrasUsuario.includes(moduloAtual) ? [moduloAtual] : baseUsuario;
+  // Usuário: cada módulo liberado pelo gerencial (CRM, Chat, Prospect, Marketing, ERP) é um módulo, como no gerencial.
+  const acessoUsuario = (m: Modulo) => acessosVend.includes(m as 'crm' | 'chat' | 'prospect' | 'marketing' | 'erp');
+  const acessiveisUsuario: Modulo[] = modulos.filter(acessoUsuario).length > 0 ? modulos.filter(acessoUsuario) : modulos;
+  const moduloUsuario: Modulo = acessiveisUsuario.includes(moduloAtual) ? moduloAtual : acessiveisUsuario[0];
+  const visiveis: Modulo[] = papel === 'admin' ? visiveisAdmin : [moduloUsuario];
   const perguntarVinculo = papel === 'admin' && empresa?.perguntarAssociar === true && empresa.modulosVinculados === undefined && vinculaveis.length > 1;
 
   // Estilo RD Station: as abas são só as do módulo aberto; no fim da barra ficam os outros módulos a que a pessoa tem acesso.
-  const acessiveis: Modulo[] = papel === 'admin' ? modulos : [...(baseUsuario.length ? [baseUsuario[0]] : []), ...extrasUsuario];
-  const mesmoGrupo = (m: Modulo) => m === moduloAtual || (vinculados && !MODULOS_SEPARADOS.includes(m) && !MODULOS_SEPARADOS.includes(moduloAtual));
-  const outrosModulos: Modulo[] = (papel === 'admin' ? varios : extrasUsuario.length > 0) && !perguntarVinculo ? acessiveis.filter((m) => !mesmoGrupo(m)) : [];
+  const acessiveis: Modulo[] = papel === 'admin' ? modulos : acessiveisUsuario;
+  const mesmoGrupo = (m: Modulo) => m === (papel === 'admin' ? moduloAtual : moduloUsuario) || (vinculados && !MODULOS_SEPARADOS.includes(m) && !MODULOS_SEPARADOS.includes(moduloAtual));
+  const outrosModulos: Modulo[] = (papel === 'admin' ? varios : acessiveisUsuario.length > 1) && !perguntarVinculo ? acessiveis.filter((m) => !mesmoGrupo(m)) : [];
 
   function trocarModulo(m: Modulo) {
     setModuloEscolhido(m);
