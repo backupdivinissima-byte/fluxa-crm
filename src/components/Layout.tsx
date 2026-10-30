@@ -60,7 +60,7 @@ const itens = [
   // Encontrar e qualificar novos clientes (Fluxa Prospect): só admin.
   { to: '/prospect', label: 'Prospecção', icon: <IconClientes />, apenasAdmin: true },
   // Só para os donos da plataforma: liga/desliga os produtos de cada empresa.
-  { to: '/modulos', label: 'Módulos', icon: <IconLinks />, apenasAdmin: true, apenasDono: true },
+  { to: '/modulos', label: 'Módulos', icon: <IconLinks />, apenasAdmin: true },
 ];
 
 const NOME_MODULO: Record<Modulo, string> = { crm: 'CRM', marketing: 'Marketing', chat: 'Chat', erp: 'ERP', prospect: 'Prospect' };

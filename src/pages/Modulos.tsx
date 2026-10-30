@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { collection, doc, getDocs, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { ouvirVendedores, salvarVendedor } from '../lib/crmData';
 import { useAuth } from '../contexts/AuthContext';
 import { modulosBase, type Modulo } from '../lib/modulos';
-import type { Empresa } from '../types';
+import type { Empresa, Vendedor } from '../types';
 
 /** Logins que administram a plataforma Fluxa (quem vende os módulos). Só eles veem esta tela. */
 export const DONOS_PLATAFORMA = ['divinissima.comercial@gmail.com', 'josycampos.comercial@gmail.com', 'backupdivinissima@gmail.com'];
@@ -27,6 +28,19 @@ export default function Modulos() {
   const [aviso, setAviso] = useState('');
   // Por padrão cada empresa vê só os próprios módulos; a lista de todas as empresas é só do dono da plataforma, sob pedido.
   const [verTodas, setVerTodas] = useState(false);
+  const [moduloAberto, setModuloAberto] = useState<Modulo | null>(null);
+  const [usuarios, setUsuarios] = useState<Vendedor[]>([]);
+  const idEmpresaAtual = empresaAtual?.id;
+  useEffect(() => {
+    if (!idEmpresaAtual) return;
+    return ouvirVendedores(idEmpresaAtual, setUsuarios);
+  }, [idEmpresaAtual]);
+  async function marcarUsuario(v: Vendedor, m: Modulo, marcar: boolean) {
+    if (!idEmpresaAtual) return;
+    const atuais = v.acessos ?? ['crm', 'chat'];
+    const novos = (marcar ? [...atuais, m] : atuais.filter((x) => x !== m)) as NonNullable<Vendedor['acessos']>;
+    await salvarVendedor(idEmpresaAtual, { ...v, acessos: novos });
+  }
 
   useEffect(() => {
     if (!dono || !verTodas) return;
@@ -81,14 +95,34 @@ export default function Modulos() {
           <div className="flex flex-wrap gap-2">
             {TODOS.map((m) => {
               const ativo = modulosBase(empresaAtual as Empresa).includes(m.id);
+              const aberto = moduloAberto === m.id;
               return (
-                <span key={m.id} className={`rounded-full px-3 py-1 text-xs font-bold border ${ativo ? 'bg-teal-50 border-teal-300 text-teal-700' : 'bg-surface border-line text-ink-soft line-through'}`}>
+                <button
+                  key={m.id}
+                  disabled={!ativo}
+                  onClick={() => setModuloAberto(aberto ? null : m.id)}
+                  className={`rounded-full px-3 py-1 text-xs font-bold border ${aberto ? 'bg-teal-600 border-teal-600 text-white' : ativo ? 'bg-teal-50 border-teal-300 text-teal-700 hover:bg-teal-100' : 'bg-surface border-line text-ink-soft line-through cursor-not-allowed'}`}
+                >
                   {m.nome}
-                </span>
+                </button>
               );
             })}
           </div>
-          <p className="text-xs text-ink-soft mt-3">Para escolher quais usuários acessam cada módulo, use a aba Usuários.</p>
+          {moduloAberto && (
+            <div className="mt-4 rounded-xl border border-line p-3">
+              <div className="text-sm font-extrabold text-ink mb-2">Quem acessa o {TODOS.find((t) => t.id === moduloAberto)?.nome}</div>
+              {usuarios.length === 0 && <div className="text-xs text-ink-soft">Nenhum usuário cadastrado ainda. Cadastre na aba Usuários.</div>}
+              <div className="grid gap-1.5 sm:grid-cols-2">
+                {usuarios.map((v) => (
+                  <label key={v.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input type="checkbox" checked={(v.acessos ?? ['crm', 'chat']).includes(moduloAberto as NonNullable<Vendedor['acessos']>[number])} onChange={(e) => void marcarUsuario(v, moduloAberto, e.target.checked)} />
+                    {v.nome} <span className="text-xs text-ink-soft">({v.login})</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+          <p className="text-xs text-ink-soft mt-3">Clique em um módulo para marcar quais usuários terão acesso a ele.</p>
         </div>
       ) : carregando ? (
         <div className="text-sm text-ink-soft">Carregando empresas…</div>
