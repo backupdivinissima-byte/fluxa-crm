@@ -60,6 +60,30 @@ const AuthContext = createContext<AuthState | null>(null);
 
 const CHAVE_SESSAO_VENDEDOR = 'fluxacrm_sessao_vendedor';
 
+const soDigitos = (t?: string) => (t ?? '').replace(/\D/g, '');
+
+/** O mesmo CNPJ/CPF pode estar em módulos diferentes, mas não duas vezes no MESMO módulo.
+ * Devolve true se já existe em outra empresa. Se o banco não deixar consultar, não bloqueia. */
+async function documentoJaNoModulo(modulo: string, documento: string | undefined, empresaId: string): Promise<boolean> {
+  const d = soDigitos(documento);
+  if (!d) return false;
+  try {
+    const sn = await getDoc(doc(db, 'documentosModulo', `${modulo}_${d}`));
+    return sn.exists() && (sn.data() as { empresaId?: string }).empresaId !== empresaId;
+  } catch {
+    return false;
+  }
+}
+async function reservarDocumento(modulo: string, documento: string | undefined, empresaId: string) {
+  const d = soDigitos(documento);
+  if (!d) return;
+  try {
+    await setDoc(doc(db, 'documentosModulo', `${modulo}_${d}`), { empresaId, modulo, em: new Date().toISOString() });
+  } catch {
+    /* regra do Firestore ainda não liberada: segue sem reservar */
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [carregando, setCarregando] = useState(true);
   const [usuario, setUsuario] = useState<User | null>(null);
@@ -230,13 +254,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const empSnap = await getDoc(empRef);
       const emp = { ...(empSnap.data() as Empresa), id: empRef.id };
       const modulo = (dados.produto ?? 'crm') as NonNullable<Empresa['modulos']>[number];
+      if (await documentoJaNoModulo(modulo, dados.documento, emp.id)) {
+        throw Object.assign(new Error('documento'), { code: 'fluxa/documento-no-modulo' });
+      }
       const atuais: NonNullable<Empresa['modulos']> = emp.modulos && emp.modulos.length > 0 ? emp.modulos : emp.produto === 'marketing' ? ['marketing'] : ['crm', 'marketing'];
       const novos = atuais.includes(modulo) ? atuais : [...atuais, modulo];
-      if (novos !== atuais) await updateDoc(empRef, { modulos: novos });
+      const cadastro = { nomeEmpresa: dados.nomeEmpresa, ...(dados.documento ? { documento: dados.documento, documentoTipo: dados.documentoTipo } : {}), whatsapp: dados.whatsapp, criadoEm: new Date().toISOString() };
+      if (novos !== atuais) await updateDoc(empRef, { modulos: novos, [`cadastrosModulos.${modulo}`]: cadastro });
+      await reservarDocumento(modulo, dados.documento, emp.id);
       setUsuario(cred.user);
       setPerfil(perfilExistente);
       setEmpresa({ ...emp, modulos: novos });
       return;
+    }
+    const moduloNovo = dados.produto === 'marketing' ? 'marketing' : dados.produto === 'chat' ? 'chat' : dados.produto === 'erp' ? 'erp' : dados.produto === 'prospect' ? 'prospect' : 'crm';
+    if (await documentoJaNoModulo(moduloNovo, dados.documento, cred.user.uid)) {
+      await cred.user.delete().catch(() => {});
+      throw Object.assign(new Error('documento'), { code: 'fluxa/documento-no-modulo' });
     }
     const empresaRef = doc(db, 'empresas', cred.user.uid); // 1ª empresa = doc com id do próprio admin fundador
     const novaEmpresa: Empresa = {
@@ -248,11 +282,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       sobreEmpresa: dados.sobreEmpresa.trim(),
       ...(dados.documento ? { cnpj: dados.documento, documentoTipo: dados.documentoTipo } : {}),
       criadoEm: new Date().toISOString(),
+      cadastrosModulos: { [moduloNovo]: { nomeEmpresa: dados.nomeEmpresa, ...(dados.documento ? { documento: dados.documento, documentoTipo: dados.documentoTipo } : {}), whatsapp: dados.whatsapp, criadoEm: new Date().toISOString() } },
       plano: 'trial',
       modulos: [dados.produto === 'marketing' ? 'marketing' : dados.produto === 'chat' ? 'chat' : dados.produto === 'erp' ? 'erp' : dados.produto === 'prospect' ? 'prospect' : 'crm'], // só o módulo escolhido
       produto: dados.produto ?? 'crm', // qual card/plataforma a pessoa escolheu no cadastro (ver DadosCadastro.produto)
     };
     await setDoc(empresaRef, novaEmpresa);
+    await reservarDocumento(moduloNovo, dados.documento, empresaRef.id);
 
     const novoPerfil: UsuarioPerfil = {
       uid: cred.user.uid,

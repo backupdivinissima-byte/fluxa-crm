@@ -195,6 +195,8 @@ export default function Cadastrar() {
       const codigo = (err as { code?: string })?.code;
       if (codigo === 'fluxa/senha-conta-existente') {
         setErro('Esse e-mail já tem uma conta e a senha digitada não confere com a dela (' + ((err as { detalhe?: string }).detalhe || 'senha incorreta') + '). Digite a senha com que você entra hoje.');
+      } else if (codigo === 'fluxa/documento-no-modulo') {
+        setErro(`Este ${tipoDocumento === 'cnpj' ? 'CNPJ' : 'CPF'} já está cadastrado neste módulo. O mesmo documento só pode ser usado uma vez em cada módulo (em módulos diferentes pode repetir). Se é a sua empresa, entre com o login dela.`);
       } else if (codigo === 'fluxa/sem-empresa') {
         setErro('Esse e-mail já existe, mas sem empresa vinculada. Fale com o suporte.');
       } else if (codigo === 'auth/invalid-email') {

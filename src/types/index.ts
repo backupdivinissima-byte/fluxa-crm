@@ -25,6 +25,8 @@ export interface Empresa {
   // Com mais de um módulo: true = abas de todos juntas; false = módulos
   // separados (um de cada vez); sem valor = ainda não respondeu à pergunta.
   modulosVinculados?: boolean;
+  // Cadastro próprio de cada módulo contratado (o mesmo e-mail e CNPJ podem estar em módulos diferentes).
+  cadastrosModulos?: Record<string, { nomeEmpresa: string; documento?: string; documentoTipo?: 'cnpj' | 'cpf'; whatsapp?: string; criadoEm: string }>;
   // Chave de API ("Importar via API", tela Importar/Sincronização) — só o
   // hash SHA-256 fica salvo aqui, nunca a chave em texto puro (gerada e
   // mostrada uma única vez no navegador, ver src/lib/apiKey.ts).
