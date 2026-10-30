@@ -1,4 +1,4 @@
-import Diagnostico from './Diagnostico';
+import Reconciliador from './Reconciliador';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -360,7 +360,7 @@ export default function Dashboard() {
 
   return (
     <div className="p-6 md:p-8 w-full">
-      <div className="mb-4"><Diagnostico compacto semRestaurar /></div>
+      <Reconciliador />
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <h1 className="text-xl font-extrabold text-ink tracking-tight">Visão geral</h1>
         <span className="text-xs font-bold text-ink-soft bg-white border border-line rounded-full px-3 py-1.5">
