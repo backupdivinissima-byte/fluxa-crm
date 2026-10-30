@@ -1433,7 +1433,7 @@ export default function Chat() {
                 {mensagens.map((m) => m.ligacao || m.id.startsWith('call-') ? (
                   <div key={m.id} className="flex justify-center">
                     <div className="rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold px-4 py-1.5 flex items-center gap-2">
-                      <span>{m.ligacao === 'video' ? '📹' : '📞'} {m.ligacao === 'video' ? 'Ligação de vídeo' : 'Ligação'} do cliente pelo WhatsApp</span>
+                      <span>{m.ligacao === 'video' ? '📹' : '📞'} {m.perdida ? 'Ligação NÃO ATENDIDA' : m.atendida ? 'Ligação atendida' : 'Ligação'} {m.ligacao === 'video' ? '(vídeo) ' : ''}do cliente pelo WhatsApp</span>
                       <span className="font-normal text-amber-700">{hora(m.em)}</span>
                     </div>
                   </div>

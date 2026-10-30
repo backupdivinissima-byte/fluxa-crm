@@ -969,20 +969,34 @@ async function iniciar() {
 
     // Chamadas de voz: o conector NÃO atende nem faz ligações (a biblioteca não
     // transmite áudio); só registra a chamada na conversa.
+    // Estados da chamada: offer (tocando) -> accept (atendida) | timeout/reject/terminate (não atendida).
+    // Uma única linha por chamada, que vai mudando de texto conforme o estado.
+    const estadoChamada = new Map(); // id -> { atendida, perdida }
     sock.ev.on('call', async (chamadas) => {
       for (const c of chamadas) {
         console.log(`[chamada] ${c.id} status=${c.status} de=${c.from} chat=${c.chatId} pn=${c.callerPn ?? '-'} video=${!!c.isVideo} grupo=${!!c.isGroup}`);
-        if (c.status !== 'offer') continue; // só a chamada recebendo (uma notificação por chamada)
         if (c.isGroup || String(c.chatId ?? c.from ?? '').endsWith('@g.us')) continue;
-        // Descobre o telefone: o WhatsApp novo identifica por @lid; usa o número real quando ele vem junto ou já é conhecido.
+        const ant = estadoChamada.get(c.id) ?? { atendida: false, perdida: false };
+        if (c.status === 'accept') ant.atendida = true;
+        if (['timeout', 'reject', 'terminate'].includes(c.status) && !ant.atendida) ant.perdida = true;
+        estadoChamada.set(c.id, ant);
+        if (estadoChamada.size > 500) estadoChamada.delete(estadoChamada.keys().next().value);
+        // Descobre o telefone: o WhatsApp novo identifica por @lid; usa o número real quando vem junto, está no mapa ou já existe a conversa.
         const pn = [c.callerPn, c.from, c.chatId].find((x) => typeof x === 'string' && x.endsWith('@s.whatsapp.net'));
         const lid = [c.from, c.chatId, c.callerPn].find((x) => typeof x === 'string' && x.endsWith('@lid'));
         if (lid && pn) void aprenderLid(lid, pn);
-        const tel = pn ? soDigitos(pn) : lid ? lidParaTel.get(soDigitos(lid)) : undefined;
-        const jid = tel ? `${tel}@s.whatsapp.net` : lid;
+        let tel = pn ? soDigitos(pn) : lid ? lidParaTel.get(soDigitos(lid)) : undefined;
+        if (!tel && lid && !MODO_TESTE) {
+          try {
+            const q = await base.collection('conversas').where('contatoJid', '==', lid).limit(1).get();
+            if (!q.empty) tel = q.docs[0].id.replace(/^whatsapp_/, '');
+          } catch { /* segue com o @lid */ }
+        }
+        const jid = tel ? (tel.length > 15 ? `${tel}@lid` : `${tel}@s.whatsapp.net`) : lid;
         if (!jid) continue;
         const numero = soDigitos(jid);
-        const texto = c.isVideo ? '📞 Videochamada recebida (atenda pelo celular)' : '📞 Chamada de voz recebida (atenda pelo celular)';
+        const tipo = c.isVideo ? 'Videochamada' : 'Chamada de voz';
+        const texto = ant.atendida ? `📞 ${tipo} atendida pelo celular` : ant.perdida ? `📞 ${tipo} NÃO ATENDIDA` : `📞 ${tipo} recebida (atenda pelo celular)`;
         if (MODO_TESTE) {
           console.log(`[CHAMADA] ${numero}: ${texto}`);
           continue;
@@ -990,6 +1004,8 @@ async function iniciar() {
         try {
           const quando = agora();
           const ref = base.collection('conversas').doc(`whatsapp_${numero}`);
+          const msgRef = ref.collection('mensagens').doc(`call-${c.id}`);
+          const jaTinha = (await msgRef.get()).exists;
           const antes = await ref.get();
           await ref.set(
             {
@@ -1000,21 +1016,18 @@ async function iniciar() {
               ultimaMensagem: texto,
               ultimaEm: quando,
               ultimaDe: 'cliente',
-              naoLidas: FieldValue.increment(1),
+              ...(jaTinha ? {} : { naoLidas: FieldValue.increment(1) }),
               ...(antes.exists ? {} : { nome: agenda.get(numero) || numero }),
               ...(telefonesInternos.has(numero.slice(-9)) ? { interno: true } : {}),
             },
             { merge: true }
           );
-          await ref.collection('mensagens').doc(`call-${c.id}`).set({ de: 'cliente', texto, em: quando, ligacao: c.isVideo ? 'video' : 'voz' });
+          await msgRef.set({ de: 'cliente', texto, em: jaTinha ? (await msgRef.get()).data()?.em ?? quando : quando, ligacao: c.isVideo ? 'video' : 'voz', ...(ant.perdida ? { perdida: true } : {}), ...(ant.atendida ? { atendida: true } : {}) }, { merge: true });
           const dono = (await ref.get()).data() ?? {};
-          await base.collection('chatLigacoes').doc(`call-${c.id}`).set({
-            tipo: 'recebida',
-            em: quando,
-            conversaId: `whatsapp_${numero}`,
-            vendedorLogin: dono.vendedorLogin ?? '',
-            vendedorNome: dono.vendedorNome ?? 'Sem vendedor',
-          });
+          await base.collection('chatLigacoes').doc(`call-${c.id}`).set(
+            { tipo: ant.perdida ? 'perdida' : 'recebida', em: quando, conversaId: `whatsapp_${numero}`, vendedorLogin: dono.vendedorLogin ?? '', vendedorNome: dono.vendedorNome ?? 'Sem vendedor' },
+            { merge: true }
+          );
         } catch (e) {
           console.error('Erro ao registrar chamada:', e.message);
         }
