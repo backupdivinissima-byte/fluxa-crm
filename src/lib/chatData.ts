@@ -652,13 +652,18 @@ export async function houveContatoNoChat(empresaId: string, telefone: string | u
   const k = chaveTelefone(telefone);
   if (k.length < 10) return false;
   await chatPronto;
-  const snap = await getDocs(query(conversasCol(empresaId), orderBy('ultimaEm', 'desc'), limit(1000)));
-  const conversas = snap.docs.filter((d) => chaveTelefone((d.data() as ConversaChat).telefone ?? (d.data() as ConversaChat).contato) === k);
+  // Compara pelos 8 últimos dígitos: ignora DDI e o 9º dígito (o mesmo cliente pode estar salvo com ou sem ele).
+  const k8 = k.slice(-8);
+  const snap = await getDocs(query(conversasCol(empresaId), orderBy('ultimaEm', 'desc'), limit(1500)));
+  const conversas = snap.docs.filter((d) => {
+    const x = d.data() as ConversaChat;
+    return [x.telefone, x.contato, x.contatoJid?.split('@')[0]].some((t) => !!t && (t.replace(/\D/g, '').slice(-8) === k8) && t.replace(/\D/g, '').length >= 10);
+  });
   for (const c of conversas) {
     const ms = await getDocs(query(collection(db, 'empresas', empresaId, 'conversas', c.id, 'mensagens'), orderBy('em', 'desc'), limit(60)));
     if (ms.docs.some((m) => {
       const d = m.data() as MensagemChat;
-      return d.de === 'equipe' && d.autor !== 'Robô' && d.em >= desdeISO;
+      return d.de === 'equipe' && d.autor !== 'Robô' && (!desdeISO || d.em >= desdeISO);
     })) return true;
   }
   return false;
