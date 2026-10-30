@@ -12,7 +12,7 @@ import { recalcularAgregadosDeOrigens } from '../lib/importarPlanilha';
 const f = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /** Página técnica (administrador): confere de onde vem cada real do "Vendas total", direto do banco, sem filtros. */
-export default function Diagnostico({ compacto = false }: { compacto?: boolean }) {
+export default function Diagnostico({ compacto = false, semRestaurar = false }: { compacto?: boolean; semRestaurar?: boolean }) {
   const { empresa } = useAuth();
   const [txt, setTxt] = useState('Carregando…');
   const [msg, setMsg] = useState('');
@@ -34,7 +34,7 @@ export default function Diagnostico({ compacto = false }: { compacto?: boolean }
     setMsg(`Restaurados ${n} clientes · R$ ${f(v)}. Recarregue a página (F5).`);
   }
   useEffect(() => {
-    if (compacto && empresa?.id) void restaurar();
+    if (compacto && !semRestaurar && empresa?.id) void restaurar();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empresa?.id]);
   useEffect(() => {
@@ -136,7 +136,6 @@ export default function Diagnostico({ compacto = false }: { compacto?: boolean }
   }, [empresa?.id]);
   return compacto ? (
     <div>
-      <button onClick={() => void restaurar()} className="mb-2 rounded-lg bg-amber-500 text-white text-xs font-bold px-3 py-1.5">Restaurar novembro/2025 dos clientes que faltam</button> <span className="text-xs font-bold">{msg}</span>
     <pre id="diag" className="rounded-xl border-2 border-amber-400 bg-amber-50 p-3 text-[10px] leading-[1.25] whitespace-pre-wrap font-mono [column-count:3] [column-gap:16px]">{'DIAGNÓSTICO TEMPORÁRIO\n' + txt}</pre>
     </div>
   ) : (
