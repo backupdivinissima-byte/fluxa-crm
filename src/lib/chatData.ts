@@ -81,10 +81,13 @@ export function ouvirMinhasConversas(empresaId: string, login: string, cb: (c: C
   const mapa = (snap: QuerySnapshot) => snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ConversaChat);
   let a: ConversaChat[] = [];
   let b: ConversaChat[] = [];
-  const emitir = () => cb([...a, ...b]);
+  let c: ConversaChat[] = [];
+  const emitir = () => cb([...a, ...b, ...c]);
   const u1 = ouvirResiliente(query(conversasCol(empresaId), where('vendedorLogin', '==', login), limit(1000)), mapa, (v) => { a = v; emitir(); });
   const u2 = ouvirResiliente(query(conversasCol(empresaId), where('salvoPor', '==', login), limit(500)), mapa, (v) => { b = v; emitir(); });
-  return () => { u1(); u2(); };
+  // Contato salvo nunca some da lista, por mais antiga que seja a última mensagem.
+  const u3 = ouvirResiliente(query(conversasCol(empresaId), where('salvo', '==', true), limit(3000)), mapa, (v) => { c = v; emitir(); });
+  return () => { u1(); u2(); u3(); };
 }
 
 export function ouvirMensagens(empresaId: string, conversaId: string, cb: (m: MensagemChat[]) => void): Unsubscribe {

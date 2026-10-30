@@ -323,13 +323,27 @@ export default function Chat() {
 
   const [conversasRec, setConversas] = useState<ConversaChat[]>([]);
   const [conversasMinhas, setConversasMinhas] = useState<ConversaChat[]>([]);
-  const conversas = useMemo(() => {
+  const conversasUnidas = useMemo(() => {
     const m = new Map<string, ConversaChat>();
     for (const c of conversasMinhas) m.set(c.id, c);
     for (const c of conversasRec) m.set(c.id, c); // a versão das 300 mais recentes é a mais fresca
     return [...m.values()].sort((x, y) => (y.ultimaEm ?? '').localeCompare(x.ultimaEm ?? ''));
   }, [conversasRec, conversasMinhas]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  // Posse de 30 dias: o cliente só continua "do vendedor" (em Minhas) se o atendimento começou há menos de 30 dias
+  // ou se ele comprou nos últimos 30 dias. Passado o prazo sem venda, volta para "Todas" e qualquer um vê e atende.
+  const conversas = useMemo(() => {
+    const limite = Date.now() - 30 * 86400000;
+    const limiteData = new Date(limite).toISOString().slice(0, 10);
+    return conversasUnidas.map((c) => {
+      if (!c.vendedorLogin || c.grupo || c.interno) return c;
+      const desde = c.atendimentoEm ?? c.ultimaEm ?? '';
+      if (desde && new Date(desde).getTime() >= limite) return c;
+      const cli = (c.clienteId ? clientes.find((x) => x.id === c.clienteId) : undefined) ?? (c.telefone ? acharClientePorTelefone(clientes, c.telefone) : undefined);
+      if (cli?.dtUltCompra && cli.dtUltCompra.slice(0, 10) >= limiteData) return c;
+      return { ...c, vendedorLogin: undefined, vendedorNome: undefined, atendimentoEm: undefined, salvoPor: undefined };
+    });
+  }, [conversasUnidas, clientes]);
   const [agendaTodos, setAgendaTodos] = useState<Agendamento[]>([]);
   const [internos, setInternos] = useState<TelefoneInterno[]>([]);
   const [abaChat, setAbaChat] = useState<'dash' | 'conversas' | 'telefones'>('dash');
