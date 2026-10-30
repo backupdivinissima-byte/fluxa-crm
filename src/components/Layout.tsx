@@ -89,7 +89,6 @@ export default function Layout() {
   // O ERP é um módulo individual: nunca entra no "vincular tudo" (não mistura abas nem dados com os outros).
   // A ligação dele com CRM/Marketing/Chat será só por API.
   const vinculaveis = modulos.filter((m) => !MODULOS_SEPARADOS.includes(m));
-  const separados = modulos.filter((m) => MODULOS_SEPARADOS.includes(m));
   const varios = modulos.length > 1;
   // Cada módulo é separado (CRM, Marketing, Chat, ERP, Prospect): nunca juntamos as abas num grupo só.
   const vinculados = papel === 'admin' && empresa?.modulosVinculados === true && vinculaveis.length > 1;
@@ -112,6 +111,11 @@ export default function Layout() {
   const visiveis: Modulo[] =
     papel === 'admin' ? visiveisAdmin : extrasUsuario.length === 0 ? baseUsuario : extrasUsuario.includes(moduloAtual) ? [moduloAtual] : baseUsuario;
   const perguntarVinculo = papel === 'admin' && empresa?.perguntarAssociar === true && empresa.modulosVinculados === undefined && vinculaveis.length > 1;
+
+  // Estilo RD Station: as abas são só as do módulo aberto; no fim da barra ficam os outros módulos a que a pessoa tem acesso.
+  const acessiveis: Modulo[] = papel === 'admin' ? modulos : [...(baseUsuario.length ? [baseUsuario[0]] : []), ...extrasUsuario];
+  const mesmoGrupo = (m: Modulo) => m === moduloAtual || (vinculados && !MODULOS_SEPARADOS.includes(m) && !MODULOS_SEPARADOS.includes(moduloAtual));
+  const outrosModulos: Modulo[] = (papel === 'admin' ? varios : extrasUsuario.length > 0) && !perguntarVinculo ? acessiveis.filter((m) => !mesmoGrupo(m)) : [];
 
   function trocarModulo(m: Modulo) {
     setModuloEscolhido(m);
@@ -148,24 +152,6 @@ export default function Layout() {
               {modulos.length === 1 && modulos[0] === 'marketing' ? 'Fluxa Marketing' : modulos.length === 1 && modulos[0] === 'chat' ? 'Fluxa Chat' : modulos.length === 1 && modulos[0] === 'erp' ? 'Fluxa ERP' : modulos.length === 1 && modulos[0] === 'prospect' ? 'Fluxa Prospect' : 'Fluxa CRM'}
             </span>
           </div>
-
-          {(papel === 'admin' ? varios : extrasUsuario.length > 0) && (!vinculados || separados.length > 0) && !perguntarVinculo && (
-            <div className="flex bg-slate-100 rounded-lg p-0.5 mr-2 shrink-0">
-              {(vinculados ? [vinculaveis[0], ...separados] : papel === 'admin' ? modulos : [...(baseUsuario.length ? [baseUsuario[0]] : []), ...extrasUsuario]).map((m) => {
-                const grupo = vinculados && !MODULOS_SEPARADOS.includes(m);
-                const ativo = grupo ? !MODULOS_SEPARADOS.includes(moduloAtual) : m === moduloAtual;
-                return (
-                  <button
-                    key={m}
-                    onClick={() => trocarModulo(m)}
-                    className={`px-3 h-8 rounded-md text-xs font-bold uppercase tracking-wide ${ativo ? 'bg-white text-ink shadow-sm' : 'text-ink-soft'}`}
-                  >
-                    {grupo ? vinculaveis.map((x) => NOME_MODULO[x]).join(' + ') : NOME_MODULO[m]}
-                  </button>
-                );
-              })}
-            </div>
-          )}
 
           <nav className="flex items-center gap-1 flex-wrap">
             {itens
@@ -218,6 +204,16 @@ export default function Layout() {
                   </div>
                 );
               })}
+            {outrosModulos.length > 0 && <span className="mx-1 h-6 w-px bg-line" aria-hidden="true" />}
+            {outrosModulos.map((m) => (
+              <button
+                key={m}
+                onClick={() => trocarModulo(m)}
+                className="flex items-center gap-1 px-3 h-9 rounded-lg text-sm font-bold whitespace-nowrap border border-teal-500/40 text-teal-600 hover:bg-teal-500/10"
+              >
+                {NOME_MODULO[m]} <span className="text-[10px]">→</span>
+              </button>
+            ))}
           </nav>
 
           <div className="ml-auto flex items-center gap-4 pl-4 shrink-0">
