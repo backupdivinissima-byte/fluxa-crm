@@ -76,6 +76,17 @@ export function ouvirConversas(empresaId: string, cb: (c: ConversaChat[]) => voi
   return ouvirResiliente(q, (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ConversaChat), cb);
 }
 
+/** Conversas que são do vendedor (atendendo ou salvas por ele), mesmo as que já saíram das 300 mais recentes. */
+export function ouvirMinhasConversas(empresaId: string, login: string, cb: (c: ConversaChat[]) => void): Unsubscribe {
+  const mapa = (snap: QuerySnapshot) => snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ConversaChat);
+  let a: ConversaChat[] = [];
+  let b: ConversaChat[] = [];
+  const emitir = () => cb([...a, ...b]);
+  const u1 = ouvirResiliente(query(conversasCol(empresaId), where('vendedorLogin', '==', login), limit(1000)), mapa, (v) => { a = v; emitir(); });
+  const u2 = ouvirResiliente(query(conversasCol(empresaId), where('salvoPor', '==', login), limit(500)), mapa, (v) => { b = v; emitir(); });
+  return () => { u1(); u2(); };
+}
+
 export function ouvirMensagens(empresaId: string, conversaId: string, cb: (m: MensagemChat[]) => void): Unsubscribe {
   const q = query(collection(db, 'empresas', empresaId, 'conversas', conversaId, 'mensagens'), orderBy('em', 'desc'), limit(300));
   // As 300 mais NOVAS (antes eram as 300 mais antigas: conversa longa parava de mostrar mensagem nova), já em ordem cronológica.
@@ -432,13 +443,36 @@ export function validarTelefoneWhatsApp(telefone: string): string | null {
 }
 
 /** Cria (ou reabre) um contato dentro do Fluxa Chat, já salvo na agenda e no nome de quem cadastrou. */
-export async function criarContatoChat(empresaId: string, nome: string, telefone: string, salvoPor?: string): Promise<ConversaChat> {
+/** Procura um contato JÁ SALVO com este telefone (com/sem DDI e 9º dígito) e devolve quem é o dono. */
+async function contatoSalvoExistente(empresaId: string, telefone: string, ignorarId?: string): Promise<string | null> {
+  let d = normalizarTelefone(telefone);
+  if (d.startsWith('55') && d.length >= 12) d = d.slice(2);
+  const vars = new Set<string>([d]);
+  if (d.length === 11 && d[2] === '9') vars.add(d.slice(0, 2) + d.slice(3));
+  if (d.length === 10) vars.add(d.slice(0, 2) + '9' + d.slice(2));
+  for (const v of [...vars]) vars.add('55' + v);
+  for (const v of vars) {
+    const id = `whatsapp_${v}`;
+    if (id === ignorarId) continue;
+    const sn = await getDoc(doc(db, 'empresas', empresaId, 'conversas', id));
+    if (!sn.exists()) continue;
+    const x = sn.data() as Partial<ConversaChat>;
+    if (!x.salvo) continue;
+    const dono = x.vendedorNome || (x.grupo || x.interno ? 'a equipe (livre para todos)' : 'ninguém ainda (livre para todos)');
+    return `Este contato já está salvo como "${x.nome ?? v}" e pertence a ${dono}. Não é preciso salvar de novo: procure por ele na lista de conversas.`;
+  }
+  return null;
+}
+
+export async function criarContatoChat(empresaId: string, nome: string, telefone: string, salvoPor?: string, permitirExistente = false): Promise<ConversaChat> {
   await chatPronto;
   const d = normalizarTelefone(telefone);
   const erroTel = validarTelefoneWhatsApp(telefone);
   if (erroTel) throw new Error(erroTel);
   const id = `whatsapp_${d}`;
   const ref = doc(db, 'empresas', empresaId, 'conversas', id);
+  const jaSalvo = permitirExistente ? null : await contatoSalvoExistente(empresaId, telefone);
+  if (jaSalvo) throw new Error(jaSalvo);
   const atual = await getDoc(ref);
   const agora = new Date().toISOString();
   if (atual.exists()) {
@@ -478,7 +512,7 @@ export async function abrirContatoChat(empresaId: string, nome: string, telefone
     const atual = await getDoc(doc(db, 'empresas', empresaId, 'conversas', `whatsapp_${d}`));
     if (atual.exists()) return { id: atual.id, ...(atual.data() as Omit<ConversaChat, 'id'>) };
   }
-  return criarContatoChat(empresaId, nome, telefone);
+  return criarContatoChat(empresaId, nome, telefone, undefined, true);
 }
 
 export interface MensagemAgendada {
@@ -577,6 +611,8 @@ export async function editarContatoChat(empresaId: string, conversaId: string, d
   if (novo.length < 10) throw new Error('Telefone inválido. Informe DDD + número (ou +país para número de fora do Brasil).');
   const novoId = `whatsapp_${novo}`;
   const novaRef = doc(db, 'empresas', empresaId, 'conversas', novoId);
+  const jaSalvo = await contatoSalvoExistente(empresaId, dados.telefone ?? novo, conversaId);
+  if (jaSalvo) throw new Error(jaSalvo);
   const existente = await getDoc(novaRef);
   const msgs = await getDocs(collection(ref, 'mensagens'));
   for (const m of msgs.docs) await setDoc(doc(novaRef, 'mensagens', m.id), m.data()); // copia o histórico

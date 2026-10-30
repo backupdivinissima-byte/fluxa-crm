@@ -288,7 +288,7 @@ export default function Prospect() {
     if (!empresaId || !mensagem || !mensagem.texto.trim()) return;
     setEnviando(true);
     try {
-      const conversa = await criarContatoChat(empresaId, mensagem.lead.nome, mensagem.lead.whatsapp ?? '');
+      const conversa = await criarContatoChat(empresaId, mensagem.lead.nome, mensagem.lead.whatsapp ?? '', undefined, true);
       await enviarMensagemChat(empresaId, conversa, mensagem.texto.trim(), perfil?.nome ?? 'Fluxa Prospect');
       await atualizarLead(empresaId, mensagem.lead.id, { status: 'contatado' }).catch(() => {});
       setMsg(`Mensagem enviada para ${mensagem.lead.nome}. As respostas chegam no seu WhatsApp.`);

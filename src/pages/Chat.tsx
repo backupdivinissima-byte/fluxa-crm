@@ -40,6 +40,7 @@ import {
   liberarConversa,
   ouvirConexaoWhatsapp,
   ouvirConversas,
+  ouvirMinhasConversas,
   ouvirMensagens,
   ouvirSupervisora,
   type SugestaoSupervisora,
@@ -320,7 +321,14 @@ export default function Chat() {
   const meuLogin = souAdmin ? '__admin__' : (sessaoVendedor?.vendedor.login ?? '');
   const meuNome = souAdmin ? (perfil?.nome ?? 'Administrador') : (sessaoVendedor?.vendedor.nome ?? '');
 
-  const [conversas, setConversas] = useState<ConversaChat[]>([]);
+  const [conversasRec, setConversas] = useState<ConversaChat[]>([]);
+  const [conversasMinhas, setConversasMinhas] = useState<ConversaChat[]>([]);
+  const conversas = useMemo(() => {
+    const m = new Map<string, ConversaChat>();
+    for (const c of conversasMinhas) m.set(c.id, c);
+    for (const c of conversasRec) m.set(c.id, c); // a versão das 300 mais recentes é a mais fresca
+    return [...m.values()].sort((x, y) => (y.ultimaEm ?? '').localeCompare(x.ultimaEm ?? ''));
+  }, [conversasRec, conversasMinhas]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [agendaTodos, setAgendaTodos] = useState<Agendamento[]>([]);
   const [internos, setInternos] = useState<TelefoneInterno[]>([]);
@@ -373,6 +381,11 @@ export default function Chat() {
   const gravadorRef = useRef<MediaRecorder | null>(null);
   const pedacosRef = useRef<Blob[]>([]);
   const enviarAoParar = useRef(true);
+
+  useEffect(() => {
+    if (!empresaId || !meuLogin) return;
+    return ouvirMinhasConversas(empresaId, meuLogin, setConversasMinhas);
+  }, [empresaId, meuLogin]);
 
   useEffect(() => {
     if (!empresaId) return;
