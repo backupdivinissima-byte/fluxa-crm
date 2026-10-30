@@ -385,6 +385,8 @@ export interface ConversaChat {
   interno?: boolean; // número cadastrado como interno (marcado pelo conector)
   internoSetor?: string;
   grupo?: boolean; // grupo de WhatsApp: sem dono, todos da equipe veem e respondem
+  /** Login de quem salvou o contato: ele sempre enxerga a conversa. */
+  salvoPor?: string;
   tags?: string[]; // ids das tags cadastradas (chatTags)
   nomeSugerido?: string; // nome que chegou pronto (agenda do celular ou perfil)
   salvo?: boolean; // a equipe confirmou o nome na agenda do Fluxa Chat

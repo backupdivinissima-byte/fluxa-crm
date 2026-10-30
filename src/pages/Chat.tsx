@@ -478,10 +478,10 @@ export default function Chat() {
   const bloqueadaPorPosse = (c: ConversaChat) => {
     if (souAdmin) return false;
     const p = posseDaConversa(c);
-    return !!p && p.login !== meuLogin && (p.nome ?? '').trim().toLowerCase() !== (meuNome ?? '').trim().toLowerCase();
+    return c.salvoPor !== meuLogin && !!p && p.login !== meuLogin && (p.nome ?? '').trim().toLowerCase() !== (meuNome ?? '').trim().toLowerCase();
   };
   const visiveis = useMemo(
-    () => (souAdmin ? conversas : conversas.filter((c) => !!internoDe(c) || ((!c.vendedorLogin || c.vendedorLogin === meuLogin) && !bloqueadaPorPosse(c)))),
+    () => (souAdmin ? conversas : conversas.filter((c) => !!internoDe(c) || (c.salvoPor === meuLogin || ((!c.vendedorLogin || c.vendedorLogin === meuLogin) && !bloqueadaPorPosse(c))))),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [conversas, souAdmin, meuLogin, posses, posseFone, fonesInternos]
   );
@@ -608,7 +608,7 @@ export default function Chat() {
           crmColunaChangedAt: new Date().toISOString(),
         });
         // O nome de cima é o da agenda (o digitado, o já salvo ou o do celular); a razão social do cliente aparece embaixo.
-        await salvarContatoChat(empresaId, aberta.id, nomeContato.trim() || (aberta.salvo ? aberta.nome : '') || aberta.nomeSugerido || cli.razao || cli.nome || '');
+        await salvarContatoChat(empresaId, aberta.id, nomeContato.trim() || (aberta.salvo ? aberta.nome : '') || aberta.nomeSugerido || cli.razao || cli.nome || '', meuLogin);
         await assumirConversa(empresaId, aberta.id, login, nomeVend, cli.id);
         setCodigoCliente('');
         setEditando(false);
@@ -616,12 +616,13 @@ export default function Chat() {
       }
       const nome = nomeContato.trim();
       if (editando) {
-        const novoId = await editarContatoChat(empresaId, aberta.id, { nome, telefone: telContato.trim() || undefined });
-        if (novoId !== aberta.id) setAbertaId(novoId);
+        const novoId = await editarContatoChat(empresaId, aberta.id, { nome, telefone: telContato.trim() || undefined, salvoPor: meuLogin });
+        setAbertaId(novoId);
         setEditando(false);
+        if (!aberta.vendedorLogin && !souAdmin) await assumir({ ...aberta, id: novoId, nome, telefone: telContato.trim() ? telContato.trim() : aberta.telefone });
         return;
       }
-      await salvarContatoChat(empresaId, aberta.id, nome);
+      await salvarContatoChat(empresaId, aberta.id, nome, meuLogin);
       // Ao salvar o contato, ele passa a pertencer a quem salvou (se ainda não tiver dono).
       if (!aberta.vendedorLogin || (aberta.vendedorLogin === meuLogin && !aberta.clienteId)) await assumir({ ...aberta, nome });
     } catch (e) {
@@ -665,7 +666,7 @@ export default function Chat() {
   async function assumir(c: ConversaChat) {
     if (internoDe(c)) return; // número interno: ninguém assume
     const pos = souAdmin ? undefined : posseDaConversa(c);
-    if (pos && bloqueadaPorPosse(c)) {
+    if (pos && bloqueadaPorPosse(c) && c.salvoPor !== meuLogin) {
       setErro(`Este cliente está em atendimento com ${pos.nome} até ${pos.ate.toLocaleDateString('pt-BR')}. Só depois desse prazo ele volta ao rodízio.`);
       return;
     }
@@ -815,11 +816,11 @@ export default function Chat() {
     }
     setErro('');
     try {
-      const conversa = await criarContatoChat(empresaId, nome, novoContato.telefone);
+      const conversa = await criarContatoChat(empresaId, nome, novoContato.telefone, meuLogin);
       // Fica com quem cadastrou: assume o atendimento e (vendedor) entra no CRM em atendimento.
       if (!conversa.vendedorLogin) await assumir(conversa);
       setNovoContato(null);
-      setFiltro('minhas');
+      setFiltro('todas');
       setAbertaId(conversa.id);
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Não foi possível cadastrar o contato.');

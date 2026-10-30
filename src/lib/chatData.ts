@@ -432,7 +432,7 @@ export function validarTelefoneWhatsApp(telefone: string): string | null {
 }
 
 /** Cria (ou reabre) um contato dentro do Fluxa Chat, já salvo na agenda e no nome de quem cadastrou. */
-export async function criarContatoChat(empresaId: string, nome: string, telefone: string): Promise<ConversaChat> {
+export async function criarContatoChat(empresaId: string, nome: string, telefone: string, salvoPor?: string): Promise<ConversaChat> {
   await chatPronto;
   const d = normalizarTelefone(telefone);
   const erroTel = validarTelefoneWhatsApp(telefone);
@@ -442,8 +442,8 @@ export async function criarContatoChat(empresaId: string, nome: string, telefone
   const atual = await getDoc(ref);
   const agora = new Date().toISOString();
   if (atual.exists()) {
-    await updateDoc(ref, { nome, salvo: true });
-    return { id, ...(atual.data() as Omit<ConversaChat, 'id'>), nome, salvo: true };
+    await updateDoc(ref, { nome, salvo: true, ...(salvoPor ? { salvoPor } : {}) });
+    return { id, ...(atual.data() as Omit<ConversaChat, 'id'>), nome, salvo: true, ...(salvoPor ? { salvoPor } : {}) };
   }
   const nova = {
     canal: 'whatsapp' as const,
@@ -452,6 +452,7 @@ export async function criarContatoChat(empresaId: string, nome: string, telefone
     contatoJid: `${d}@s.whatsapp.net`,
     nome,
     salvo: true,
+    ...(salvoPor ? { salvoPor } : {}),
     ultimaMensagem: '',
     ultimaEm: agora,
     ultimaDe: 'equipe' as const,
@@ -557,7 +558,7 @@ export function ouvirLigacoesHoje(empresaId: string, cb: (l: LigacaoChat[]) => v
 /** Edita um contato já salvo: nome e (opcional) telefone. */
 /** Edita o contato. Se o telefone mudou, a conversa inteira (com o histórico) passa para o número certo,
  * e as próximas mensagens já saem para ele. Devolve o id da conversa (que muda quando o telefone muda). */
-export async function editarContatoChat(empresaId: string, conversaId: string, dados: { nome: string; telefone?: string }): Promise<string> {
+export async function editarContatoChat(empresaId: string, conversaId: string, dados: { nome: string; telefone?: string; salvoPor?: string }): Promise<string> {
   await chatPronto;
   const ref = doc(db, 'empresas', empresaId, 'conversas', conversaId);
   const atual = await getDoc(ref);
@@ -569,7 +570,7 @@ export async function editarContatoChat(empresaId: string, conversaId: string, d
   }
   const mudou = !!novo && dadosAtuais.canal === 'whatsapp' && novo !== dadosAtuais.contato && `whatsapp_${novo}` !== conversaId;
   if (!mudou) {
-    await updateDoc(ref, { nome: dados.nome, salvo: true, ...(novo ? { telefone: novo } : {}) });
+    await updateDoc(ref, { nome: dados.nome, salvo: true, ...(dados.salvoPor ? { salvoPor: dados.salvoPor } : {}), ...(novo ? { telefone: novo } : {}) });
     void espelharNoCofre(empresaId, conversaId);
     return conversaId;
   }
@@ -579,7 +580,7 @@ export async function editarContatoChat(empresaId: string, conversaId: string, d
   const existente = await getDoc(novaRef);
   const msgs = await getDocs(collection(ref, 'mensagens'));
   for (const m of msgs.docs) await setDoc(doc(novaRef, 'mensagens', m.id), m.data()); // copia o histórico
-  const campos = { ...(atual.data() ?? {}), contato: novo, telefone: novo, contatoJid: `${novo}@s.whatsapp.net`, nome: dados.nome, salvo: true };
+  const campos = { ...(atual.data() ?? {}), contato: novo, telefone: novo, contatoJid: `${novo}@s.whatsapp.net`, nome: dados.nome, salvo: true, ...(dados.salvoPor ? { salvoPor: dados.salvoPor } : {}) };
   if (existente.exists()) {
     const e = existente.data() as Partial<ConversaChat>;
     const maisRecente = (e.ultimaEm ?? '') > (dadosAtuais.ultimaEm ?? '');
@@ -592,9 +593,9 @@ export async function editarContatoChat(empresaId: string, conversaId: string, d
   return novoId;
 }
 
-export async function salvarContatoChat(empresaId: string, conversaId: string, nome: string) {
+export async function salvarContatoChat(empresaId: string, conversaId: string, nome: string, salvoPor?: string) {
   await chatPronto;
-  await updateDoc(doc(db, 'empresas', empresaId, 'conversas', conversaId), { nome, salvo: true });
+  await updateDoc(doc(db, 'empresas', empresaId, 'conversas', conversaId), { nome, salvo: true, ...(salvoPor ? { salvoPor } : {}) });
   void espelharNoCofre(empresaId, conversaId);
 }
 
