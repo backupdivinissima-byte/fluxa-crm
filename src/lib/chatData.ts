@@ -166,6 +166,12 @@ export async function assumirConversa(empresaId: string, conversaId: string, log
   void espelharNoCofre(empresaId, conversaId);
 }
 
+/** Quem recebeu a transferência concluiu: some o aviso e a conversa fica dele. */
+export async function concluirTransferencia(empresaId: string, conversaId: string) {
+  await chatPronto;
+  await updateDoc(doc(db, 'empresas', empresaId, 'conversas', conversaId), { transferenciaPendente: null });
+}
+
 export async function liberarConversa(empresaId: string, conversaId: string) {
   await chatPronto;
   await updateDoc(doc(db, 'empresas', empresaId, 'conversas', conversaId), {
@@ -369,7 +375,8 @@ export async function transferirConversa(
   empresaId: string,
   conversa: ConversaChat,
   de: string,
-  para: { login: string; nome: string }
+  para: { login: string; nome: string },
+  notaInterna?: string
 ) {
   await chatPronto;
   const agora = new Date().toISOString();
@@ -377,11 +384,12 @@ export async function transferirConversa(
     vendedorLogin: para.login,
     vendedorNome: para.nome,
     atendimentoEm: agora,
+    ...(notaInterna ? { transferenciaPendente: { texto: notaInterna, deNome: de, em: agora } } : {}),
   });
   void espelharNoCofre(empresaId, conversa.id);
   await addDoc(collection(db, 'empresas', empresaId, 'conversas', conversa.id, 'mensagens'), {
     de: 'equipe',
-    texto: `🔁 Atendimento transferido de ${de} para ${para.nome}`,
+    texto: `🔁 Atendimento transferido de ${de} para ${para.nome}${notaInterna ? `\n📝 Mensagem interna: ${notaInterna}` : ''}`,
     em: agora,
     autor: 'Sistema',
     interna: true,

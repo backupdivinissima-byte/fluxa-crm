@@ -41,6 +41,7 @@ import {
   ouvirConexaoWhatsapp,
   ouvirConversas,
   ouvirMinhasConversas,
+  concluirTransferencia,
   ouvirMensagens,
   ouvirSupervisora,
   type SugestaoSupervisora,
@@ -380,6 +381,8 @@ export default function Chat() {
   const [editando, setEditando] = useState(false);
   const [vendedoresCrm, setVendedoresCrm] = useState<Vendedor[]>([]);
   const [transferindo, setTransferindo] = useState(false);
+  const [paraTransferir, setParaTransferir] = useState<Vendedor | null>(null);
+  const [notaTransf, setNotaTransf] = useState('');
   const [novoContato, setNovoContato] = useState<{ nome: string; telefone: string } | null>(null);
   const [anexo, setAnexo] = useState<{ arquivo: File | Blob; nome: string; previa?: string } | null>(null);
   const [maisAnexos, setMaisAnexos] = useState<Array<{ arquivo: File | Blob; nome: string; previa?: string }>>([]);
@@ -854,14 +857,16 @@ export default function Chat() {
     }
   }
 
-  async function transferir(v: Vendedor) {
+  async function transferir(v: Vendedor, nota?: string) {
     if (!empresaId || !aberta) return;
     setErro('');
     try {
-      await transferirConversa(empresaId, aberta, aberta.vendedorNome || meuNome, { login: v.login, nome: v.nome });
+      await transferirConversa(empresaId, aberta, aberta.vendedorNome || meuNome, { login: v.login, nome: v.nome }, nota);
       const idCli = aberta.clienteId ?? clienteCrm?.id;
       if (idCli) await transferirPosse(empresaId, agendaTodos, idCli, { login: v.login, nome: v.nome }).catch(() => {});
       setTransferindo(false);
+      setParaTransferir(null);
+      setNotaTransf('');
       if (!souAdmin) setAbertaId(null); // deixou de ser dele
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Não foi possível transferir.');
@@ -892,6 +897,7 @@ export default function Chat() {
       // Quem conversa com um contato sem dono passa a ser o dono: a conversa fica em "Minhas" e não some.
       if (!souAdmin && !aberta.vendedorLogin && !internoDe(aberta)) await assumir(aberta);
       await enviarMensagemChat(empresaId, aberta, t, meuNome, agendarPara, cit);
+      if (aberta.transferenciaPendente) await concluirTransferencia(empresaId, aberta.id); // respondeu ao cliente: assumiu
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Não foi possível enviar.');
     }
@@ -1459,6 +1465,18 @@ export default function Chat() {
                   );
                 })}
               </div>
+              {aberta.transferenciaPendente && (souAdmin || aberta.vendedorLogin === meuLogin) && (
+                <div className="mx-4 mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3">
+                  <div className="text-xs font-extrabold text-amber-800">📝 Mensagem interna de {aberta.transferenciaPendente.deNome}</div>
+                  <p className="text-sm text-amber-900 mt-1 whitespace-pre-wrap">{aberta.transferenciaPendente.texto}</p>
+                  <button
+                    onClick={() => empresaId && void concluirTransferencia(empresaId, aberta.id)}
+                    className="mt-2 rounded-lg bg-amber-600 text-white text-xs font-bold px-3 py-1.5 hover:opacity-90"
+                  >
+                    Concluir e assumir a conversa
+                  </button>
+                </div>
+              )}
               <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-2">
                 {mensagens.map((m) => m.ligacao || m.id.startsWith('call-') ? (
                   <div key={m.id} className="flex justify-center">
@@ -1824,7 +1842,8 @@ export default function Chat() {
                   <li key={v.id}>
                     <button
                       onClick={() => {
-                        if (confirm(`Transferir este atendimento para ${v.nome}?`)) void transferir(v);
+                        setNotaTransf('');
+                        setParaTransferir(v);
                       }}
                       className="w-full text-left px-4 py-2.5 text-sm font-bold text-ink hover:bg-surface"
                     >
@@ -1839,6 +1858,36 @@ export default function Chat() {
             <button onClick={() => setTransferindo(false)} className="mt-3 w-full rounded-xl border border-line text-sm font-bold py-2 hover:bg-surface">
               Cancelar
             </button>
+          </div>
+        </div>
+      )}
+      {paraTransferir && aberta && (
+        <div className="fixed inset-0 z-[60] bg-ink/40 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-5 shadow-xl">
+            <h3 className="text-base font-extrabold text-ink">📝 Mensagem interna</h3>
+            <p className="text-xs text-ink-soft mt-1 mb-3">
+              Escreva para {paraTransferir.nome} o que você conversou com {clienteCrm?.razao ?? clienteCrm?.nome ?? aberta.nome}. Só a equipe vê; o cliente não recebe.
+            </p>
+            <textarea
+              autoFocus
+              value={notaTransf}
+              onChange={(e) => setNotaTransf(e.target.value)}
+              rows={6}
+              placeholder="O que foi conversado, o que o cliente quer, combinados, próximos passos…"
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/30"
+            />
+            <div className="flex gap-2 mt-3">
+              <button onClick={() => setParaTransferir(null)} className="flex-1 rounded-xl border border-line text-sm font-bold py-2 hover:bg-surface">
+                Voltar
+              </button>
+              <button
+                disabled={!notaTransf.trim()}
+                onClick={() => void transferir(paraTransferir, notaTransf.trim())}
+                className="flex-1 rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold py-2 disabled:opacity-50"
+              >
+                Salvar e transferir
+              </button>
+            </div>
           </div>
         </div>
       )}
