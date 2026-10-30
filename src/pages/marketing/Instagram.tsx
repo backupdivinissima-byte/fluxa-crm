@@ -49,7 +49,7 @@ function baixarCsv(live: InstagramLive) {
 /** Aba "Instagram": conecta a conta comercial (API oficial, sem senha) e,
  * enquanto uma live está no ar, vai captando os @ de quem comenta nela. */
 export default function InstagramLives() {
-  const { empresa, papel } = useAuth();
+  const { empresa, acessoModulo } = useAuth();
   const empresaId = empresa?.id;
   const conexao = empresa?.instagramConexao;
 
@@ -244,7 +244,7 @@ export default function InstagramLives() {
     [live]
   );
 
-  if (papel !== 'admin' || !empresaId) {
+  if (!acessoModulo('marketing') || !empresaId) {
     return (
       <div className="p-6 w-full">
         <p className="text-sm text-ink-soft">Somente administradores acessam essa tela.</p>

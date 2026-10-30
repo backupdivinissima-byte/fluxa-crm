@@ -146,14 +146,14 @@ export default function Login() {
             modo === 'vendedor' ? 'bg-white text-ink shadow-sm' : 'text-ink-soft'
           }`}
         >
-          Vendedor
+          Usuário
         </button>
       </div>
 
       <form onSubmit={onSubmit} className="bg-white border border-line rounded-2xl p-6 space-y-4">
         <div>
           <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1.5">
-            {modo === 'admin' ? 'E-mail' : 'Login'}
+            {modo === 'admin' ? 'E-mail' : 'Login do usuário'}
           </label>
           <input
             type={modo === 'admin' ? 'email' : 'text'}

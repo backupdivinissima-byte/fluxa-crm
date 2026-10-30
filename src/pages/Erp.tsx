@@ -30,7 +30,7 @@ const rotulo = 'block text-xs font-bold text-ink-soft uppercase tracking-wide mb
 const numero = (t: string) => { const n = parseValorBR(t); return Number.isNaN(n) ? 0 : n; };
 
 export default function Erp() {
-  const { empresa, papel, perfil } = useAuth();
+  const { empresa, perfil , acessoModulo } = useAuth();
   const empresaId = empresa?.id;
   const { aba: abaUrl } = useParams();
   const navigate = useNavigate();
@@ -67,7 +67,7 @@ export default function Erp() {
 
   const vista = SUBS[aba] ? (sub || SUBS[aba]?.[0].id) : aba;
 
-  if (papel !== 'admin') return <div className="p-6 text-sm text-ink-soft">Somente administradores acessam o Estoque.</div>;
+  if (!acessoModulo('erp')) return <div className="p-6 text-sm text-ink-soft">Somente administradores acessam o Estoque.</div>;
 
   return (
     <div className="p-5 w-full">

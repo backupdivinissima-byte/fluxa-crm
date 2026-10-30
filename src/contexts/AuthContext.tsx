@@ -50,6 +50,8 @@ interface AuthState {
   loginVendedor: (login: string, senha: string, empresaIdHint?: string) => Promise<void>;
   cadastrar: (dados: DadosCadastro) => Promise<void>;
   sair: () => Promise<void>;
+  /** O usuário (ou o administrador) tem acesso a este módulo? */
+  acessoModulo: (m: 'marketing' | 'erp') => boolean;
   /** Responde à pergunta "vincular todos os módulos?" (só administrador). */
   definirVinculoModulos: (vincular: boolean) => Promise<void>;
 }
@@ -283,10 +285,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const papel: 'admin' | 'vendedor' | null = perfil ? 'admin' : sessaoVendedor ? 'vendedor' : null;
+  const acessoModulo = (m: 'marketing' | 'erp') => papel === 'admin' || !!sessaoVendedor?.vendedor.acessos?.includes(m);
 
   return (
     <AuthContext.Provider
-      value={{ carregando, usuario, perfil, empresa, sessaoVendedor, papel, login, loginVendedor, cadastrar, sair, definirVinculoModulos }}
+      value={{ carregando, usuario, perfil, empresa, sessaoVendedor, papel, acessoModulo, login, loginVendedor, cadastrar, sair, definirVinculoModulos }}
     >
       {children}
     </AuthContext.Provider>

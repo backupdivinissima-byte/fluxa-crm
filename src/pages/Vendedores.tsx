@@ -4,6 +4,7 @@ import { ouvirClientes, ouvirEmpresa, ouvirVendedores, removerVendedor, salvarVe
 import { CRM_COLUNAS_PADRAO, type Cliente, type ColunaCrm, type Vendedor } from '../types';
 import { formatarMoeda, matchVendedor, rankingVendedoresImportado, vendasDoMesVendedor } from '../lib/crmLogic';
 import { IconVendedores } from '../components/NavIcons';
+import { modulosDaEmpresa } from '../lib/modulos';
 
 function mesAtual(): string {
   const h = new Date();
@@ -25,7 +26,7 @@ export default function Vendedores() {
   const [senha, setSenha] = useState('');
   const [meta, setMeta] = useState('');
   const [erro, setErro] = useState('');
-  const [acessos, setAcessos] = useState<Array<'crm' | 'chat' | 'prospect'>>(['crm', 'chat']);
+  const [acessos, setAcessos] = useState<Array<'crm' | 'chat' | 'prospect' | 'marketing' | 'erp'>>(['crm', 'chat']);
 
   const ehAdmin = papel === 'admin';
 
@@ -158,15 +159,43 @@ export default function Vendedores() {
     <div className="p-6 w-full">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-base font-extrabold text-ink flex items-center gap-2">
-          <IconVendedores /> Vendedores
+          <IconVendedores /> Usuários
         </h1>
         <button
           onClick={abrirNovo}
           className="rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold px-4 py-2.5 hover:opacity-90"
         >
-          + Novo vendedor
+          + Novo usuário
         </button>
       </div>
+
+      {ehAdmin && vendedores.length > 0 && (
+        <div className="bg-white border border-line rounded-2xl p-4 mb-4">
+          <div className="text-xs font-bold text-ink-soft uppercase tracking-wide mb-2">Quem acessa cada módulo</div>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {([['crm', 'CRM'], ['chat', 'Chat'], ['prospect', 'Prospecção'], ['marketing', 'Marketing'], ['erp', 'ERP']] as const)
+              .filter(([id]) => (id !== 'marketing' && id !== 'erp') || modulosDaEmpresa(empresa).includes(id))
+              .map(([id, nomeMod]) => (
+                <div key={id}>
+                  <div className="text-sm font-extrabold text-ink mb-1">{nomeMod}</div>
+                  {vendedores.map((v) => {
+                    const atuais = v.acessos ?? ['crm', 'chat'];
+                    return (
+                      <label key={v.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={atuais.includes(id)}
+                          onChange={(e) => empresaId && void salvarVendedor(empresaId, { ...v, acessos: e.target.checked ? [...atuais, id] : atuais.filter((x) => x !== id) })}
+                        />
+                        {v.nome}
+                      </label>
+                    );
+                  })}
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
 
       <div className="bg-white border border-line rounded-2xl overflow-hidden">
         <table className="w-full text-sm">
@@ -191,7 +220,7 @@ export default function Vendedores() {
                 <td className="px-4 py-2.5 text-right font-bold text-ink">
                   {formatarMoeda(vendasDoMesVendedor(clientes, v.login, v.nome, colunasFechamentoIds, mesAtual()))}
                 </td>
-                <td className="px-4 py-2.5 text-xs text-ink-soft">{(v.acessos ?? ['crm', 'chat']).map((a) => (a === 'crm' ? 'CRM' : a === 'chat' ? 'Chat' : 'Prospecção')).join(' · ') || 'nenhum'}</td>
+                <td className="px-4 py-2.5 text-xs text-ink-soft">{(v.acessos ?? ['crm', 'chat']).map((a) => (a === 'crm' ? 'CRM' : a === 'chat' ? 'Chat' : a === 'marketing' ? 'Marketing' : a === 'erp' ? 'ERP' : 'Prospecção')).join(' · ') || 'nenhum'}</td>
                 <td className="px-4 py-2.5 text-right">
                   <button onClick={() => abrirEdicao(v)} className="text-teal-600 font-bold text-xs mr-3 hover:underline">
                     Editar
@@ -287,13 +316,15 @@ export default function Vendedores() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1">O que este vendedor pode acessar</label>
+                <label className="block text-xs font-bold text-ink-soft uppercase tracking-wide mb-1">Módulos que este usuário pode acessar</label>
                 <div className="space-y-1.5 rounded-lg border border-line p-2.5">
                   {([
                     ['crm', 'CRM', 'Meu painel, CRM, Agenda, Clientes e Metas'],
                     ['chat', 'Chat', 'Atendimento por WhatsApp, Instagram e Messenger'],
                     ['prospect', 'Prospecção', 'Buscar e qualificar novos clientes'],
-                  ] as const).map(([id, nomeAcesso, desc]) => (
+                    ['marketing', 'Marketing', 'Anúncios, lives e ROI'],
+                    ['erp', 'ERP', 'Produtos, estoque, pedidos e financeiro'],
+                  ] as const).filter(([id]) => (id !== 'marketing' && id !== 'erp') || modulosDaEmpresa(empresa).includes(id)).map(([id, nomeAcesso, desc]) => (
                     <label key={id} className="flex items-start gap-2 text-sm cursor-pointer">
                       <input
                         type="checkbox"

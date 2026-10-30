@@ -29,7 +29,7 @@ function formatarPct(v: number | undefined): string {
  * registrado na aba Meta com a receita fechada no CRM e a receita atribuída
  * às lives (aba Live) — mais a evolução dos últimos meses. */
 export default function AnaliseMarketing() {
-  const { empresa, papel } = useAuth();
+  const { empresa, acessoModulo } = useAuth();
   const empresaId = empresa?.id;
 
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -74,7 +74,7 @@ export default function AnaliseMarketing() {
     [campanhas, clientes, reservas, colunasFechamentoIds]
   );
 
-  if (papel !== 'admin' || !empresaId) {
+  if (!acessoModulo('marketing') || !empresaId) {
     return (
       <div className="p-6 w-full">
         <p className="text-sm text-ink-soft">Somente administradores acessam essa tela.</p>

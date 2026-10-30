@@ -40,7 +40,7 @@ const itens = [
   { to: '/crm', label: 'CRM', labelVendedor: 'Meu CRM', icon: <IconCrm /> },
   { to: '/agenda', label: 'Agenda', labelVendedor: 'Minha agenda', icon: <IconAgenda /> },
   { to: '/clientes', label: 'Clientes', labelVendedor: 'Meus clientes', icon: <IconClientes /> },
-  { to: '/vendedores', label: 'Vendedores', icon: <IconVendedores />, apenasAdmin: true },
+  { to: '/vendedores', label: 'Usuários', icon: <IconVendedores />, apenasAdmin: true },
   { to: '/metas', label: 'Metas & Comissões', icon: <IconMetas /> },
   { to: '/links', label: 'Links dos vendedores', icon: <IconLinks />, apenasAdmin: true },
   // Disponível pra qualquer empresa, só não faz sentido pro login de
@@ -73,7 +73,7 @@ export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   // O que o gerencial liberou para este vendedor (atualiza ao vivo, sem precisar sair e entrar).
-  const [acessosVend, setAcessosVend] = useState<Array<'crm' | 'chat' | 'prospect'>>(sessaoVendedor?.vendedor.acessos ?? ['crm', 'chat']);
+  const [acessosVend, setAcessosVend] = useState<Array<'crm' | 'chat' | 'prospect' | 'marketing' | 'erp'>>(sessaoVendedor?.vendedor.acessos ?? ['crm', 'chat']);
   useEffect(() => {
     if (papel !== 'vendedor' || !empresa?.id || !sessaoVendedor) return;
     return ouvirVendedores(empresa.id, (lista) => {
@@ -106,7 +106,11 @@ export default function Layout() {
   const moduloAtual: Modulo = !rotaNeutra && modulos.includes(moduloDaTela) ? moduloDaTela : moduloEscolhido && modulos.includes(moduloEscolhido) ? moduloEscolhido : modulos[0];
   const visiveisAdmin: Modulo[] = !varios ? modulos : MODULOS_SEPARADOS.includes(moduloAtual) ? [moduloAtual] : vinculados ? vinculaveis : [moduloAtual];
   // Vendedor não troca de módulo: vê o que o gerencial liberou (abas filtradas abaixo).
-  const visiveis: Modulo[] = papel === 'admin' ? visiveisAdmin : modulos;
+  // Usuário com Marketing/ERP liberado pelo gerencial troca entre o módulo base (CRM/Chat/Prospect) e esses módulos.
+  const extrasUsuario: Modulo[] = papel === 'admin' ? [] : (['marketing', 'erp'] as Modulo[]).filter((m) => modulos.includes(m) && acessosVend.includes(m as 'marketing' | 'erp'));
+  const baseUsuario = modulos.filter((m) => m !== 'marketing' && m !== 'erp');
+  const visiveis: Modulo[] =
+    papel === 'admin' ? visiveisAdmin : extrasUsuario.length === 0 ? baseUsuario : extrasUsuario.includes(moduloAtual) ? [moduloAtual] : baseUsuario;
   const perguntarVinculo = false;
 
   function trocarModulo(m: Modulo) {
@@ -124,9 +128,9 @@ export default function Layout() {
     return <Navigate to={rotaInicial(visiveis[0])} replace />;
   }
   // Vendedor abrindo uma aba que o gerencial não liberou: volta para a primeira que ele tem.
-  const grupoDe = (to: string): 'crm' | 'chat' | 'prospect' => (to.startsWith('/chat') ? 'chat' : to.startsWith('/prospect') ? 'prospect' : 'crm');
-  const abaDoVendedor = (item: (typeof itens)[number]) => (!item.apenasAdmin || item.to === '/prospect') && !('apenasDono' in item) && acessosVend.includes(grupoDe(item.to)) && visiveis.includes(moduloDaRota(item.to, modulos));
-  if (papel === 'vendedor' && /^\/(chat|prospect|dashboard|crm|agenda|clientes|metas)/.test(location.pathname) && !acessosVend.includes(grupoDe(location.pathname))) {
+  const grupoDe = (to: string): 'crm' | 'chat' | 'prospect' | 'marketing' | 'erp' => (to.startsWith('/chat') ? 'chat' : to.startsWith('/prospect') ? 'prospect' : to.startsWith('/marketing') ? 'marketing' : to.startsWith('/erp') ? 'erp' : 'crm');
+  const abaDoVendedor = (item: (typeof itens)[number]) => (!item.apenasAdmin || item.to === '/prospect' || item.to.startsWith('/marketing') || item.to.startsWith('/erp')) && !('apenasDono' in item) && acessosVend.includes(grupoDe(item.to)) && visiveis.includes(moduloDaRota(item.to, modulos));
+  if (papel === 'vendedor' && /^\/(chat|prospect|dashboard|crm|agenda|clientes|metas|marketing|erp)/.test(location.pathname) && !acessosVend.includes(grupoDe(location.pathname))) {
     const primeira = itens.find(abaDoVendedor);
     if (primeira && primeira.to !== location.pathname) return <Navigate to={primeira.to} replace />;
   }
@@ -145,9 +149,9 @@ export default function Layout() {
             </span>
           </div>
 
-          {papel === 'admin' && varios && (!vinculados || separados.length > 0) && !perguntarVinculo && (
+          {(papel === 'admin' ? varios : extrasUsuario.length > 0) && (!vinculados || separados.length > 0) && !perguntarVinculo && (
             <div className="flex bg-slate-100 rounded-lg p-0.5 mr-2 shrink-0">
-              {(vinculados ? [vinculaveis[0], ...separados] : modulos).map((m) => {
+              {(vinculados ? [vinculaveis[0], ...separados] : papel === 'admin' ? modulos : [...(baseUsuario.length ? [baseUsuario[0]] : []), ...extrasUsuario]).map((m) => {
                 const grupo = vinculados && !MODULOS_SEPARADOS.includes(m);
                 const ativo = grupo ? !MODULOS_SEPARADOS.includes(moduloAtual) : m === moduloAtual;
                 return (
@@ -166,7 +170,7 @@ export default function Layout() {
           <nav className="flex items-center gap-1 flex-wrap">
             {itens
               .filter((item) => (papel === 'admin' ? true : abaDoVendedor(item)))
-              .filter((item) => !item.apenasAdmin || papel === 'admin' || item.to === '/prospect')
+              .filter((item) => !item.apenasAdmin || papel === 'admin' || item.to === '/prospect' || item.to.startsWith('/marketing') || item.to.startsWith('/erp'))
               .filter((item) => !('apenasDono' in item) || (!!perfil?.email && DONOS_PLATAFORMA.includes(perfil.email.toLowerCase())))
               .filter((item) => visiveis.includes(moduloDaRota(item.to, modulos)))
               .map((item) => {

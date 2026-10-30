@@ -40,7 +40,7 @@ function gradeDoMes(mesRef: string): { data: string; noMes: boolean }[] {
 }
 
 export default function Live() {
-  const { empresa, papel, usuario } = useAuth();
+  const { empresa, usuario , acessoModulo } = useAuth();
   const empresaId = empresa?.id;
 
   const [lives, setLives] = useState<LiveEvento[]>([]);
@@ -101,7 +101,7 @@ export default function Live() {
   const totalReservado = useMemo(() => resultado.filter((r) => r.origem === 'live').reduce((s, r) => s + (r.valorReservado ?? 0), 0), [resultado]);
   const totalAcrescimo = useMemo(() => resultado.filter((r) => r.origem === 'live').reduce((s, r) => s + (r.acrescimo ?? 0), 0), [resultado]);
 
-  if (papel !== 'admin' || !empresaId) {
+  if (!acessoModulo('marketing') || !empresaId) {
     return (
       <div className="p-6 w-full">
         <p className="text-sm text-ink-soft">Somente administradores acessam essa tela.</p>

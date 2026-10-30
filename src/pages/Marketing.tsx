@@ -14,10 +14,10 @@ const ABAS = [
  * de nav em Layout.tsx), então a rota raiz "/marketing" só existe pra
  * redirecionar pra "/marketing/meta". */
 export default function Marketing() {
-  const { papel } = useAuth();
+  const { acessoModulo } = useAuth();
   const location = useLocation();
 
-  if (papel !== 'admin') {
+  if (!acessoModulo('marketing')) {
     return (
       <div className="p-6 w-full">
         <p className="text-sm text-ink-soft">Somente administradores acessam o módulo Marketing.</p>

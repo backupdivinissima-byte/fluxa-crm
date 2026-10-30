@@ -132,7 +132,7 @@ export interface Vendedor {
   criadoEm?: string;
   meta?: number; // meta pessoal em R$ (opcional, além das faixas globais)
   metas?: MetaTier[]; // faixas de meta/comissão/bônus próprias deste vendedor (se vazio, vale o padrão da empresa)
-  acessos?: ('crm' | 'chat' | 'prospect')[]; // o que o gerencial liberou para este vendedor (sem valor = CRM e Chat)
+  acessos?: ('crm' | 'chat' | 'prospect' | 'marketing' | 'erp')[]; // módulos que o gerencial liberou para este usuário (sem valor = CRM e Chat)
 }
 
 // ===== CRM =====

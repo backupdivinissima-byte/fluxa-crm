@@ -27,7 +27,7 @@ const ROTULO_STATUS: Record<CampanhaMeta['status'], { texto: string; cor: string
  * conta do Meta Ads estiver conectada — sincronizadas direto do Meta pelo
  * navegador do administrador (sem servidor). */
 export default function MetaAds() {
-  const { empresa, papel } = useAuth();
+  const { empresa, acessoModulo } = useAuth();
   const empresaId = empresa?.id;
 
   const [campanhas, setCampanhas] = useState<CampanhaMeta[]>([]);
@@ -69,7 +69,7 @@ export default function MetaAds() {
   // sincronização tiver mais de 6 horas.
   const autoSyncFeito = useRef(false);
   useEffect(() => {
-    if (autoSyncFeito.current || papel !== 'admin' || !empresaId || !conexaoSalva?.contaAnuncioId) return;
+    if (autoSyncFeito.current || !acessoModulo('marketing') || !empresaId || !conexaoSalva?.contaAnuncioId) return;
     const ultima = conexaoSalva.ultimaSincronizacao ? new Date(conexaoSalva.ultimaSincronizacao).getTime() : 0;
     if (Date.now() - ultima < 6 * 60 * 60 * 1000) return;
     if (!lerTokenLocal(empresaId) && !conexaoSalva.tokenAcesso) return;
@@ -78,7 +78,7 @@ export default function MetaAds() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empresaId, conexaoSalva?.contaAnuncioId]);
 
-  if (papel !== 'admin' || !empresaId) {
+  if (!acessoModulo('marketing') || !empresaId) {
     return (
       <div className="p-6 w-full">
         <p className="text-sm text-ink-soft">Somente administradores acessam essa tela.</p>
