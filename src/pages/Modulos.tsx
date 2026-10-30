@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { collection, doc, getDocs, updateDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { ouvirVendedores, salvarVendedor } from '../lib/crmData';
 import { useAuth } from '../contexts/AuthContext';
@@ -19,7 +19,7 @@ const TODOS: { id: Modulo; nome: string }[] = [
 
 /** Tela do dono da plataforma: liga e desliga o CRM, o Marketing e o Chat de cada empresa. */
 export default function Modulos() {
-  const { perfil, empresa: empresaAtual } = useAuth();
+  const { perfil, empresa: empresaAtual, definirVinculoModulos } = useAuth();
   const dono = !!perfil?.email && DONOS_PLATAFORMA.includes(perfil.email.toLowerCase());
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [carregando, setCarregando] = useState(true);
@@ -35,6 +35,32 @@ export default function Modulos() {
     if (!idEmpresaAtual) return;
     return ouvirVendedores(idEmpresaAtual, setUsuarios);
   }, [idEmpresaAtual]);
+  // Dono da plataforma: cada empresa existente ganha o cadastro de cada módulo que já usa (só acrescenta, nada é alterado).
+  useEffect(() => {
+    if (!dono) return;
+    try { if (localStorage.getItem('cadastros-modulos-v1')) return; } catch { /* ignore */ }
+    (async () => {
+      const snap = await getDocs(collection(db, 'empresas'));
+      for (const d of snap.docs) {
+        const e = { ...(d.data() as Empresa), id: d.id };
+        const faltam = modulosBase(e).filter((m) => !e.cadastrosModulos?.[m]);
+        if (faltam.length === 0) continue;
+        const novos: Record<string, unknown> = {};
+        for (const m of faltam) {
+          novos[`cadastrosModulos.${m}`] = { nomeEmpresa: e.nome, ...(e.cnpj ? { documento: e.cnpj, documentoTipo: e.documentoTipo ?? 'cnpj' } : {}), ...(e.whatsapp ? { whatsapp: e.whatsapp } : {}), criadoEm: e.criadoEm ?? new Date().toISOString() };
+          const dig = (e.cnpj ?? '').replace(/\D/g, '');
+          if (dig) {
+            const ref = doc(db, 'documentosModulo', `${m}_${dig}`);
+            const ja = await getDoc(ref).catch(() => null);
+            if (ja && !ja.exists()) await setDoc(ref, { empresaId: e.id, modulo: m, em: new Date().toISOString() }).catch(() => {});
+          }
+        }
+        await updateDoc(doc(db, 'empresas', e.id), novos).catch(() => {});
+      }
+      try { localStorage.setItem('cadastros-modulos-v1', '1'); } catch { /* ignore */ }
+    })().catch(() => {});
+  }, [dono]);
+
   async function marcarUsuario(v: Vendedor, m: Modulo, marcar: boolean) {
     if (!idEmpresaAtual) return;
     const atuais = v.acessos ?? ['crm', 'chat'];
@@ -121,6 +147,12 @@ export default function Modulos() {
                 ))}
               </div>
             </div>
+          )}
+          {modulosBase(empresaAtual as Empresa).filter((m) => m !== 'erp' && m !== 'prospect').length > 1 && (
+            <label className="flex items-center gap-2 text-sm font-semibold text-ink mt-3 cursor-pointer">
+              <input type="checkbox" checked={empresaAtual?.modulosVinculados === true} onChange={(e) => void definirVinculoModulos(e.target.checked)} />
+              Associar módulos (abas de todos juntas na mesma tela)
+            </label>
           )}
           <p className="text-xs text-ink-soft mt-3">Clique em um módulo para marcar quais usuários terão acesso a ele.</p>
         </div>

@@ -92,7 +92,7 @@ export default function Layout() {
   const separados = modulos.filter((m) => MODULOS_SEPARADOS.includes(m));
   const varios = modulos.length > 1;
   // Cada módulo é separado (CRM, Marketing, Chat, ERP, Prospect): nunca juntamos as abas num grupo só.
-  const vinculados = false;
+  const vinculados = papel === 'admin' && empresa?.modulosVinculados === true && vinculaveis.length > 1;
   const [moduloEscolhido, setModuloEscolhido] = useState<Modulo | null>(() => {
     try {
       return sessionStorage.getItem(CHAVE_MODULO_ATUAL) as Modulo | null;
@@ -111,7 +111,7 @@ export default function Layout() {
   const baseUsuario = modulos.filter((m) => m !== 'marketing' && m !== 'erp');
   const visiveis: Modulo[] =
     papel === 'admin' ? visiveisAdmin : extrasUsuario.length === 0 ? baseUsuario : extrasUsuario.includes(moduloAtual) ? [moduloAtual] : baseUsuario;
-  const perguntarVinculo = false;
+  const perguntarVinculo = papel === 'admin' && empresa?.perguntarAssociar === true && empresa.modulosVinculados === undefined && vinculaveis.length > 1;
 
   function trocarModulo(m: Modulo) {
     setModuloEscolhido(m);
@@ -244,17 +244,17 @@ export default function Layout() {
       {perguntarVinculo && (
         <div className="fixed inset-0 z-50 bg-ink/40 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-xl">
-            <h3 className="text-base font-extrabold text-ink">Vincular todos os módulos?</h3>
+            <h3 className="text-base font-extrabold text-ink">Deseja associar módulos?</h3>
             <p className="text-xs text-ink-soft mt-2">
-              Você tem mais de um módulo ({vinculaveis.map((m) => NOME_MODULO[m]).join(' e ')}). Se vincular, as abas de todos aparecem juntas na barra
-              de cima. Se não, cada módulo funciona separado e você troca entre eles no seletor.
+              Você tem mais de um módulo ({vinculaveis.map((m) => NOME_MODULO[m]).join(' e ')}). Se associar, as abas de todos aparecem juntas na mesma
+              tela. Se não, cada módulo funciona separado e você troca entre eles no seletor (dá para mudar depois na aba Módulos).
             </p>
             <div className="flex gap-2 mt-4">
               <button onClick={() => void definirVinculoModulos(true)} className="flex-1 rounded-xl bg-gradient-to-br from-teal-500 to-blue-600 text-white text-sm font-bold py-2">
-                Sim, vincular tudo
+                Sim, associar
               </button>
               <button onClick={() => void definirVinculoModulos(false)} className="flex-1 rounded-xl border border-line text-sm font-bold py-2 text-ink">
-                Não, separados
+                Não, trabalhar separado
               </button>
             </div>
           </div>

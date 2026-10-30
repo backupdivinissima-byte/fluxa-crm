@@ -260,7 +260,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const atuais: NonNullable<Empresa['modulos']> = emp.modulos && emp.modulos.length > 0 ? emp.modulos : emp.produto === 'marketing' ? ['marketing'] : ['crm', 'marketing'];
       const novos = atuais.includes(modulo) ? atuais : [...atuais, modulo];
       const cadastro = { nomeEmpresa: dados.nomeEmpresa, ...(dados.documento ? { documento: dados.documento, documentoTipo: dados.documentoTipo } : {}), whatsapp: dados.whatsapp, criadoEm: new Date().toISOString() };
-      if (novos !== atuais) await updateDoc(empRef, { modulos: novos, [`cadastrosModulos.${modulo}`]: cadastro });
+      if (novos !== atuais) await updateDoc(empRef, { modulos: novos, [`cadastrosModulos.${modulo}`]: cadastro, ...(emp.modulosVinculados === undefined ? { perguntarAssociar: true } : {}) });
       await reservarDocumento(modulo, dados.documento, emp.id);
       setUsuario(cred.user);
       setPerfil(perfilExistente);
