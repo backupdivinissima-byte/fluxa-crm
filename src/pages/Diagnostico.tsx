@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
 import { totalGeralReal } from '../lib/crmLogic';
 import type { Cliente } from '../types';
+import REF from '../tmp/refMov.json';
 
 const f = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -69,6 +70,27 @@ export default function Diagnostico({ compacto = false }: { compacto?: boolean }
         if (Object.keys(c.origensImportacao ?? {}).length && Math.abs(soma - real) > 0.01) { d2 += soma - real; if (ex2.length < 8) ex2.push(`${c.cod} ${c.nome}: soma das origens ${f(soma)} vs real ${f(real)}`); }
       }
       L.push('', `== Clientes em que "totalGeralReal" descarta valor das origens: diferença acumulada ${f(d2)}`, ...ex2);
+      // Conferência cliente a cliente contra o relatório Movimentações (01/2024 a 05/2026)
+      const ref = REF as Record<string, Record<string, number>>;
+      const porCod = new Map<string, Cliente>();
+      for (const c of cl) porCod.set(String(c.cod), c);
+      const difMes = new Map<string, number>();
+      const itens: { d: number; txt: string }[] = [];
+      let ausentes = 0, valAus = 0;
+      for (const [cod, ms] of Object.entries(ref)) {
+        const c = porCod.get(cod);
+        for (const [m, v] of Object.entries(ms)) {
+          const db = c?.origensImportacao?.['mes-' + m]?.totalGeral ?? 0;
+          const d = db - v;
+          if (Math.abs(d) < 0.01) continue;
+          if (!c) { ausentes++; valAus += v; }
+          difMes.set(m, (difMes.get(m) ?? 0) + d);
+          itens.push({ d, txt: `${cod} ${(c?.nome ?? '(NÃO EXISTE)').slice(0, 22)} ${m}: banco ${f(db)} x relatório ${f(v)}` });
+        }
+      }
+      L.push('', `== CONFERÊNCIA com Movimentações: ${itens.length} cliente-mês diferentes · clientes ausentes: ${ausentes} (${f(valAus)})`);
+      [...difMes.entries()].sort().forEach(([m, d]) => L.push(`  dif ${m}: ${f(d)}`));
+      itens.sort((a, b) => a.d - b.d).slice(0, 45).forEach((x) => L.push('  ' + x.txt));
       setTxt(L.join('\n'));
     })().catch((e) => setTxt(`Erro: ${e?.message ?? e}`));
   }, [empresa?.id]);
