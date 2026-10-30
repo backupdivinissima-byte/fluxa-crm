@@ -8,7 +8,7 @@ import type { Cliente } from '../types';
 const f = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /** Página técnica (administrador): confere de onde vem cada real do "Vendas total", direto do banco, sem filtros. */
-export default function Diagnostico() {
+export default function Diagnostico({ compacto = false }: { compacto?: boolean }) {
   const { empresa } = useAuth();
   const [txt, setTxt] = useState('Carregando…');
   useEffect(() => {
@@ -72,5 +72,9 @@ export default function Diagnostico() {
       setTxt(L.join('\n'));
     })().catch((e) => setTxt(`Erro: ${e?.message ?? e}`));
   }, [empresa?.id]);
-  return <pre id="diag" className="p-6 text-xs whitespace-pre-wrap font-mono">{txt}</pre>;
+  return compacto ? (
+    <pre id="diag" className="rounded-xl border-2 border-amber-400 bg-amber-50 p-3 text-[10px] leading-[1.25] whitespace-pre-wrap font-mono [column-count:3] [column-gap:16px]">{'DIAGNÓSTICO TEMPORÁRIO\n' + txt}</pre>
+  ) : (
+    <pre id="diag" className="p-6 text-xs whitespace-pre-wrap font-mono">{txt}</pre>
+  );
 }
